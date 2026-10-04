@@ -4,6 +4,7 @@ import { usePlayer } from '../../context/PlayerContext.tsx';
 import { useToast } from '../../context/ToastContext.tsx';
 import { api } from '../../lib/api.ts';
 import { saveOrderToFirestore } from '../../lib/firestoreSync.ts';
+import { extractUrlFromText } from '../../lib/urlUtils.ts';
 import { X, ExternalLink, Zap, AlertCircle, CheckCircle2, QrCode, Copy } from 'lucide-react';
 
 interface CheckoutModalProps {
@@ -30,19 +31,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
 
-  // Link do LivePix específico do item ou fallback global
-  const targetLivePixUrl = (item.livepixUrl && item.livepixUrl.trim().length > 0)
+  // Texto/Link cadastrado do LivePix específico do item ou fallback global
+  const rawLivePixText = (item.livepixUrl && item.livepixUrl.trim().length > 0)
     ? item.livepixUrl.trim()
     : (livePixUrl && livePixUrl.trim().length > 0 ? livePixUrl.trim() : '');
 
-  // Link de cobrança PIX específico do item ou fallback global
-  const targetPixUrl = (item.pixUrl && item.pixUrl.trim().length > 0)
+  // Texto/Link cadastrado do PIX específico do item ou fallback global (pode conter frases com URL, URL direta ou chave)
+  const rawPixText = (item.pixUrl && item.pixUrl.trim().length > 0)
     ? item.pixUrl.trim()
     : (pixUrl && pixUrl.trim().length > 0 ? pixUrl.trim() : '');
 
+  // Extrai automaticamente a URL limpa de destino caso o texto contenha https:// ou http://
+  const targetPixUrl = extractUrlFromText(rawPixText);
+  const targetLivePixUrl = extractUrlFromText(rawLivePixText) || (rawLivePixText.startsWith('http') ? rawLivePixText : '');
+
   // Default to PIX if available, otherwise LIVEPIX
   const [paymentMethod, setPaymentMethod] = useState<'PIX' | 'LIVEPIX'>(() => {
-    if (item.pixUrl || pixUrl) return 'PIX';
+    if (rawPixText || targetPixUrl) return 'PIX';
     return 'LIVEPIX';
   });
 
@@ -86,8 +91,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       return;
     }
 
-    const currentUrl = paymentMethod === 'PIX' ? targetPixUrl : targetLivePixUrl;
-
     try {
       setLoading(true);
       const order = await api.createOrder({
@@ -101,21 +104,30 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setActiveOrder(order);
       await saveOrderToFirestore(order).catch(() => {});
 
-      if (currentUrl) {
-        if (currentUrl.startsWith('http://') || currentUrl.startsWith('https://')) {
-          window.open(currentUrl, '_blank');
+      if (paymentMethod === 'PIX') {
+        if (targetPixUrl) {
+          window.open(targetPixUrl, '_blank');
           showSuccess(
-            `Pedido #${order.id} gerado! Redirecionando para ${paymentMethod === 'PIX' ? 'a cobrança PIX' : 'o LivePix'}...`
+            `Pedido #${order.id} gerado! Redirecionando para a cobrança PIX...`
           );
-        } else {
-          // If it's a direct PIX key or code
-          navigator.clipboard.writeText(currentUrl);
+        } else if (rawPixText) {
+          navigator.clipboard.writeText(rawPixText);
           showSuccess(`Pedido #${order.id} gerado! Chave PIX copiada para a área de transferência.`);
+        } else {
+          showError('Aviso: O administrador ainda não configurou o link de cobrança PIX para este item.');
         }
       } else {
-        showError(
-          `Aviso: O administrador ainda não configurou o link de ${paymentMethod === 'PIX' ? 'cobrança PIX' : 'LivePix'} para este item.`
-        );
+        if (targetLivePixUrl) {
+          window.open(targetLivePixUrl, '_blank');
+          showSuccess(
+            `Pedido #${order.id} gerado! Redirecionando para o LivePix...`
+          );
+        } else if (rawLivePixText) {
+          navigator.clipboard.writeText(rawLivePixText);
+          showSuccess(`Pedido #${order.id} gerado! Link do LivePix copiado.`);
+        } else {
+          showError('Aviso: O administrador ainda não configurou o link de LivePix para este item.');
+        }
       }
     } catch (err: unknown) {
       showError(err instanceof Error ? err.message : 'Falha ao processar pedido.');
@@ -124,7 +136,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   };
 
-  const isCurrentUrlConfigured = paymentMethod === 'PIX' ? !!targetPixUrl : !!targetLivePixUrl;
+  const isCurrentUrlConfigured = paymentMethod === 'PIX'
+    ? !!(targetPixUrl || rawPixText)
+    : !!(targetLivePixUrl || rawLivePixText);
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 overflow-y-auto">
@@ -366,9 +380,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </p>
 
               {/* Botão de abrir link novamente */}
-              {activeOrder.paymentMethod === 'PIX' && targetPixUrl && (
+              {activeOrder.paymentMethod === 'PIX' && (targetPixUrl || rawPixText) && (
                 <div className="space-y-2 pt-1">
-                  {targetPixUrl.startsWith('http') ? (
+                  {targetPixUrl ? (
                     <button
                       type="button"
                       onClick={() => window.open(targetPixUrl, '_blank')}
@@ -381,8 +395,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(targetPixUrl);
-                      showSuccess('Chave ou link PIX copiado!');
+                      navigator.clipboard.writeText(targetPixUrl || rawPixText);
+                      showSuccess('Link ou chave PIX copiado!');
                     }}
                     className="w-full py-2.5 px-4 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-colors"
                   >
@@ -392,10 +406,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </div>
               )}
 
-              {activeOrder.paymentMethod === 'LIVEPIX' && targetLivePixUrl && (
+              {activeOrder.paymentMethod === 'LIVEPIX' && (targetLivePixUrl || rawLivePixText) && (
                 <button
                   type="button"
-                  onClick={() => window.open(targetLivePixUrl, '_blank')}
+                  onClick={() => window.open(targetLivePixUrl || rawLivePixText, '_blank')}
                   className="w-full py-2.5 px-4 rounded-lg bg-[#00e676]/15 hover:bg-[#00e676]/25 border border-[#00e676]/40 text-[#00e676] text-xs font-black font-heading tracking-wide flex items-center justify-center gap-2 cursor-pointer transition-colors"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
