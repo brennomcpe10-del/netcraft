@@ -4,12 +4,13 @@ import { usePlayer } from '../../context/PlayerContext.tsx';
 import { useToast } from '../../context/ToastContext.tsx';
 import { api } from '../../lib/api.ts';
 import { saveOrderToFirestore } from '../../lib/firestoreSync.ts';
-import { X, ExternalLink, Zap, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, ExternalLink, Zap, AlertCircle, CheckCircle2, QrCode, Copy } from 'lucide-react';
 
 interface CheckoutModalProps {
   item: VIP | Product;
   itemType: 'vip' | 'product';
   livePixUrl?: string;
+  pixUrl?: string;
   onClose: () => void;
   onSuccess?: () => void;
 }
@@ -18,6 +19,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   item,
   itemType,
   livePixUrl,
+  pixUrl,
   onClose
 }) => {
   const { player, openLoginModal } = usePlayer();
@@ -32,6 +34,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const targetLivePixUrl = (item.livepixUrl && item.livepixUrl.trim().length > 0)
     ? item.livepixUrl.trim()
     : (livePixUrl && livePixUrl.trim().length > 0 ? livePixUrl.trim() : '');
+
+  // Link de cobrança PIX específico do item ou fallback global
+  const targetPixUrl = (item.pixUrl && item.pixUrl.trim().length > 0)
+    ? item.pixUrl.trim()
+    : (pixUrl && pixUrl.trim().length > 0 ? pixUrl.trim() : '');
+
+  // Default to PIX if available, otherwise LIVEPIX
+  const [paymentMethod, setPaymentMethod] = useState<'PIX' | 'LIVEPIX'>(() => {
+    if (item.pixUrl || pixUrl) return 'PIX';
+    return 'LIVEPIX';
+  });
 
   if (!player) {
     return (
@@ -66,12 +79,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     );
   }
 
-  const handlePayWithLivePix = async () => {
+  const handleProceedPayment = async () => {
     const finalRecipient = recipientType === 'self' ? player.nickname : recipientNickname.trim();
     if (!finalRecipient) {
       showError('Informe o nickname do jogador beneficiário.');
       return;
     }
+
+    const currentUrl = paymentMethod === 'PIX' ? targetPixUrl : targetLivePixUrl;
 
     try {
       setLoading(true);
@@ -80,17 +95,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         recipientNickname: finalRecipient,
         productId: item.id,
         productType: itemType,
-        paymentMethod: 'LIVEPIX'
+        paymentMethod: paymentMethod === 'PIX' ? 'PIX' : 'LIVEPIX'
       });
 
       setActiveOrder(order);
       await saveOrderToFirestore(order).catch(() => {});
 
-      if (targetLivePixUrl) {
-        window.open(targetLivePixUrl, '_blank');
-        showSuccess(`Pedido #${order.id} gerado! Redirecionando para o LivePix...`);
+      if (currentUrl) {
+        if (currentUrl.startsWith('http://') || currentUrl.startsWith('https://')) {
+          window.open(currentUrl, '_blank');
+          showSuccess(
+            `Pedido #${order.id} gerado! Redirecionando para ${paymentMethod === 'PIX' ? 'a cobrança PIX' : 'o LivePix'}...`
+          );
+        } else {
+          // If it's a direct PIX key or code
+          navigator.clipboard.writeText(currentUrl);
+          showSuccess(`Pedido #${order.id} gerado! Chave PIX copiada para a área de transferência.`);
+        }
       } else {
-        showError('Aviso: O administrador ainda não definiu o link do LivePix para este item.');
+        showError(
+          `Aviso: O administrador ainda não configurou o link de ${paymentMethod === 'PIX' ? 'cobrança PIX' : 'LivePix'} para este item.`
+        );
       }
     } catch (err: unknown) {
       showError(err instanceof Error ? err.message : 'Falha ao processar pedido.');
@@ -98,6 +123,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setLoading(false);
     }
   };
+
+  const isCurrentUrlConfigured = paymentMethod === 'PIX' ? !!targetPixUrl : !!targetLivePixUrl;
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 overflow-y-auto">
@@ -183,70 +210,130 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               )}
             </div>
 
-            {/* Payment Method - ÚNICA OPÇÃO: LIVEPIX */}
+            {/* Payment Method - OPÇÕES: PIX & LIVEPIX */}
             <div className="space-y-2">
               <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wide">
-                Forma de Pagamento
+                Escolha a Forma de Pagamento
               </label>
-              
-              <div className="p-3.5 rounded-xl border border-[#00e676]/40 bg-[#00e676]/[0.06] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-[#00e676]/20 border border-[#00e676]/40 flex items-center justify-center text-[#00e676]">
-                    <Zap className="w-5 h-5 fill-[#00e676]" />
+
+              <div className="grid grid-cols-1 gap-2.5">
+                {/* OPÇÃO 1: PIX (Link de Cobrança) */}
+                <div
+                  onClick={() => setPaymentMethod('PIX')}
+                  className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                    paymentMethod === 'PIX'
+                      ? 'border-cyan-400/80 bg-cyan-500/[0.08] shadow-[0_0_16px_rgba(34,211,238,0.2)]'
+                      : 'border-white/[0.08] bg-white/[0.02] hover:border-white/[0.2]'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                      <QrCode className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="font-heading font-black text-sm text-white tracking-wide flex items-center gap-2">
+                        <span>PIX</span>
+                        <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-cyan-400 text-zinc-950 font-bold uppercase tracking-wider">
+                          Cobrança Direta
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-zinc-400 mt-0.5">
+                        Link de pagamento via Mercado Pago, Nubank ou chave PIX
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-heading font-black text-sm text-white tracking-wide flex items-center gap-2">
-                      <span>LIVEPIX</span>
-                      <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#00e676] text-zinc-950 font-bold uppercase tracking-wider">
-                        Opção Única
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-zinc-400 mt-0.5">
-                      Pagamento rápido e seguro via LivePix
-                    </div>
+                  <div
+                    className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                      paymentMethod === 'PIX'
+                        ? 'bg-cyan-400 text-zinc-950 shadow-[0_0_8px_#22d3ee]'
+                        : 'border border-white/20'
+                    }`}
+                  >
+                    {paymentMethod === 'PIX' && '✓'}
                   </div>
                 </div>
-                <div className="w-5 h-5 rounded-full bg-[#00e676] text-zinc-950 flex items-center justify-center font-bold text-xs shadow-[0_0_8px_#00e676]">
-                  ✓
+
+                {/* OPÇÃO 2: LIVEPIX */}
+                <div
+                  onClick={() => setPaymentMethod('LIVEPIX')}
+                  className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                    paymentMethod === 'LIVEPIX'
+                      ? 'border-[#00e676]/80 bg-[#00e676]/[0.08] shadow-[0_0_16px_rgba(0,230,118,0.2)]'
+                      : 'border-white/[0.08] bg-white/[0.02] hover:border-white/[0.2]'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#00e676]/20 border border-[#00e676]/40 flex items-center justify-center text-[#00e676]">
+                      <Zap className="w-5 h-5 fill-[#00e676]" />
+                    </div>
+                    <div>
+                      <div className="font-heading font-black text-sm text-white tracking-wide flex items-center gap-2">
+                        <span>LIVEPIX</span>
+                        <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#00e676] text-zinc-950 font-bold uppercase tracking-wider">
+                          Instantâneo
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-zinc-400 mt-0.5">
+                        Pagamento rápido e prático com a plataforma LivePix
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                      paymentMethod === 'LIVEPIX'
+                        ? 'bg-[#00e676] text-zinc-950 shadow-[0_0_8px_#00e676]'
+                        : 'border border-white/20'
+                    }`}
+                  >
+                    {paymentMethod === 'LIVEPIX' && '✓'}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Aviso caso LivePix não esteja configurado */}
-            {!targetLivePixUrl && (
+            {/* Aviso caso o método selecionado não tenha link configurado */}
+            {!isCurrentUrlConfigured && (
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span className="text-[11px]">
-                  O administrador ainda não cadastrou o link do LivePix específico para este item no painel administrativo.
+                  {paymentMethod === 'PIX'
+                    ? 'O administrador ainda não cadastrou o link de cobrança PIX específico deste item no painel.'
+                    : 'O administrador ainda não cadastrou o link do LivePix específico deste item no painel.'}
                 </span>
               </div>
             )}
 
-            {/* BOTÃO ÚNICO DE COMPRA COM LIVEPIX */}
+            {/* BOTÃO DE CONFIRMAR E PAGAR */}
             <button
               type="button"
-              onClick={handlePayWithLivePix}
+              onClick={handleProceedPayment}
               disabled={loading || (recipientType === 'gift' && !recipientNickname.trim())}
-              className="w-full py-3.5 bg-[#00e676] hover:bg-[#00c853] text-zinc-950 font-black font-heading text-xs tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-[0_0_16px_rgba(0,230,118,0.35)] hover:shadow-[0_0_24px_rgba(0,230,118,0.6)] hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`w-full py-3.5 font-black font-heading text-xs tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                paymentMethod === 'PIX'
+                  ? 'bg-cyan-400 hover:bg-cyan-300 text-zinc-950 shadow-[0_0_16px_rgba(34,211,238,0.35)] hover:shadow-[0_0_24px_rgba(34,211,238,0.6)]'
+                  : 'bg-[#00e676] hover:bg-[#00c853] text-zinc-950 shadow-[0_0_16px_rgba(0,230,118,0.35)] hover:shadow-[0_0_24px_rgba(0,230,118,0.6)]'
+              }`}
             >
               {loading ? (
                 <span>PROCESSANDO PEDIDO...</span>
               ) : (
                 <>
                   <ExternalLink className="w-4 h-4" />
-                  <span>PAGAR COM LIVEPIX</span>
+                  <span>
+                    {paymentMethod === 'PIX' ? 'PAGAR COM PIX (COBRANÇA)' : 'PAGAR COM LIVEPIX'}
+                  </span>
                 </>
               )}
             </button>
           </div>
         )}
 
-        {/* STEP 2: ORDER CREATED & AWAITING PAYMENT VIA LIVEPIX */}
+        {/* STEP 2: ORDER CREATED & AWAITING PAYMENT */}
         {activeOrder && activeOrder.status === 'Pendente' && (
           <div className="space-y-6">
             <div>
               <span className="text-[10px] font-mono uppercase text-amber-400 font-bold">
-                Aguardando Pagamento no LivePix • #{activeOrder.id}
+                Aguardando Pagamento • #{activeOrder.id} ({activeOrder.paymentMethod})
               </span>
               <h2 className="text-xl font-black font-heading text-white mt-1">
                 {activeOrder.productName}
@@ -262,13 +349,50 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <div className="p-4 rounded-xl border border-white/[0.08] bg-white/[0.02] space-y-3">
               <div className="flex items-center gap-2 text-xs text-zinc-300">
                 <CheckCircle2 className="w-4 h-4 text-[#00e676] shrink-0" />
-                <span>Pedido registrado no sistema do servidor.</span>
+                <span>Pedido registrado com sucesso no sistema.</span>
               </div>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                A página de pagamento do <strong>LivePix</strong> foi aberta em uma nova aba do seu navegador para você concluir o pagamento de <strong>R$ {activeOrder.amount.toFixed(2).replace('.', ',')}</strong>.
+                {activeOrder.paymentMethod === 'PIX' ? (
+                  <>
+                    A página de cobrança do <strong>PIX</strong> foi aberta para você concluir o pagamento de{' '}
+                    <strong>R$ {activeOrder.amount.toFixed(2).replace('.', ',')}</strong>.
+                  </>
+                ) : (
+                  <>
+                    A página de pagamento do <strong>LivePix</strong> foi aberta em uma nova aba para você concluir o pagamento de{' '}
+                    <strong>R$ {activeOrder.amount.toFixed(2).replace('.', ',')}</strong>.
+                  </>
+                )}
               </p>
-              
-              {targetLivePixUrl && (
+
+              {/* Botão de abrir link novamente */}
+              {activeOrder.paymentMethod === 'PIX' && targetPixUrl && (
+                <div className="space-y-2 pt-1">
+                  {targetPixUrl.startsWith('http') ? (
+                    <button
+                      type="button"
+                      onClick={() => window.open(targetPixUrl, '_blank')}
+                      className="w-full py-2.5 px-4 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-400 text-xs font-black font-heading tracking-wide flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>ABRIR LINK DE COBRANÇA PIX</span>
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(targetPixUrl);
+                      showSuccess('Chave ou link PIX copiado!');
+                    }}
+                    className="w-full py-2.5 px-4 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>COPIAR LINK OU CHAVE PIX</span>
+                  </button>
+                </div>
+              )}
+
+              {activeOrder.paymentMethod === 'LIVEPIX' && targetLivePixUrl && (
                 <button
                   type="button"
                   onClick={() => window.open(targetLivePixUrl, '_blank')}

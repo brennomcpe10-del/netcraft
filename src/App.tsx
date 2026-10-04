@@ -252,6 +252,7 @@ function MainAppContent() {
           item={checkoutItem.item}
           itemType={checkoutItem.type}
           livePixUrl={settings?.livePixUrl}
+          pixUrl={settings?.pixUrl}
           onClose={() => setCheckoutItem(null)}
           onSuccess={async () => {
             await fetchGlobalData();

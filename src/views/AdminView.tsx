@@ -519,13 +519,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                       <span className="text-emerald-400 font-mono">
                         R$ {vip.price.toFixed(2).replace('.', ',')}
                       </span>
+                      {vip.pixUrl && vip.pixUrl.trim().length > 0 ? (
+                        <span className="px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-mono text-[10px] flex items-center gap-1">
+                          💠 PIX: {vip.pixUrl}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-zinc-800/80 border border-white/[0.06] text-zinc-500 font-mono text-[10px]">
+                          Sem PIX
+                        </span>
+                      )}
                       {vip.livepixUrl && vip.livepixUrl.trim().length > 0 ? (
                         <span className="px-2 py-0.5 rounded bg-[#00e676]/10 border border-[#00e676]/30 text-[#00e676] font-mono text-[10px] flex items-center gap-1">
                           ⚡ LivePix: {vip.livepixUrl}
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 font-mono text-[10px]">
-                          ⚠️ Sem LivePix
+                        <span className="px-2 py-0.5 rounded bg-zinc-800/80 border border-white/[0.06] text-zinc-500 font-mono text-[10px]">
+                          Sem LivePix
                         </span>
                       )}
                     </div>
@@ -785,13 +794,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                       <span className="text-emerald-400 font-mono">
                         R$ {prod.price.toFixed(2).replace('.', ',')}
                       </span>
+                      {prod.pixUrl && prod.pixUrl.trim().length > 0 ? (
+                        <span className="px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-mono text-[10px] flex items-center gap-1">
+                          💠 PIX: {prod.pixUrl}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-zinc-800/80 border border-white/[0.06] text-zinc-500 font-mono text-[10px]">
+                          Sem PIX
+                        </span>
+                      )}
                       {prod.livepixUrl && prod.livepixUrl.trim().length > 0 ? (
                         <span className="px-2 py-0.5 rounded bg-[#00e676]/10 border border-[#00e676]/30 text-[#00e676] font-mono text-[10px] flex items-center gap-1">
                           ⚡ LivePix: {prod.livepixUrl}
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 font-mono text-[10px]">
-                          ⚠️ Sem LivePix
+                        <span className="px-2 py-0.5 rounded bg-zinc-800/80 border border-white/[0.06] text-zinc-500 font-mono text-[10px]">
+                          Sem LivePix
                         </span>
                       )}
                     </div>
@@ -1319,6 +1337,47 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                   </button>
                 </div>
               </div>
+
+              {/* Link ou Chave Padrão de Cobrança PIX */}
+              <div className="pt-4 border-t border-white/[0.08] space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-4 bg-cyan-400 rounded-full shadow-[0_0_8px_#22d3ee]" />
+                  <label className="block text-xs font-black font-heading text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="text-cyan-400">💠</span>
+                    <span>Link ou Chave Padrão de Cobrança PIX</span>
+                  </label>
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Link ou chave PIX principal do servidor (ex: link de cobrança do Mercado Pago, Nubank, PicPay ou chave Pix). Usado no checkout para quem escolher pagar via PIX direto caso o item não tenha um link individual.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={serverSettings.pixUrl || ''}
+                    onChange={e => setServerSettings({ ...serverSettings, pixUrl: e.target.value })}
+                    placeholder="https://link.mercadopago.com.br/... ou sua chave PIX"
+                    className="flex-1 px-3.5 py-2.5 bg-white/[0.03] border border-white/[0.08] focus:border-cyan-400 rounded-lg text-xs font-mono text-white outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!adminToken) return;
+                      try {
+                        const clean = (serverSettings.pixUrl || '').trim();
+                        await api.updatePixUrl(clean, adminToken);
+                        await saveSettingsToFirestore({ ...serverSettings, pixUrl: clean }).catch(() => {});
+                        showSuccess('Link de cobrança PIX padrão salvo com sucesso!');
+                        await onRefreshGlobalData();
+                      } catch (err: unknown) {
+                        showError(err instanceof Error ? err.message : 'Erro ao salvar link do PIX.');
+                      }
+                    }}
+                    className="px-4 py-2.5 bg-cyan-400 hover:bg-cyan-300 text-black font-bold font-heading text-xs rounded-lg transition-colors cursor-pointer shrink-0"
+                  >
+                    Salvar PIX
+                  </button>
+                </div>
+              </div>
             </div>
 
             <button
@@ -1394,7 +1453,26 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                   placeholder="https://livepix.gg/SEU_LINK_VIP"
                 />
                 <p className="text-[10px] text-zinc-500 mt-1">
-                  Cole o link do LivePix específico para este plano VIP. Ao clicar em comprar no checkout, o jogador será direcionado para cá.
+                  Cole o link do LivePix específico para este plano VIP. Ao escolher LivePix no checkout, o jogador será direcionado para cá.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-zinc-300 font-bold mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-white">
+                    <span className="text-cyan-400">💠</span> Link de Cobrança PIX deste VIP
+                  </span>
+                  <span className="text-[10px] text-zinc-500 font-mono">Mercado Pago / Nubank / etc.</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingVip.pixUrl || ''}
+                  onChange={e => setEditingVip({ ...editingVip, pixUrl: e.target.value })}
+                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] focus:border-cyan-400 rounded-lg text-xs font-mono text-white outline-none placeholder-zinc-600"
+                  placeholder="https://link.mercadopago.com.br/... ou sua chave PIX"
+                />
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  Cole o link de cobrança PIX específico deste VIP (Mercado Pago, Nubank, PicPay ou chave). Ao escolher PIX no checkout, o jogador será direcionado para este link.
                 </p>
               </div>
 
@@ -1551,7 +1629,26 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                   placeholder="https://livepix.gg/SEU_LINK_ITEM"
                 />
                 <p className="text-[10px] text-zinc-500 mt-1">
-                  Cole o link do LivePix específico para este item da loja. Ao clicar em comprar no checkout, o jogador será direcionado para cá.
+                  Cole o link do LivePix específico para este item da loja. Ao escolher LivePix no checkout, o jogador será direcionado para cá.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-zinc-300 font-bold mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-white">
+                    <span className="text-cyan-400">💠</span> Link de Cobrança PIX deste Item
+                  </span>
+                  <span className="text-[10px] text-zinc-500 font-mono">Mercado Pago / Nubank / etc.</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingProduct.pixUrl || ''}
+                  onChange={e => setEditingProduct({ ...editingProduct, pixUrl: e.target.value })}
+                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] focus:border-cyan-400 rounded-lg text-xs font-mono text-white outline-none placeholder-zinc-600"
+                  placeholder="https://link.mercadopago.com.br/... ou sua chave PIX"
+                />
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  Cole o link de cobrança PIX específico para este item (Mercado Pago, Nubank, PicPay ou chave). Ao escolher PIX no checkout, o jogador será direcionado para cá.
                 </p>
               </div>
 

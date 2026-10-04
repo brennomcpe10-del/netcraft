@@ -36,6 +36,7 @@ export interface VIP {
   active: boolean;
   isPopular?: boolean;
   livepixUrl?: string;
+  pixUrl?: string;
 }
 
 export interface Product {
@@ -49,6 +50,7 @@ export interface Product {
   highlights: string[];
   order: number;
   livepixUrl?: string;
+  pixUrl?: string;
 }
 
 export interface Order {
@@ -125,6 +127,7 @@ export interface ServerSettings {
   rules: ServerRule[];
   systems: ServerSystem[];
   livePixUrl?: string;
+  pixUrl?: string;
   whatToExpectImage?: string;
 }
 

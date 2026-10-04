@@ -129,6 +129,18 @@ export const api = {
     );
   },
 
+  async updatePixUrl(pixUrl: string, adminToken: string): Promise<{ success: boolean; message: string; pixUrl: string; settings: ServerSettings }> {
+    const res = await fetch(`${API_BASE}/admin/settings/pix`, {
+      method: 'PUT',
+      headers: getHeaders(adminToken),
+      body: JSON.stringify({ pixUrl })
+    });
+    return handleAdminFetch<{ success: boolean; message: string; pixUrl: string; settings: ServerSettings }>(
+      res,
+      'Erro ao atualizar link de cobrança PIX.'
+    );
+  },
+
   // --- VIPS ---
   async getVips(all = false): Promise<VIP[]> {
     const res = await fetch(`${API_BASE}/vips${all ? '?all=true' : ''}`);

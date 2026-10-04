@@ -183,6 +183,21 @@ apiRouter.put('/admin/settings/livepix', requireAdmin, (req, res) => {
   });
 });
 
+apiRouter.put('/admin/settings/pix', requireAdmin, (req, res) => {
+  const { pixUrl } = req.body;
+  if (typeof pixUrl !== 'string') {
+    return res.status(400).json({ error: 'Link ou chave PIX inválido.' });
+  }
+  const clean = pixUrl.trim();
+  const updated = dbStore.updateSettings({ pixUrl: clean });
+  res.json({
+    success: true,
+    message: 'Link de cobrança PIX atualizado com sucesso.',
+    pixUrl: updated.pixUrl,
+    settings: updated
+  });
+});
+
 // -------------------------------------------------------------
 // VIP PACKAGES
 // -------------------------------------------------------------
@@ -192,7 +207,7 @@ apiRouter.get('/vips', (req, res) => {
 });
 
 apiRouter.post('/admin/vips', requireAdmin, (req, res) => {
-  const { name, price, duration, description, benefits, color, image, order, active, livepixUrl } = req.body;
+  const { name, price, duration, description, benefits, color, image, order, active, livepixUrl, pixUrl } = req.body;
   if (!name || price == null || !duration) {
     return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
   }
@@ -208,7 +223,8 @@ apiRouter.post('/admin/vips', requireAdmin, (req, res) => {
     order: Number(order) || 1,
     active: active !== false,
     isPopular: !!req.body.isPopular,
-    livepixUrl: livepixUrl ? String(livepixUrl).trim() : ''
+    livepixUrl: livepixUrl ? String(livepixUrl).trim() : '',
+    pixUrl: pixUrl ? String(pixUrl).trim() : ''
   });
 
   res.status(201).json(newVip);
@@ -242,7 +258,7 @@ apiRouter.get('/products', (req, res) => {
 });
 
 apiRouter.post('/admin/products', requireAdmin, (req, res) => {
-  const { name, category, price, description, image, active, highlights, order, livepixUrl } = req.body;
+  const { name, category, price, description, image, active, highlights, order, livepixUrl, pixUrl } = req.body;
   if (!name || !category || price == null) {
     return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
   }
@@ -256,7 +272,8 @@ apiRouter.post('/admin/products', requireAdmin, (req, res) => {
     active: active !== false,
     highlights: Array.isArray(highlights) ? highlights : [],
     order: Number(order) || 1,
-    livepixUrl: livepixUrl ? String(livepixUrl).trim() : ''
+    livepixUrl: livepixUrl ? String(livepixUrl).trim() : '',
+    pixUrl: pixUrl ? String(pixUrl).trim() : ''
   });
 
   res.status(201).json(newProd);

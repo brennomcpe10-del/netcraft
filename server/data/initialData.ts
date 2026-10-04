@@ -12,6 +12,7 @@ export const initialSettings: ServerSettings = {
   maxPlayers: 250,
   logoUrl: '',
   livePixUrl: '',
+  pixUrl: '',
   whatToExpectImage: '/harbor_explore.jpg',
   announcementText: '🎉 Grande Torneio Gladiador neste sábado às 19:00 com premiação VIP Supreme!',
   rules: [
