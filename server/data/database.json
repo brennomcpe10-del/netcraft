@@ -11,550 +11,137 @@
     "maxPlayers": 250,
     "logoUrl": "",
     "announcementText": "🎉 Grande Torneio Gladiador neste sábado às 19:00 com premiação VIP Supreme!",
+    "pixUrl": "",
     "rules": [
       {
+        "title": "Respeito Mútuo e Comunidade",
         "id": "rule-1",
         "category": "Geral",
-        "description": "Proibido qualquer tipo de ofensa, preconceito, discurso de ódio, assédio ou toxicidade no chat global ou privado.",
-        "title": "Respeito Mútuo e Comunidade"
+        "description": "Proibido qualquer tipo de ofensa, preconceito, discurso de ódio, assédio ou toxicidade no chat global ou privado."
       },
       {
+        "category": "Geral",
         "title": "Proibido Trapaças (Hacks / Cheats / X-Ray)",
-        "id": "rule-2",
         "description": "O uso de qualquer cliente modificado que proporcione vantagens injustas (Fly, Killaura, Speed, X-Ray) resultará em banimento permanente imediato.",
-        "category": "Geral"
+        "id": "rule-2"
       },
       {
-        "title": "Proteção de Terrenos e Anti-Grief",
-        "id": "rule-3",
+        "description": "Não destrua construções de outros jogadores nem tente roubar através de bugs de blocos. Utilize sempre o bloco de proteção de terreno.",
         "category": "Construções",
-        "description": "Não destrua construções de outros jogadores nem tente roubar através de bugs de blocos. Utilize sempre o bloco de proteção de terreno."
+        "id": "rule-3",
+        "title": "Proteção de Terrenos e Anti-Grief"
       },
       {
         "id": "rule-4",
-        "category": "Economia",
         "title": "Economia Justa e Anti-Duplicação",
+        "category": "Economia",
         "description": "Qualquer tentativa de duplicar itens ou explorar falhas no sistema econômico resultará em reset de conta e banimento sem aviso prévio."
       },
       {
-        "category": "PvP",
-        "description": "O combate entre jogadores é liberado apenas em áreas permitidas (Arenas e /warp pvp). Combat logging (desconectar durante combate) é punido automaticamente.",
         "title": "Regras de PvP e Combate",
+        "description": "O combate entre jogadores é liberado apenas em áreas permitidas (Arenas e /warp pvp). Combat logging (desconectar durante combate) é punido automaticamente.",
+        "category": "PvP",
         "id": "rule-5"
       }
     ],
     "systems": [
       {
+        "description": "Sistema completo de coins, mercado de jogadores, leilões em tempo real, banco com juros e lojas automáticas.",
+        "id": "sys-eco",
         "icon": "Coins",
         "command": "/money, /mercado",
-        "id": "sys-eco",
-        "title": "Economia Global",
-        "description": "Sistema completo de coins, mercado de jogadores, leilões em tempo real, banco com juros e lojas automáticas."
+        "title": "Economia Global"
       },
       {
-        "title": "Terrenos & Proteção",
-        "command": "/terreno, /bloco",
-        "description": "Proteja suas vilas, castelos e baús com blocos de proteção inteligentes. Compartilhe permissões com amigos.",
         "id": "sys-terrenos",
-        "icon": "Shield"
+        "title": "Terrenos & Proteção",
+        "description": "Proteja suas vilas, castelos e baús com blocos de proteção inteligentes. Compartilhe permissões com amigos.",
+        "icon": "Shield",
+        "command": "/terreno, /bloco"
       },
       {
-        "command": "/sethome, /home",
         "icon": "Home",
-        "id": "sys-casas",
         "title": "Sistema de Casas (/sethome)",
+        "command": "/sethome, /home",
+        "id": "sys-casas",
         "description": "Defina múltiplos pontos de retorno rápidos e seguros para nunca se perder pelo imenso mundo de sobrevivência."
       },
       {
-        "icon": "Compass",
         "title": "Warps & Mundos",
-        "description": "Teleportes instantâneos para o Spawn, Mina Resetável, Arena PvP, Loja Central, Nether e The End.",
         "command": "/warp, /spawn",
-        "id": "sys-warps"
+        "id": "sys-warps",
+        "icon": "Compass",
+        "description": "Teleportes instantâneos para o Spawn, Mina Resetável, Arena PvP, Loja Central, Nether e The End."
       },
       {
         "icon": "Trophy",
-        "id": "sys-eventos",
         "command": "/eventos",
+        "title": "Eventos Automáticos",
         "description": "Gladiador semanal, Caça ao Dragão, Corrida de Barcos no Gelo, Caça ao Tesouro e Quiz no chat.",
-        "title": "Eventos Automáticos"
+        "id": "sys-eventos"
       },
       {
+        "id": "sys-grupos",
+        "title": "Clãs & Grupos",
         "description": "Crie ou junte-se a uma aliança, conquiste territórios, dispute o ranking dos clãs mais poderosos e dispute guerras.",
         "command": "/cla, /clan",
-        "icon": "Users",
-        "title": "Clãs & Grupos",
-        "id": "sys-grupos"
+        "icon": "Users"
       },
       {
-        "command": "/tpa, /tpaccept",
         "description": "Envie e aceite pedidos de teleporte para jogar em conjunto com seus amigos a qualquer hora.",
+        "title": "Teleporte Entre Amigos (TPA)",
+        "command": "/tpa, /tpaccept",
         "icon": "Zap",
-        "id": "sys-tpa",
-        "title": "Teleporte Entre Amigos (TPA)"
+        "id": "sys-tpa"
       },
       {
         "command": "/vip",
-        "icon": "Crown",
         "id": "sys-vips",
-        "title": "Vantagens VIP",
-        "description": "Acesse kits exclusivos, comando /fly em seus terrenos, multiplicadores de moedas, chat colorido e prioridade na fila."
+        "icon": "Crown",
+        "description": "Acesse kits exclusivos, comando /fly em seus terrenos, multiplicadores de moedas, chat colorido e prioridade na fila.",
+        "title": "Vantagens VIP"
       },
       {
-        "icon": "Video",
-        "title": "Apoio a Criadores",
         "command": "/criadores",
+        "id": "sys-criadores",
+        "title": "Apoio a Criadores",
         "description": "Programa oficial para streamers e criadores de conteúdo do YouTube e TikTok com tag exclusiva e recompensas.",
-        "id": "sys-criadores"
+        "icon": "Video"
       },
       {
-        "title": "Sistema de Procurados (Bounties)",
         "id": "sys-procurados",
+        "icon": "Target",
+        "title": "Sistema de Procurados (Bounties)",
         "command": "/bounty, /procurados",
-        "description": "Coloque a cabeça dos seus rivais a prêmio ou torne-se um caçador de recompensas temido em todo o mapa.",
-        "icon": "Target"
+        "description": "Coloque a cabeça dos seus rivais a prêmio ou torne-se um caçador de recompensas temido em todo o mapa."
       },
       {
-        "command": "/bosses",
-        "id": "sys-bosses",
-        "icon": "Skull",
         "description": "Chefões ancestrais surgem em masmorras secretas no Nether e End com padrões de ataque únicos e drops lendários.",
-        "title": "Bosses Customizados"
+        "icon": "Skull",
+        "id": "sys-bosses",
+        "title": "Bosses Customizados",
+        "command": "/bosses"
       },
       {
-        "description": "Compre e venda minérios, blocos raros e itens de agricultura com preços que variam conforme a oferta e demanda.",
         "id": "sys-loja",
-        "command": "/loja",
+        "description": "Compre e venda minérios, blocos raros e itens de agricultura com preços que variam conforme a oferta e demanda.",
+        "icon": "ShoppingBag",
         "title": "Loja Dinâmica",
-        "icon": "ShoppingBag"
+        "command": "/loja"
       }
     ],
-    "livePixUrl": "",
-    "whatToExpectImage": "/harbor_explore.jpg"
+    "gallery": [],
+    "faq": [],
+    "whatToExpectImage": "/harbor_explore.jpg",
+    "livePixUrl": ""
   },
-  "vips": [
-    {
-      "livepixUrl": "https://livepix.gg/halzintv/plano-explorer",
-      "description": "O pontapé inicial ideal para quem quer explorar o servidor com vantagens úteis e sem complicações.",
-      "price": 4.9,
-      "pixUrl": "Para me transferir R$ 4,90 pela conta do Nubank ou de outros bancos pelo Pix, entre em  https://nubank.com.br/cobrar/b49ns/6ac25a7e-ffac-4003-908f-6e616cff7381",
-      "color": "emerald",
-      "duration": "30 dias",
-      "active": true,
-      "image": "compass",
-      "id": "vip-explorer",
-      "name": "Explorer",
-      "order": 1,
-      "benefits": [
-        "Tag [EXPLORER] destacada no chat e tablist",
-        "Acesso ao /kit explorer diário com armaduras e ferramentas",
-        "Até 4 /sethomes extras",
-        "Comando /hat para usar blocos na cabeça",
-        "Entrada prioritária com o servidor cheio",
-        "Desconto de 5% no mercado da loja global",
-        "Acesso ao canal exclusivo de VIPs no Discord"
-      ]
-    },
-    {
-      "price": 12.9,
-      "pixUrl": "https://nubank.com.br/cobrar/b49ns/6ac25bd1-9ac1-4df8-a17c-a47c708950ca",
-      "color": "cyan",
-      "description": "O pacote preferido dos jogadores dedicados. Ganhe asas em seus terrenos e kits muito mais fortes.",
-      "name": "Elite",
-      "active": true,
-      "isPopular": true,
-      "image": "award",
-      "order": 2,
-      "id": "vip-elite",
-      "duration": "30 dias",
-      "livepixUrl": "https://livepix.gg/halzintv/plano-elite",
-      "benefits": [
-        "Tag [ELITE] estilizada com cor ciano no chat",
-        "Comando /fly liberado em todas as suas construções e terrenos",
-        "Acesso aos /kit elite diário e semanal",
-        "Até 8 /sethomes extras",
-        "Multiplicador de moedas 1.5x em todas as atividades",
-        "Comandos /feed e /craft em qualquer lugar",
-        "Acesso a partículas exclusivas de caminhada",
-        "Todos os benefícios do plano Explorer"
-      ]
-    },
-    {
-      "image": "crown",
-      "duration": "30 dias",
-      "livepixUrl": "https://livepix.gg/halzintv/plano-supreme",
-      "benefits": [
-        "Tudo do Elite.",
-        "Kit semanal lendário (Amadura + Elytra)",
-        "Pet exclusivo raro (Imortal)",
-        "Efeitos visuais de caminhada"
-      ],
-      "order": 3,
-      "description": "",
-      "price": 24.9,
-      "color": "emerald",
-      "pixUrl": "https://nubank.com.br/cobrar/b49ns/6ac25c34-6abf-4a5d-84aa-98db091c8118",
-      "id": "vip-1791126353919-t0yb",
-      "name": "Supreme",
-      "active": true,
-      "isPopular": false
-    }
-  ],
-  "products": [
-    {
-      "price": 9.9,
-      "id": "prod-kit-pvp",
-      "category": "kits",
-      "description": "Conjunto completo de armadura de Netherite com Proteção IV, Espada Afiada V e Maçãs Douradas Encantadas.",
-      "highlights": [
-        "Set Netherite Completo",
-        "32x Golden Apple",
-        "Totens da Imortalidade"
-      ],
-      "active": true,
-      "image": "sword",
-      "name": "Super Kit Gladiador",
-      "order": 1
-    },
-    {
-      "price": 12.5,
-      "id": "prod-spawner-blaze",
-      "category": "itens",
-      "description": "Gerador de monstros lendário para construir fazendas automáticas de poções e pontos de experiência massivos.",
-      "highlights": [
-        "Taxa de Spawn +50%",
-        "Colocável em qualquer terreno protegido"
-      ],
-      "active": true,
-      "image": "flame",
-      "name": "Spawner de Blaze Raro",
-      "order": 2
-    },
-    {
-      "category": "itens",
-      "id": "prod-chaves-misteriosas",
-      "active": true,
-      "name": "Combo 5x Chaves Místicas",
-      "highlights": [
-        "Abertura imediata no /warp caixas",
-        "Garantia de premiações épicas"
-      ],
-      "price": 15,
-      "order": 3,
-      "description": "Chaves mágicas para abrir a Caixa Misteriosa no Spawn com chance de ganhar VIPs, moedas e itens raros.",
-      "image": "key"
-    },
-    {
-      "price": 19.9,
-      "name": "Pacote 100.000 Coins",
-      "highlights": [
-        "Moedas depositadas direto na sua conta",
-        "Sem limite de transferências"
-      ],
-      "active": true,
-      "order": 4,
-      "image": "coins",
-      "category": "outros",
-      "description": "Alavanque sua fortuna na economia do servidor. Compre terrenos imensos, monte lojas e domine os leilões.",
-      "id": "prod-coins-pacote"
-    },
-    {
-      "active": true,
-      "price": 8.9,
-      "id": "prod-cosmetico-asas",
-      "image": "sparkles",
-      "highlights": [
-        "100% cosmético",
-        "Ativável e desativável pelo /particulas"
-      ],
-      "category": "cosmeticos",
-      "name": "Partículas de Fogo Alado",
-      "description": "Efeito visual exuberante de chamas que segue os passos do seu personagem em todo o servidor.",
-      "order": 5
-    },
-    {
-      "id": "prod-unban",
-      "image": "unlock",
-      "category": "outros",
-      "order": 6,
-      "description": "Segunda chance para jogadores que foram punidos com banimento por infrações leves do servidor.",
-      "active": true,
-      "name": "Perdão Judicial (Unban)",
-      "price": 35,
-      "highlights": [
-        "Reativação imediata da conta",
-        "Não aplicável a trapaças graves repetidas"
-      ]
-    }
-  ],
-  "orders": [
-    {
-      "id": "ORD-781923",
-      "buyerNickname": "BrennoMCPE",
-      "recipientNickname": "BrennoMCPE",
-      "productId": "vip-legendario",
-      "productName": "VIP Lendário",
-      "productType": "vip",
-      "amount": 89.9,
-      "createdAt": "2026-09-01T10:00:00.000Z",
-      "status": "Entregue",
-      "transactionId": "TX-PIX-984102941",
-      "paymentMethod": "PIX",
-      "paidAt": "2026-09-01T10:01:15.000Z",
-      "deliveredAt": "2026-09-01T10:01:20.000Z"
-    },
-    {
-      "id": "ORD-912845",
-      "buyerNickname": "GamerGuerreiro",
-      "recipientNickname": "GamerGuerreiro",
-      "productId": "vip-elite",
-      "productName": "VIP Elite",
-      "productType": "vip",
-      "amount": 29.9,
-      "createdAt": "2026-09-15T18:20:00.000Z",
-      "status": "Entregue",
-      "transactionId": "TX-PIX-120491823",
-      "paymentMethod": "PIX",
-      "paidAt": "2026-09-15T18:21:05.000Z",
-      "deliveredAt": "2026-09-15T18:21:10.000Z"
-    },
-    {
-      "id": "ORD-395687",
-      "buyerNickname": "SteveBuilder",
-      "recipientNickname": "SteveBuilder",
-      "productId": "vip-elite",
-      "productName": "VIP Elite",
-      "productType": "vip",
-      "amount": 29.9,
-      "createdAt": "2026-10-01T20:21:18.860Z",
-      "status": "Entregue",
-      "transactionId": "TX-PIX-078860",
-      "paymentMethod": "PIX",
-      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654029.905802BR5910NETCRAFTBR6009SAO PAULO62070503***63046CF0",
-      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654029.905802BR5910NETCRAFTBR6009SAO%20PAULO62070503***63046CF0",
-      "paidAt": "2026-10-01T20:21:18.885Z",
-      "deliveredAt": "2026-10-01T20:21:18.885Z"
-    },
-    {
-      "id": "ORD-247383",
-      "buyerNickname": "Halzin",
-      "recipientNickname": "Halzin",
-      "productId": "vip-explorer",
-      "productName": "VIP Explorer",
-      "productType": "vip",
-      "amount": 14.9,
-      "createdAt": "2026-10-02T12:04:58.960Z",
-      "status": "Entregue",
-      "transactionId": "TX-LIVEPIX-698960",
-      "paymentMethod": "LIVEPIX",
-      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654014.905802BR5910NETCRAFTBR6009SAO PAULO62070503***6304OU6X",
-      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654014.905802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304OU6X",
-      "paidAt": "2026-10-02T12:06:00.524Z",
-      "deliveredAt": "2026-10-02T12:06:00.524Z"
-    }
-  ],
-  "events": [
-    {
-      "date": "Sábado",
-      "name": "Torneio Gladiador Semanal",
-      "time": "19:00 (Brasília)",
-      "published": true,
-      "description": "A maior batalha do NetCraftBR! Todos os clãs e jogadores se reúnem na arena coliseu para lutar até o último sobrevivente.",
-      "location": "/warp gladiador",
-      "id": "ev-1",
-      "rewards": [
-        "1x VIP Supreme (30 dias)",
-        "500.000 Coins para o Clã Vencedor",
-        "Troféu Físico no Hall da Fama"
-      ],
-      "status": "Próximo",
-      "image": "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80"
-    },
-    {
-      "description": "O Ender Dragon despertou com mutações de fogo sombrio e vida triplicada. Reúna seus aliados para derrotá-lo.",
-      "time": "17:00 (Brasília)",
-      "date": "Domingo",
-      "name": "A Caçada ao Dragão Ancestral",
-      "location": "/warp the-end",
-      "published": true,
-      "image": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80",
-      "rewards": [
-        "Ovo de Dragão Decorativo",
-        "Armaduras Netherite Lendárias",
-        "Chaves Místicas para todos os participantes"
-      ],
-      "status": "Próximo",
-      "id": "ev-2"
-    },
-    {
-      "date": "Quarta-feira",
-      "rewards": [
-        "1x VIP Elite",
-        "100.000 Coins",
-        "Tag [PILOTO] no chat"
-      ],
-      "status": "Encerrado",
-      "name": "Corrida de Barcos no Gelo",
-      "time": "20:00 (Brasília)",
-      "image": "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80",
-      "published": true,
-      "location": "/warp corrida",
-      "id": "ev-3",
-      "description": "Circuito veloz construído nas alturas com obstáculos, saltos acrobáticos e curvas perigosas."
-    }
-  ],
-  "news": [
-    {
-      "author": "Equipe NetCraftBR",
-      "summary": "Novo mapa com biomas expandidos, economia reformulada e sistema de terrenos mais rápido.",
-      "category": "Atualização",
-      "date": "2026-09-28",
-      "image": "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80",
-      "published": true,
-      "content": "Sejam bem-vindos à nova era do NetCraftBR! É com imenso orgulho que anunciamos a abertura da Temporada 2.0 para todos os jogadores do Minecraft Bedrock.\n\nNesta nova temporada preparamos:\n• Mundo totalmente novo gerado na versão mais recente do Minecraft Bedrock.\n• Novo sistema de proteção de terrenos por bloco, sem lag e 100% intuitivo.\n• Reformulação completa dos preços da loja de minérios.\n• Adição de novos kits para os planos VIP Explorer, Elite e Supreme.\n• Servidor de alta performance hospedado no Brasil com ping super baixo.\n\nJunte-se a nós hoje mesmo conectando em netcraftbr.srvmc.com na porta 25673!",
-      "id": "news-1",
-      "title": "Grande Inauguração da Temporada NetCraftBR 2.0!"
-    },
-    {
-      "published": true,
-      "title": "Chegada dos Novos Bosses Customizados no Nether",
-      "content": "Os guerreiros mais corajosos agora têm um novo desafio: masmorras lendárias foram descobertas nas profundezas do Nether!\n\nA cada 4 horas, um chefe temível surge com padrões especiais de ataque e invocação de servos. Derrotar um chefe concede fragmentos para forjar as novas armas cósmicas.\n\nReúna seu clã e prepare suas poções!",
-      "image": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80",
-      "date": "2026-09-25",
-      "category": "Novidade",
-      "author": "Brenno (Owner)",
-      "id": "news-2",
-      "summary": "Enfrente o Demônio das Chamas e o Guarda do Vazio em masmorras sombrias."
-    },
-    {
-      "author": "Suporte Técnico",
-      "published": true,
-      "id": "news-3",
-      "content": "Realizamos com sucesso a migração de roteamento para um novo nó de rede de baixa latência.\n\nJogadores no celular (Android e iOS), consoles (Xbox, PlayStation, Nintendo Switch) e Windows agora contam com resposta instantânea de quebra de blocos e combate fluído.\n\nAgradecemos a todos pelo feedback contínuo em nossa comunidade do Discord!",
-      "image": "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80",
-      "category": "Manutenção",
-      "summary": "Melhorias de rota para jogadores de celular e consoles em todas as regiões do Brasil.",
-      "title": "Manutenção Preventiva de Infraestrutura e Redução de Ping",
-      "date": "2026-09-20"
-    }
-  ],
-  "socialLinks": [
-    {
-      "active": true,
-      "url": "https://discord.gg/netcraftbr",
-      "icon": "MessageSquare",
-      "platform": "discord",
-      "description": "Comunidade ativa com mais de 3.500 membros, sorteios semanais, anúncios e chat de voz.",
-      "name": "Discord Oficial",
-      "memberCount": "3.540 membros",
-      "id": "soc-discord"
-    },
-    {
-      "platform": "tiktok",
-      "active": true,
-      "name": "TikTok NetCraftBR",
-      "id": "soc-tiktok",
-      "icon": "Video",
-      "memberCount": "45.000 seguidores",
-      "url": "https://tiktok.com/@netcraftbr",
-      "description": "Clipes engraçados da galera, melhores construções dos jogadores e dicas rápidas de Bedrock."
-    }
-  ],
-  "players": [
-    {
-      "id": "player-brenno",
-      "nickname": "BrennoMCPE",
-      "createdAt": "2026-09-01T10:00:00.000Z",
-      "lastActive": "2026-10-04T12:26:52.409Z",
-      "activeVips": [
-        {
-          "vipId": "vip-legendario",
-          "vipName": "Lendário",
-          "activatedAt": "2026-09-01T10:00:00.000Z",
-          "expiresAt": null
-        }
-      ],
-      "totalSpent": 89.9,
-      "ordersCount": 1,
-      "bio": "Criador e fundador do NetCraftBR."
-    },
-    {
-      "id": "player-steve",
-      "nickname": "GamerGuerreiro",
-      "createdAt": "2026-09-12T14:30:00.000Z",
-      "lastActive": "2026-10-01T12:00:00.000Z",
-      "activeVips": [
-        {
-          "vipId": "vip-elite",
-          "vipName": "Elite",
-          "activatedAt": "2026-09-15T18:20:00.000Z",
-          "expiresAt": "2026-10-15T18:20:00.000Z"
-        }
-      ],
-      "totalSpent": 29.9,
-      "ordersCount": 1,
-      "bio": "Líder do Clã Dragões Vermelhos."
-    },
-    {
-      "id": "player-1790886074561-aggs3",
-      "nickname": "SteveBuilder",
-      "createdAt": "2026-10-01T20:21:14.561Z",
-      "lastActive": "2026-10-01T20:21:18.885Z",
-      "activeVips": [
-        {
-          "vipId": "vip-elite",
-          "vipName": "VIP Elite",
-          "activatedAt": "2026-10-01T20:21:18.885Z",
-          "expiresAt": "2026-10-31T20:21:18.885Z"
-        }
-      ],
-      "totalSpent": 29.9,
-      "ordersCount": 1
-    },
-    {
-      "id": "player-1790909477058-p5396",
-      "nickname": "Halzin",
-      "createdAt": "2026-10-02T02:51:17.058Z",
-      "lastActive": "2026-10-04T14:07:06.546Z",
-      "activeVips": [
-        {
-          "vipId": "vip-explorer",
-          "vipName": "VIP Explorer",
-          "activatedAt": "2026-10-02T12:06:00.524Z",
-          "expiresAt": "2026-11-01T12:06:00.524Z"
-        }
-      ],
-      "totalSpent": 14.9,
-      "ordersCount": 1
-    },
-    {
-      "id": "player-1791116706963-mz9us",
-      "nickname": "Steve",
-      "createdAt": "2026-10-04T12:25:06.963Z",
-      "lastActive": "2026-10-04T12:25:06.963Z",
-      "activeVips": [],
-      "totalSpent": 0,
-      "ordersCount": 0
-    },
-    {
-      "id": "player-1791116765692-kwmjg",
-      "nickname": "Alex",
-      "createdAt": "2026-10-04T12:26:05.692Z",
-      "lastActive": "2026-10-04T12:26:05.692Z",
-      "activeVips": [],
-      "totalSpent": 0,
-      "ordersCount": 0
-    },
-    {
-      "id": "player-1791116814699-yvywh",
-      "nickname": "NovoJogador123",
-      "createdAt": "2026-10-04T12:26:54.699Z",
-      "lastActive": "2026-10-04T12:26:54.700Z",
-      "activeVips": [],
-      "totalSpent": 0,
-      "ordersCount": 0
-    }
-  ],
+  "vips": [],
+  "products": [],
+  "orders": [],
+  "events": [],
+  "news": [],
+  "socialLinks": [],
+  "players": [],
   "tickets": [],
   "initialized": true
 }
