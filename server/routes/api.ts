@@ -1,6 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import crypto from 'crypto';
 import { dbStore } from '../data/store.ts';
+import type { Player } from '../../src/types/index.ts';
 
 export const apiRouter = express.Router();
 
@@ -114,7 +115,7 @@ apiRouter.get('/admin/verify', (req, res) => {
 // -------------------------------------------------------------
 // PLAYER / ACCOUNT IDENTIFICATION
 // -------------------------------------------------------------
-apiRouter.post('/player/login', (req, res) => {
+apiRouter.post('/player/login', async (req, res) => {
   const { nickname } = req.body;
   if (!nickname || typeof nickname !== 'string') {
     return res.status(400).json({ error: 'Nickname é obrigatório.' });
@@ -126,6 +127,16 @@ apiRouter.post('/player/login', (req, res) => {
   }
 
   const player = dbStore.getOrCreatePlayer(clean);
+
+  // Sync to Firestore users collection
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, setDoc } = await import('firebase/firestore');
+    await setDoc(doc(db, 'users', player.id), player);
+  } catch (err) {
+    console.warn('Firestore player sync notice:', err);
+  }
+
   return res.json({
     success: true,
     player
@@ -456,6 +467,24 @@ apiRouter.post('/orders', (req, res) => {
     paymentMethod: paymentMethod || 'PIX'
   });
 
+  // Ensure both buyer and recipient are immediately registered as players
+  const buyerPlayer = dbStore.getOrCreatePlayer(buyerNickname);
+  const recipientPlayer = dbStore.getOrCreatePlayer(recipientNickname);
+
+  // Background sync to Firestore users collection
+  (async () => {
+    try {
+      const { db } = await import('../../src/lib/firebase.ts');
+      const { doc, setDoc } = await import('firebase/firestore');
+      await Promise.all([
+        setDoc(doc(db, 'users', buyerPlayer.id), buyerPlayer).catch(() => {}),
+        setDoc(doc(db, 'users', recipientPlayer.id), recipientPlayer).catch(() => {})
+      ]);
+    } catch {
+      // ignore
+    }
+  })();
+
   res.status(201).json(order);
 });
 
@@ -715,13 +744,77 @@ apiRouter.get('/admin/stats', requireAdmin, (_req, res) => {
   res.json(dbStore.getDashboardStats());
 });
 
-apiRouter.get('/admin/players', requireAdmin, (req, res) => {
+apiRouter.get('/admin/players', requireAdmin, async (req, res) => {
   const search = typeof req.query.search === 'string' ? req.query.search.toLowerCase() : '';
+
+  // Synchronize any Firestore users so no registration is ever missed
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { collection, getDocs } = await import('firebase/firestore');
+    const snap = await getDocs(collection(db, 'users'));
+    snap.forEach(d => {
+      const u = d.data() as Player;
+      if (u.nickname) {
+        dbStore.getOrCreatePlayer(u.nickname);
+      }
+    });
+  } catch {
+    // ignore
+  }
+
   let players = dbStore.getPlayers();
   if (search) {
     players = players.filter(p => p.nickname.toLowerCase().includes(search));
   }
   res.json(players);
+});
+
+apiRouter.post('/admin/players', requireAdmin, async (req, res) => {
+  const { nickname, vipId } = req.body;
+  if (!nickname || typeof nickname !== 'string') {
+    return res.status(400).json({ error: 'Nickname é obrigatório.' });
+  }
+
+  const clean = nickname.trim();
+  if (clean.length < 3 || clean.length > 32) {
+    return res.status(400).json({ error: 'O nickname deve conter entre 3 e 32 caracteres.' });
+  }
+
+  let player = dbStore.getOrCreatePlayer(clean);
+
+  if (vipId) {
+    const vip = dbStore.getVipById(vipId);
+    if (vip) {
+      const isLifetime = vip.duration.toLowerCase().includes('vitalício');
+      const now = new Date();
+      const expiresAt = isLifetime ? null : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const activeVips = [...player.activeVips];
+      const existingIdx = activeVips.findIndex(v => v.vipId === vip.id);
+      if (existingIdx >= 0) {
+        activeVips[existingIdx].expiresAt = expiresAt;
+      } else {
+        activeVips.push({
+          vipId: vip.id,
+          vipName: `VIP ${vip.name}`,
+          activatedAt: now.toISOString(),
+          expiresAt
+        });
+      }
+      const updated = dbStore.updatePlayer(player.id, { activeVips });
+      if (updated) player = updated;
+    }
+  }
+
+  // Sync to Firestore
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, setDoc } = await import('firebase/firestore');
+    await setDoc(doc(db, 'users', player.id), player);
+  } catch {
+    // ignore
+  }
+
+  res.status(201).json(player);
 });
 
 apiRouter.delete('/admin/players/:id', requireAdmin, (req, res) => {

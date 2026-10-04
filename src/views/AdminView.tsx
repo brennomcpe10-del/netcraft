@@ -83,6 +83,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const [bulkOrderFilter, setBulkOrderFilter] = useState<'all' | 'concluidos' | 'pendentes' | 'cancelados'>('all');
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
+  // Manual player creation modal
+  const [isAddingPlayer, setIsAddingPlayer] = useState(false);
+  const [newPlayerNick, setNewPlayerNick] = useState('');
+  const [newPlayerVipId, setNewPlayerVipId] = useState('');
+  const [isSavingPlayer, setIsSavingPlayer] = useState(false);
+
   useEffect(() => {
     if (adminToken) {
       loadData();
@@ -304,6 +310,37 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       showError(err instanceof Error ? err.message : 'Falha ao excluir pedidos em massa.');
     } finally {
       setIsBulkDeleting(false);
+    }
+  };
+
+  const handleCreatePlayer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminToken || isSavingPlayer) return;
+    const clean = newPlayerNick.trim();
+    if (!clean) {
+      showError('Informe o nickname do jogador.');
+      return;
+    }
+    if (clean.length < 3 || clean.length > 32) {
+      showError('O nickname deve ter entre 3 e 32 caracteres.');
+      return;
+    }
+
+    try {
+      setIsSavingPlayer(true);
+      const created = await api.createAdminPlayer(
+        { nickname: clean, vipId: newPlayerVipId || undefined },
+        adminToken
+      );
+      showSuccess(`Jogador ${created.nickname} registrado com sucesso!`);
+      setIsAddingPlayer(false);
+      setNewPlayerNick('');
+      setNewPlayerVipId('');
+      await loadData();
+    } catch (err: unknown) {
+      showError(err instanceof Error ? err.message : 'Falha ao registrar jogador.');
+    } finally {
+      setIsSavingPlayer(false);
     }
   };
 
@@ -778,17 +815,29 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-base font-bold text-white">Jogadores Registrados</h2>
-                <p className="text-zinc-500 text-[11px]">Lista completa de jogadores cadastrados no ecossistema</p>
+                <p className="text-zinc-500 text-[11px]">
+                  {players.length} jogador{players.length === 1 ? '' : 'es'} registrado{players.length === 1 ? '' : 's'} no ecossistema
+                </p>
               </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Buscar nickname..."
-                  className="px-3 py-1.5 pl-8 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none w-64"
-                />
-                <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingPlayer(true)}
+                  className="px-3 py-1.5 bg-[#00e676]/15 hover:bg-[#00e676]/25 border border-[#00e676]/40 text-[#00e676] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Novo Jogador</span>
+                </button>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Buscar nickname..."
+                    className="px-3 py-1.5 pl-8 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none w-52 sm:w-64"
+                  />
+                  <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
+                </div>
               </div>
             </div>
 
@@ -2330,6 +2379,90 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MANUAL ADD PLAYER MODAL */}
+      {/* ============================================================== */}
+      {isAddingPlayer && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-sm bg-[#0d1017] border border-white/[0.1] rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#00e676]/15 border border-[#00e676]/30 flex items-center justify-center text-[#00e676] shrink-0">
+                <Plus className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white font-heading">Novo Jogador</h3>
+                <p className="text-xs text-zinc-400">Cadastre manualmente um jogador no ecossistema</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreatePlayer} className="space-y-4 pt-1">
+              <div>
+                <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                  Nickname do Minecraft <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newPlayerNick}
+                  onChange={e => setNewPlayerNick(e.target.value)}
+                  placeholder="Ex: Steve_BR"
+                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] focus:border-[#00e676] rounded-xl text-xs text-white placeholder-zinc-500 outline-none"
+                  autoFocus
+                  maxLength={32}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                  Vincular Plano VIP (Opcional)
+                </label>
+                <select
+                  value={newPlayerVipId}
+                  onChange={e => setNewPlayerVipId(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#0c1017] border border-white/[0.08] focus:border-[#00e676] rounded-xl text-xs text-white outline-none cursor-pointer"
+                >
+                  <option value="">Nenhum (Jogador Padrão)</option>
+                  {vips.map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} ({v.duration}) - R$ {v.price.toFixed(2).replace('.', ',')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  disabled={isSavingPlayer}
+                  onClick={() => {
+                    setIsAddingPlayer(false);
+                    setNewPlayerNick('');
+                    setNewPlayerVipId('');
+                  }}
+                  className="px-4 py-2 rounded-lg border border-white/[0.08] text-xs text-zinc-300 hover:bg-white/[0.05] disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingPlayer || !newPlayerNick.trim()}
+                  className="px-4 py-2 rounded-lg bg-[#00e676] hover:bg-[#00c853] text-zinc-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-[#00e676]/20 disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  {isSavingPlayer ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-zinc-950/30 border-t-zinc-950 rounded-full animate-spin inline-block" />
+                      <span>Cadastrando...</span>
+                    </>
+                  ) : (
+                    <span>Cadastrar Jogador</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

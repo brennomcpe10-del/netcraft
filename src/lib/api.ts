@@ -452,6 +452,19 @@ export const api = {
     return handleAdminFetch<Player[]>(res, 'Erro ao carregar lista de jogadores.');
   },
 
+  async createAdminPlayer(data: { nickname: string; vipId?: string }, adminToken: string): Promise<Player> {
+    const res = await fetch(`${API_BASE}/admin/players`, {
+      method: 'POST',
+      headers: getHeaders(adminToken),
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Erro ao cadastrar jogador.');
+    }
+    return res.json();
+  },
+
   async deletePlayer(id: string, adminToken: string, nickname?: string): Promise<void> {
     const q = nickname ? `?nickname=${encodeURIComponent(nickname)}` : '';
     const res = await fetch(`${API_BASE}/admin/players/${encodeURIComponent(id)}${q}`, {

@@ -14,120 +14,120 @@
     "pixUrl": "",
     "rules": [
       {
-        "title": "Respeito Mútuo e Comunidade",
         "id": "rule-1",
-        "category": "Geral",
-        "description": "Proibido qualquer tipo de ofensa, preconceito, discurso de ódio, assédio ou toxicidade no chat global ou privado."
+        "description": "Proibido qualquer tipo de ofensa, preconceito, discurso de ódio, assédio ou toxicidade no chat global ou privado.",
+        "title": "Respeito Mútuo e Comunidade",
+        "category": "Geral"
       },
       {
-        "category": "Geral",
-        "title": "Proibido Trapaças (Hacks / Cheats / X-Ray)",
         "description": "O uso de qualquer cliente modificado que proporcione vantagens injustas (Fly, Killaura, Speed, X-Ray) resultará em banimento permanente imediato.",
+        "title": "Proibido Trapaças (Hacks / Cheats / X-Ray)",
+        "category": "Geral",
         "id": "rule-2"
       },
       {
-        "description": "Não destrua construções de outros jogadores nem tente roubar através de bugs de blocos. Utilize sempre o bloco de proteção de terreno.",
-        "category": "Construções",
+        "title": "Proteção de Terrenos e Anti-Grief",
         "id": "rule-3",
-        "title": "Proteção de Terrenos e Anti-Grief"
+        "description": "Não destrua construções de outros jogadores nem tente roubar através de bugs de blocos. Utilize sempre o bloco de proteção de terreno.",
+        "category": "Construções"
       },
       {
+        "category": "Economia",
         "id": "rule-4",
         "title": "Economia Justa e Anti-Duplicação",
-        "category": "Economia",
         "description": "Qualquer tentativa de duplicar itens ou explorar falhas no sistema econômico resultará em reset de conta e banimento sem aviso prévio."
       },
       {
-        "title": "Regras de PvP e Combate",
         "description": "O combate entre jogadores é liberado apenas em áreas permitidas (Arenas e /warp pvp). Combat logging (desconectar durante combate) é punido automaticamente.",
+        "title": "Regras de PvP e Combate",
         "category": "PvP",
         "id": "rule-5"
       }
     ],
     "systems": [
       {
-        "description": "Sistema completo de coins, mercado de jogadores, leilões em tempo real, banco com juros e lojas automáticas.",
-        "id": "sys-eco",
-        "icon": "Coins",
         "command": "/money, /mercado",
+        "description": "Sistema completo de coins, mercado de jogadores, leilões em tempo real, banco com juros e lojas automáticas.",
+        "icon": "Coins",
+        "id": "sys-eco",
         "title": "Economia Global"
       },
       {
+        "command": "/terreno, /bloco",
         "id": "sys-terrenos",
-        "title": "Terrenos & Proteção",
-        "description": "Proteja suas vilas, castelos e baús com blocos de proteção inteligentes. Compartilhe permissões com amigos.",
         "icon": "Shield",
-        "command": "/terreno, /bloco"
+        "description": "Proteja suas vilas, castelos e baús com blocos de proteção inteligentes. Compartilhe permissões com amigos.",
+        "title": "Terrenos & Proteção"
       },
       {
-        "icon": "Home",
-        "title": "Sistema de Casas (/sethome)",
-        "command": "/sethome, /home",
         "id": "sys-casas",
-        "description": "Defina múltiplos pontos de retorno rápidos e seguros para nunca se perder pelo imenso mundo de sobrevivência."
+        "description": "Defina múltiplos pontos de retorno rápidos e seguros para nunca se perder pelo imenso mundo de sobrevivência.",
+        "command": "/sethome, /home",
+        "title": "Sistema de Casas (/sethome)",
+        "icon": "Home"
       },
       {
-        "title": "Warps & Mundos",
-        "command": "/warp, /spawn",
         "id": "sys-warps",
+        "title": "Warps & Mundos",
         "icon": "Compass",
-        "description": "Teleportes instantâneos para o Spawn, Mina Resetável, Arena PvP, Loja Central, Nether e The End."
+        "description": "Teleportes instantâneos para o Spawn, Mina Resetável, Arena PvP, Loja Central, Nether e The End.",
+        "command": "/warp, /spawn"
       },
       {
-        "icon": "Trophy",
         "command": "/eventos",
-        "title": "Eventos Automáticos",
         "description": "Gladiador semanal, Caça ao Dragão, Corrida de Barcos no Gelo, Caça ao Tesouro e Quiz no chat.",
-        "id": "sys-eventos"
+        "icon": "Trophy",
+        "id": "sys-eventos",
+        "title": "Eventos Automáticos"
       },
       {
         "id": "sys-grupos",
-        "title": "Clãs & Grupos",
-        "description": "Crie ou junte-se a uma aliança, conquiste territórios, dispute o ranking dos clãs mais poderosos e dispute guerras.",
         "command": "/cla, /clan",
-        "icon": "Users"
+        "description": "Crie ou junte-se a uma aliança, conquiste territórios, dispute o ranking dos clãs mais poderosos e dispute guerras.",
+        "icon": "Users",
+        "title": "Clãs & Grupos"
       },
       {
-        "description": "Envie e aceite pedidos de teleporte para jogar em conjunto com seus amigos a qualquer hora.",
-        "title": "Teleporte Entre Amigos (TPA)",
-        "command": "/tpa, /tpaccept",
         "icon": "Zap",
+        "title": "Teleporte Entre Amigos (TPA)",
+        "description": "Envie e aceite pedidos de teleporte para jogar em conjunto com seus amigos a qualquer hora.",
+        "command": "/tpa, /tpaccept",
         "id": "sys-tpa"
       },
       {
-        "command": "/vip",
-        "id": "sys-vips",
         "icon": "Crown",
         "description": "Acesse kits exclusivos, comando /fly em seus terrenos, multiplicadores de moedas, chat colorido e prioridade na fila.",
-        "title": "Vantagens VIP"
+        "id": "sys-vips",
+        "title": "Vantagens VIP",
+        "command": "/vip"
       },
       {
-        "command": "/criadores",
+        "icon": "Video",
         "id": "sys-criadores",
+        "command": "/criadores",
         "title": "Apoio a Criadores",
-        "description": "Programa oficial para streamers e criadores de conteúdo do YouTube e TikTok com tag exclusiva e recompensas.",
-        "icon": "Video"
+        "description": "Programa oficial para streamers e criadores de conteúdo do YouTube e TikTok com tag exclusiva e recompensas."
       },
       {
-        "id": "sys-procurados",
+        "description": "Coloque a cabeça dos seus rivais a prêmio ou torne-se um caçador de recompensas temido em todo o mapa.",
+        "command": "/bounty, /procurados",
         "icon": "Target",
         "title": "Sistema de Procurados (Bounties)",
-        "command": "/bounty, /procurados",
-        "description": "Coloque a cabeça dos seus rivais a prêmio ou torne-se um caçador de recompensas temido em todo o mapa."
+        "id": "sys-procurados"
       },
       {
-        "description": "Chefões ancestrais surgem em masmorras secretas no Nether e End com padrões de ataque únicos e drops lendários.",
         "icon": "Skull",
-        "id": "sys-bosses",
+        "description": "Chefões ancestrais surgem em masmorras secretas no Nether e End com padrões de ataque únicos e drops lendários.",
         "title": "Bosses Customizados",
+        "id": "sys-bosses",
         "command": "/bosses"
       },
       {
-        "id": "sys-loja",
         "description": "Compre e venda minérios, blocos raros e itens de agricultura com preços que variam conforme a oferta e demanda.",
         "icon": "ShoppingBag",
         "title": "Loja Dinâmica",
-        "command": "/loja"
+        "command": "/loja",
+        "id": "sys-loja"
       }
     ],
     "gallery": [],
@@ -141,7 +141,17 @@
   "events": [],
   "news": [],
   "socialLinks": [],
-  "players": [],
+  "players": [
+    {
+      "id": "player-1791127917404-dp04d",
+      "nickname": "Halzin5212",
+      "createdAt": "2026-10-04T15:31:57.404Z",
+      "lastActive": "2026-10-04T15:31:57.491Z",
+      "activeVips": [],
+      "totalSpent": 0,
+      "ordersCount": 0
+    }
+  ],
   "tickets": [],
   "initialized": true
 }
