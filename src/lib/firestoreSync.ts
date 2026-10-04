@@ -6,6 +6,7 @@ import {
   onSnapshot,
   getDocs,
   query,
+  limit,
   getDoc
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -126,10 +127,12 @@ export const initialFaqs: FaqItem[] = [
 // -------------------------------------------------------------
 export async function seedFirestoreIfEmpty() {
   try {
+    // 1. Fast localStorage check to avoid unnecessary Firestore queries on repeated visits
     if (typeof window !== 'undefined' && localStorage.getItem('netcraftbr_seeded') === 'true') {
       return;
     }
 
+    // 2. Check the system initialization document in Firestore
     const initRef = doc(db, 'system', 'initialized');
     const initSnap = await getDoc(initRef);
     if (initSnap.exists()) {
@@ -141,18 +144,51 @@ export async function seedFirestoreIfEmpty() {
       return;
     }
 
-    // Check if any collections already have persisted data
-    const [vipsCheck, prodsCheck, settingsCheck, newsCheck, eventsCheck, socCheck] = await Promise.all([
-      getDocs(collection(db, 'vips')),
-      getDocs(collection(db, 'products')),
+    // 3. Comprehensive check for ANY existing data across all Firestore collections
+    const [
+      vipsCheck,
+      prodsCheck,
+      ordersCheck,
+      usersCheck,
+      eventsCheck,
+      newsCheck,
+      socCheck,
+      settingsCheck,
+      homeCheck,
+      menuCheck,
+      appCheck,
+      faqCheck
+    ] = await Promise.all([
+      getDocs(query(collection(db, 'vips'), limit(1))),
+      getDocs(query(collection(db, 'products'), limit(1))),
+      getDocs(query(collection(db, 'orders'), limit(1))),
+      getDocs(query(collection(db, 'users'), limit(1))),
+      getDocs(query(collection(db, 'events'), limit(1))),
+      getDocs(query(collection(db, 'news'), limit(1))),
+      getDocs(query(collection(db, 'socialLinks'), limit(1))),
       getDoc(doc(db, 'serverSettings', 'default')),
-      getDocs(collection(db, 'news')),
-      getDocs(collection(db, 'events')),
-      getDocs(collection(db, 'socialLinks'))
+      getDoc(doc(db, 'homeConfig', 'default')),
+      getDocs(query(collection(db, 'menuItems'), limit(1))),
+      getDoc(doc(db, 'appearanceConfig', 'default')),
+      getDocs(query(collection(db, 'faqItems'), limit(1)))
     ]);
 
-    // If ANY persisted data already exists, mark initialized and NEVER seed default presets
-    if (!vipsCheck.empty || !prodsCheck.empty || settingsCheck.exists() || !newsCheck.empty || !eventsCheck.empty || !socCheck.empty) {
+    const hasAnyExistingData =
+      !vipsCheck.empty ||
+      !prodsCheck.empty ||
+      !ordersCheck.empty ||
+      !usersCheck.empty ||
+      !eventsCheck.empty ||
+      !newsCheck.empty ||
+      !socCheck.empty ||
+      settingsCheck.exists() ||
+      homeCheck.exists() ||
+      !menuCheck.empty ||
+      appCheck.exists() ||
+      !faqCheck.empty;
+
+    // 4. If ANY persisted data already exists, mark initialized and NEVER seed default presets
+    if (hasAnyExistingData) {
       await setDoc(initRef, { initializedAt: new Date().toISOString(), version: 1 }).catch(() => {});
       if (typeof window !== 'undefined') {
         localStorage.setItem('netcraftbr_seeded', 'true');
@@ -160,54 +196,99 @@ export async function seedFirestoreIfEmpty() {
       return;
     }
 
-    // Mark system as initialized FIRST before inserting any first-boot baseline data
+    // 5. Also check if the backend API already has data (local database.json or server store)
+    try {
+      if (typeof window !== 'undefined') {
+        const apiCheck = await fetch('/api/vips?all=true').then(r => r.json()).catch(() => []);
+        if (Array.isArray(apiCheck) && apiCheck.length > 0) {
+          await setDoc(initRef, { initializedAt: new Date().toISOString(), version: 1 }).catch(() => {});
+          localStorage.setItem('netcraftbr_seeded', 'true');
+          return;
+        }
+      }
+    } catch {
+      // ignore network errors
+    }
+
+    // 6. Mark system as initialized FIRST before inserting any first-boot baseline data
     await setDoc(initRef, { initializedAt: new Date().toISOString(), version: 1 }).catch(() => {});
     if (typeof window !== 'undefined') {
       localStorage.setItem('netcraftbr_seeded', 'true');
     }
 
+    // 7. Double check existence for every individual document before writing, so it NEVER overwrites
     // 1. VIPs (Initial installation baseline only)
     for (const vip of initialVips) {
-      await setDoc(doc(db, 'vips', vip.id), vip);
+      const snap = await getDoc(doc(db, 'vips', vip.id));
+      if (!snap.exists()) {
+        await setDoc(doc(db, 'vips', vip.id), vip);
+      }
     }
 
     // 2. Products (Initial installation baseline only)
     for (const prod of initialProducts) {
-      await setDoc(doc(db, 'products', prod.id), prod);
+      const snap = await getDoc(doc(db, 'products', prod.id));
+      if (!snap.exists()) {
+        await setDoc(doc(db, 'products', prod.id), prod);
+      }
     }
 
     // 3. Server Settings
-    await setDoc(doc(db, 'serverSettings', 'default'), initialSettings);
+    const sSnap = await getDoc(doc(db, 'serverSettings', 'default'));
+    if (!sSnap.exists()) {
+      await setDoc(doc(db, 'serverSettings', 'default'), initialSettings);
+    }
 
     // 4. Social Links
     for (const link of initialSocialLinks) {
-      await setDoc(doc(db, 'socialLinks', link.id), link);
+      const snap = await getDoc(doc(db, 'socialLinks', link.id));
+      if (!snap.exists()) {
+        await setDoc(doc(db, 'socialLinks', link.id), link);
+      }
     }
 
     // 5. Events
     for (const ev of initialEvents) {
-      await setDoc(doc(db, 'events', ev.id), ev);
+      const snap = await getDoc(doc(db, 'events', ev.id));
+      if (!snap.exists()) {
+        await setDoc(doc(db, 'events', ev.id), ev);
+      }
     }
 
     // 6. News
     for (const n of initialNews) {
-      await setDoc(doc(db, 'news', n.id), n);
+      const snap = await getDoc(doc(db, 'news', n.id));
+      if (!snap.exists()) {
+        await setDoc(doc(db, 'news', n.id), n);
+      }
     }
 
     // 7. Home Config
-    await setDoc(doc(db, 'homeConfig', 'default'), initialHomeConfig);
+    const hSnap = await getDoc(doc(db, 'homeConfig', 'default'));
+    if (!hSnap.exists()) {
+      await setDoc(doc(db, 'homeConfig', 'default'), initialHomeConfig);
+    }
 
     // 8. Menu Items
     for (const item of initialMenuItems) {
-      await setDoc(doc(db, 'menuItems', item.id), item);
+      const snap = await getDoc(doc(db, 'menuItems', item.id));
+      if (!snap.exists()) {
+        await setDoc(doc(db, 'menuItems', item.id), item);
+      }
     }
 
     // 9. Appearance Config
-    await setDoc(doc(db, 'appearanceConfig', 'default'), initialAppearance);
+    const aSnap = await getDoc(doc(db, 'appearanceConfig', 'default'));
+    if (!aSnap.exists()) {
+      await setDoc(doc(db, 'appearanceConfig', 'default'), initialAppearance);
+    }
 
     // 10. FAQ Items
     for (const f of initialFaqs) {
-      await setDoc(doc(db, 'faqItems', f.id), f);
+      const snap = await getDoc(doc(db, 'faqItems', f.id));
+      if (!snap.exists()) {
+        await setDoc(doc(db, 'faqItems', f.id), f);
+      }
     }
   } catch (err) {
     console.warn('Firestore seeding check notice:', err);
