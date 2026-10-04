@@ -242,10 +242,7 @@ apiRouter.put('/admin/vips/:id', requireAdmin, (req, res) => {
 apiRouter.delete('/admin/vips/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   const deleted = dbStore.deleteVip(id);
-  if (!deleted) {
-    return res.status(404).json({ error: 'VIP não encontrado.' });
-  }
-  res.json({ success: true, message: 'VIP excluído com sucesso.' });
+  res.json({ success: true, message: 'VIP excluído com sucesso.', removed: deleted });
 });
 
 // -------------------------------------------------------------
@@ -291,10 +288,7 @@ apiRouter.put('/admin/products/:id', requireAdmin, (req, res) => {
 apiRouter.delete('/admin/products/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   const deleted = dbStore.deleteProduct(id);
-  if (!deleted) {
-    return res.status(404).json({ error: 'Produto não encontrado.' });
-  }
-  res.json({ success: true, message: 'Produto excluído com sucesso.' });
+  res.json({ success: true, message: 'Produto excluído com sucesso.', removed: deleted });
 });
 
 // -------------------------------------------------------------
@@ -401,10 +395,7 @@ apiRouter.put('/admin/orders/:id/status', requireAdmin, (req, res) => {
 apiRouter.delete('/admin/orders/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   const deleted = dbStore.deleteOrder(id);
-  if (!deleted) {
-    return res.status(404).json({ error: 'Pedido não encontrado.' });
-  }
-  res.json({ success: true, message: 'Pedido excluído com sucesso.' });
+  res.json({ success: true, message: 'Pedido excluído com sucesso.', removed: deleted });
 });
 
 // -------------------------------------------------------------
@@ -448,10 +439,7 @@ apiRouter.put('/admin/events/:id', requireAdmin, (req, res) => {
 apiRouter.delete('/admin/events/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   const deleted = dbStore.deleteEvent(id);
-  if (!deleted) {
-    return res.status(404).json({ error: 'Evento não encontrado.' });
-  }
-  res.json({ success: true });
+  res.json({ success: true, message: 'Evento excluído com sucesso.', removed: deleted });
 });
 
 // -------------------------------------------------------------
@@ -494,10 +482,7 @@ apiRouter.put('/admin/news/:id', requireAdmin, (req, res) => {
 apiRouter.delete('/admin/news/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   const deleted = dbStore.deleteNews(id);
-  if (!deleted) {
-    return res.status(404).json({ error: 'Notícia não encontrada.' });
-  }
-  res.json({ success: true });
+  res.json({ success: true, message: 'Notícia excluída com sucesso.', removed: deleted });
 });
 
 // -------------------------------------------------------------
@@ -539,10 +524,7 @@ apiRouter.put('/admin/community/:id', requireAdmin, (req, res) => {
 apiRouter.delete('/admin/community/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   const deleted = dbStore.deleteSocialLink(id);
-  if (!deleted) {
-    return res.status(404).json({ error: 'Rede social não encontrada.' });
-  }
-  res.json({ success: true, message: 'Rede social excluída com sucesso.' });
+  res.json({ success: true, message: 'Rede social excluída com sucesso.', removed: deleted });
 });
 
 // -------------------------------------------------------------
@@ -603,8 +585,5 @@ apiRouter.get('/admin/players', requireAdmin, (req, res) => {
 apiRouter.delete('/admin/players/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   const deleted = dbStore.deletePlayer(id);
-  if (!deleted) {
-    return res.status(404).json({ error: 'Jogador não encontrado.' });
-  }
-  res.json({ success: true, message: 'Jogador excluído com sucesso.' });
+  res.json({ success: true, message: 'Jogador excluído com sucesso.', removed: deleted });
 });

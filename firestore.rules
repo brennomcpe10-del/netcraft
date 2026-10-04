@@ -76,6 +76,11 @@ service cloud.firestore {
       allow write: if isValidId(faqId);
     }
 
+    match /system/{docId} {
+      allow read: if true;
+      allow write: if isValidId(docId);
+    }
+
     match /test/{testId} {
       allow read, write: if isValidId(testId);
     }

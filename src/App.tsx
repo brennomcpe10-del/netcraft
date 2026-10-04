@@ -84,11 +84,11 @@ function MainAppContent() {
 
     // Attach real-time listeners for live updates across all devices
     const unsubVips = subscribeToVips(liveVips => {
-      if (liveVips.length > 0) setVips(liveVips);
+      setVips(liveVips);
     });
 
     const unsubProds = subscribeToProducts(liveProds => {
-      if (liveProds.length > 0) setProducts(liveProds);
+      setProducts(liveProds);
     });
 
     const unsubSettings = subscribeToServerSettings(liveSettings => {
@@ -96,15 +96,15 @@ function MainAppContent() {
     });
 
     const unsubEvents = subscribeToEvents(liveEvents => {
-      if (liveEvents.length > 0) setEvents(liveEvents);
+      setEvents(liveEvents);
     });
 
     const unsubNews = subscribeToNews(liveNews => {
-      if (liveNews.length > 0) setNews(liveNews);
+      setNews(liveNews);
     });
 
     const unsubSocial = subscribeToSocialLinks(liveSocial => {
-      if (liveSocial.length > 0) setSocialLinks(liveSocial);
+      setSocialLinks(liveSocial);
     });
 
     return () => {

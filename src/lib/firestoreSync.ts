@@ -126,6 +126,14 @@ export const initialFaqs: FaqItem[] = [
 // -------------------------------------------------------------
 export async function seedFirestoreIfEmpty() {
   try {
+    const initRef = doc(db, 'system', 'initialized');
+    const initSnap = await getDoc(initRef);
+    if (initSnap.exists()) {
+      // Database has already been initialized previously.
+      // Do not re-insert items that were deleted by an administrator!
+      return;
+    }
+
     // 1. VIPs
     const vipsSnap = await getDocs(collection(db, 'vips'));
     if (vipsSnap.empty) {
@@ -199,6 +207,9 @@ export async function seedFirestoreIfEmpty() {
         await setDoc(doc(db, 'faqItems', f.id), f);
       }
     }
+
+    // Mark system as initialized so subsequent page loads never resurrect deleted records
+    await setDoc(initRef, { initializedAt: new Date().toISOString(), version: 1 }).catch(() => {});
   } catch (err) {
     console.warn('Firestore seeding check notice:', err);
   }
@@ -338,7 +349,21 @@ export async function saveVipToFirestore(vip: VIP) {
 }
 
 export async function deleteVipFromFirestore(id: string) {
-  await deleteDoc(doc(db, 'vips', id));
+  try {
+    await deleteDoc(doc(db, 'vips', id)).catch(() => {});
+    if (id.toLowerCase() !== id) {
+      await deleteDoc(doc(db, 'vips', id.toLowerCase())).catch(() => {});
+    }
+    const snap = await getDocs(collection(db, 'vips'));
+    snap.forEach(async docSnap => {
+      const data = docSnap.data();
+      if (docSnap.id === id || docSnap.id.toLowerCase() === id.toLowerCase() || data.id === id) {
+        await deleteDoc(doc(db, 'vips', docSnap.id)).catch(() => {});
+      }
+    });
+  } catch (err) {
+    console.warn('Error in deleteVipFromFirestore:', err);
+  }
 }
 
 export async function saveProductToFirestore(prod: Product) {
@@ -346,7 +371,21 @@ export async function saveProductToFirestore(prod: Product) {
 }
 
 export async function deleteProductFromFirestore(id: string) {
-  await deleteDoc(doc(db, 'products', id));
+  try {
+    await deleteDoc(doc(db, 'products', id)).catch(() => {});
+    if (id.toLowerCase() !== id) {
+      await deleteDoc(doc(db, 'products', id.toLowerCase())).catch(() => {});
+    }
+    const snap = await getDocs(collection(db, 'products'));
+    snap.forEach(async docSnap => {
+      const data = docSnap.data();
+      if (docSnap.id === id || docSnap.id.toLowerCase() === id.toLowerCase() || data.id === id) {
+        await deleteDoc(doc(db, 'products', docSnap.id)).catch(() => {});
+      }
+    });
+  } catch (err) {
+    console.warn('Error in deleteProductFromFirestore:', err);
+  }
 }
 
 export async function saveSettingsToFirestore(settings: ServerSettings) {
@@ -358,7 +397,21 @@ export async function saveEventToFirestore(ev: ServerEvent) {
 }
 
 export async function deleteEventFromFirestore(id: string) {
-  await deleteDoc(doc(db, 'events', id));
+  try {
+    await deleteDoc(doc(db, 'events', id)).catch(() => {});
+    if (id.toLowerCase() !== id) {
+      await deleteDoc(doc(db, 'events', id.toLowerCase())).catch(() => {});
+    }
+    const snap = await getDocs(collection(db, 'events'));
+    snap.forEach(async docSnap => {
+      const data = docSnap.data();
+      if (docSnap.id === id || docSnap.id.toLowerCase() === id.toLowerCase() || data.id === id) {
+        await deleteDoc(doc(db, 'events', docSnap.id)).catch(() => {});
+      }
+    });
+  } catch (err) {
+    console.warn('Error in deleteEventFromFirestore:', err);
+  }
 }
 
 export async function saveNewsToFirestore(n: NewsArticle) {
@@ -366,7 +419,21 @@ export async function saveNewsToFirestore(n: NewsArticle) {
 }
 
 export async function deleteNewsFromFirestore(id: string) {
-  await deleteDoc(doc(db, 'news', id));
+  try {
+    await deleteDoc(doc(db, 'news', id)).catch(() => {});
+    if (id.toLowerCase() !== id) {
+      await deleteDoc(doc(db, 'news', id.toLowerCase())).catch(() => {});
+    }
+    const snap = await getDocs(collection(db, 'news'));
+    snap.forEach(async docSnap => {
+      const data = docSnap.data();
+      if (docSnap.id === id || docSnap.id.toLowerCase() === id.toLowerCase() || data.id === id) {
+        await deleteDoc(doc(db, 'news', docSnap.id)).catch(() => {});
+      }
+    });
+  } catch (err) {
+    console.warn('Error in deleteNewsFromFirestore:', err);
+  }
 }
 
 export async function saveSocialLinkToFirestore(link: SocialLink) {
@@ -374,7 +441,21 @@ export async function saveSocialLinkToFirestore(link: SocialLink) {
 }
 
 export async function deleteSocialLinkFromFirestore(id: string) {
-  await deleteDoc(doc(db, 'socialLinks', id));
+  try {
+    await deleteDoc(doc(db, 'socialLinks', id)).catch(() => {});
+    if (id.toLowerCase() !== id) {
+      await deleteDoc(doc(db, 'socialLinks', id.toLowerCase())).catch(() => {});
+    }
+    const snap = await getDocs(collection(db, 'socialLinks'));
+    snap.forEach(async docSnap => {
+      const data = docSnap.data();
+      if (docSnap.id === id || docSnap.id.toLowerCase() === id.toLowerCase() || data.id === id) {
+        await deleteDoc(doc(db, 'socialLinks', docSnap.id)).catch(() => {});
+      }
+    });
+  } catch (err) {
+    console.warn('Error in deleteSocialLinkFromFirestore:', err);
+  }
 }
 
 export async function saveOrderToFirestore(order: Order) {
@@ -382,7 +463,26 @@ export async function saveOrderToFirestore(order: Order) {
 }
 
 export async function deleteOrderFromFirestore(id: string) {
-  await deleteDoc(doc(db, 'orders', id));
+  try {
+    const cleanId = id.trim().toLowerCase().replace(/^#/, '');
+    await deleteDoc(doc(db, 'orders', id)).catch(() => {});
+    await deleteDoc(doc(db, 'orders', id.replace(/^#/, ''))).catch(() => {});
+    const snap = await getDocs(collection(db, 'orders'));
+    snap.forEach(async docSnap => {
+      const data = docSnap.data();
+      const docClean = docSnap.id.toLowerCase().replace(/^#/, '');
+      const dataIdClean = (data.id || '').toLowerCase().replace(/^#/, '');
+      if (
+        docSnap.id === id ||
+        docClean === cleanId ||
+        dataIdClean === cleanId
+      ) {
+        await deleteDoc(doc(db, 'orders', docSnap.id)).catch(() => {});
+      }
+    });
+  } catch (err) {
+    console.warn('Error in deleteOrderFromFirestore:', err);
+  }
 }
 
 function playerDocIdFromNickname(nickname: string): string {
@@ -496,8 +596,53 @@ export async function getOrCreateUserFromFirestore(nickname: string): Promise<Pl
   }
 }
 
-export async function deleteUserFromFirestore(id: string) {
-  await deleteDoc(doc(db, 'users', id));
+export async function deleteUserFromFirestore(id: string, nickname?: string) {
+  try {
+    const cleanNick = (nickname || '').trim().toLowerCase();
+    const cleanId = id.trim().toLowerCase();
+
+    // 1. Direct doc deletion attempts
+    const directRefs = [
+      doc(db, 'users', id),
+      doc(db, 'players', id)
+    ];
+    if (cleanId !== id) {
+      directRefs.push(doc(db, 'users', cleanId));
+      directRefs.push(doc(db, 'players', cleanId));
+    }
+    if (cleanNick) {
+      directRefs.push(doc(db, 'users', playerDocIdFromNickname(cleanNick)));
+      directRefs.push(doc(db, 'players', playerDocIdFromNickname(cleanNick)));
+    }
+
+    for (const dRef of directRefs) {
+      await deleteDoc(dRef).catch(() => {});
+    }
+
+    // 2. Scan both collections for matching id or nickname to guarantee total removal
+    for (const colName of ['users', 'players']) {
+      try {
+        const snap = await getDocs(collection(db, colName));
+        snap.forEach(async docSnap => {
+          const data = docSnap.data();
+          const dNick = (data.nickname || '').trim().toLowerCase();
+          const dId = (data.id || '').trim().toLowerCase();
+          if (
+            docSnap.id === id ||
+            docSnap.id.toLowerCase() === cleanId ||
+            dId === cleanId ||
+            (cleanNick && (dNick === cleanNick || docSnap.id.includes(cleanNick)))
+          ) {
+            await deleteDoc(doc(db, colName, docSnap.id)).catch(() => {});
+          }
+        });
+      } catch (err) {
+        console.warn(`Notice scanning ${colName} during user deletion:`, err);
+      }
+    }
+  } catch (err) {
+    console.warn('Error in deleteUserFromFirestore:', err);
+  }
 }
 
 export async function saveHomeConfigToFirestore(config: HomeConfig) {

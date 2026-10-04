@@ -73,7 +73,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     type: 'vip' | 'product' | 'order' | 'player' | 'event' | 'news' | 'community';
     id: string;
     name: string;
+    extraNickname?: string;
   } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (adminToken) {
@@ -279,51 +281,99 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   // UNIFIED DELETE CONFIRMATION HANDLER
   // -------------------------------------------------------------
   const handleConfirmDelete = async () => {
-    if (!deleteConfirm || !adminToken) return;
-    const { type, id, name } = deleteConfirm;
+    if (!deleteConfirm || !adminToken || isDeleting) return;
+    const { type, id, name, extraNickname } = deleteConfirm;
+    setIsDeleting(true);
+
+    const lowerId = id.trim().toLowerCase();
+    const cleanNick = (extraNickname || name).trim().toLowerCase();
+
+    // 1. OPTIMISTIC UI: Instantly remove item from view so user never sees lag
+    switch (type) {
+      case 'vip':
+        setVips(prev => prev.filter(v => v.id !== id && v.id.toLowerCase() !== lowerId));
+        break;
+      case 'product':
+        setProducts(prev => prev.filter(p => p.id !== id && p.id.toLowerCase() !== lowerId));
+        break;
+      case 'order':
+        setOrders(prev => prev.filter(o => o.id !== id && o.id.toLowerCase() !== lowerId && o.id.toLowerCase().replace(/^#/, '') !== lowerId.replace(/^#/, '')));
+        break;
+      case 'player':
+        setPlayers(prev => prev.filter(p => p.id !== id && p.id.toLowerCase() !== lowerId && p.nickname.toLowerCase() !== cleanNick));
+        break;
+      case 'event':
+        setEvents(prev => prev.filter(e => e.id !== id && e.id.toLowerCase() !== lowerId));
+        break;
+      case 'news':
+        setNews(prev => prev.filter(n => n.id !== id && n.id.toLowerCase() !== lowerId));
+        break;
+      case 'community':
+        setSocialLinks(prev => prev.filter(s => s.id !== id && s.id.toLowerCase() !== lowerId));
+        break;
+    }
+
     try {
+      // 2. Perform deletions concurrently on server & Firestore
       switch (type) {
         case 'vip':
-          await api.deleteVip(id, adminToken);
-          await deleteVipFromFirestore(id).catch(() => {});
-          showSuccess(`VIP ${name} excluído`);
+          await Promise.allSettled([
+            api.deleteVip(id, adminToken),
+            deleteVipFromFirestore(id)
+          ]);
+          showSuccess(`VIP ${name} excluído com sucesso`);
           break;
         case 'product':
-          await api.deleteProduct(id, adminToken);
-          await deleteProductFromFirestore(id).catch(() => {});
-          showSuccess(`Item ${name} excluído`);
+          await Promise.allSettled([
+            api.deleteProduct(id, adminToken),
+            deleteProductFromFirestore(id)
+          ]);
+          showSuccess(`Item ${name} excluído com sucesso`);
           break;
         case 'order':
-          await api.deleteOrder(id, adminToken);
-          await deleteOrderFromFirestore(id).catch(() => {});
+          await Promise.allSettled([
+            api.deleteOrder(id, adminToken),
+            deleteOrderFromFirestore(id)
+          ]);
           showSuccess(`Pedido #${id} excluído com sucesso`);
           break;
         case 'player':
-          await api.deletePlayer(id, adminToken);
-          await deleteUserFromFirestore(id).catch(() => {});
+          await Promise.allSettled([
+            api.deletePlayer(id, adminToken),
+            deleteUserFromFirestore(id, extraNickname || name)
+          ]);
           showSuccess(`Jogador ${name} removido do sistema`);
           break;
         case 'event':
-          await api.deleteEvent(id, adminToken);
-          await deleteEventFromFirestore(id).catch(() => {});
-          showSuccess(`Evento ${name} excluído`);
+          await Promise.allSettled([
+            api.deleteEvent(id, adminToken),
+            deleteEventFromFirestore(id)
+          ]);
+          showSuccess(`Evento ${name} excluído com sucesso`);
           break;
         case 'news':
-          await api.deleteNews(id, adminToken);
-          await deleteNewsFromFirestore(id).catch(() => {});
-          showSuccess(`Notícia ${name} excluída`);
+          await Promise.allSettled([
+            api.deleteNews(id, adminToken),
+            deleteNewsFromFirestore(id)
+          ]);
+          showSuccess(`Notícia ${name} excluída com sucesso`);
           break;
         case 'community':
-          await api.deleteSocialLink(id, adminToken);
-          await deleteSocialLinkFromFirestore(id).catch(() => {});
-          showSuccess(`Comunidade ${name} excluída`);
+          await Promise.allSettled([
+            api.deleteSocialLink(id, adminToken),
+            deleteSocialLinkFromFirestore(id)
+          ]);
+          showSuccess(`Comunidade ${name} excluída com sucesso`);
           break;
       }
       setDeleteConfirm(null);
       await loadData();
       await onRefreshGlobalData();
     } catch (err: unknown) {
-      showError(err instanceof Error ? err.message : 'Erro ao excluir');
+      showError(err instanceof Error ? err.message : 'Erro ao processar exclusão');
+      await loadData();
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -725,7 +775,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                           setDeleteConfirm({
                             type: 'player',
                             id: p.id,
-                            name: `Jogador ${p.nickname}`
+                            name: p.nickname,
+                            extraNickname: p.nickname
                           })
                         }
                         title="Apagar Jogador"
@@ -2065,17 +2116,26 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
             <div className="flex gap-2 justify-center pt-2">
               <button
                 type="button"
+                disabled={isDeleting}
                 onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 rounded-lg border border-white/[0.08] text-xs text-zinc-300 hover:bg-white/[0.05] transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-lg border border-white/[0.08] text-xs text-zinc-300 hover:bg-white/[0.05] disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="button"
+                disabled={isDeleting}
                 onClick={handleConfirmDelete}
-                className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-lg shadow-rose-950/50 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-lg shadow-rose-950/50 transition-colors cursor-pointer flex items-center justify-center gap-1.5 min-w-[100px]"
               >
-                Sim, Excluir
+                {isDeleting ? (
+                  <>
+                    <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+                    <span>Excluindo...</span>
+                  </>
+                ) : (
+                  <span>Sim, Excluir</span>
+                )}
               </button>
             </div>
           </div>

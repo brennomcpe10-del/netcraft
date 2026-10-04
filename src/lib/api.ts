@@ -172,7 +172,7 @@ export const api = {
   },
 
   async deleteVip(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/vips/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/vips/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
@@ -201,7 +201,7 @@ export const api = {
   },
 
   async updateProduct(id: string, productData: Partial<Product>, adminToken: string): Promise<Product> {
-    const res = await fetch(`${API_BASE}/admin/products/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/products/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: getHeaders(adminToken),
       body: JSON.stringify(productData)
@@ -211,7 +211,7 @@ export const api = {
   },
 
   async deleteProduct(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/products/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/products/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
@@ -263,7 +263,7 @@ export const api = {
   },
 
   async deleteOrder(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/orders/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/orders/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
@@ -308,7 +308,7 @@ export const api = {
   },
 
   async deleteEvent(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/events/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/events/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
@@ -333,7 +333,7 @@ export const api = {
   },
 
   async updateNews(id: string, newsData: Partial<NewsArticle>, adminToken: string): Promise<NewsArticle> {
-    const res = await fetch(`${API_BASE}/admin/news/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/news/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: getHeaders(adminToken),
       body: JSON.stringify(newsData)
@@ -343,7 +343,7 @@ export const api = {
   },
 
   async deleteNews(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/news/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/news/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
@@ -368,7 +368,7 @@ export const api = {
   },
 
   async updateSocialLink(id: string, data: Partial<SocialLink>, adminToken: string): Promise<SocialLink> {
-    const res = await fetch(`${API_BASE}/admin/community/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/community/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: getHeaders(adminToken),
       body: JSON.stringify(data)
@@ -378,7 +378,7 @@ export const api = {
   },
 
   async deleteSocialLink(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/community/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/community/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
@@ -406,7 +406,7 @@ export const api = {
   },
 
   async updateTicket(id: string, data: Partial<SupportTicket>, adminToken: string): Promise<SupportTicket> {
-    const res = await fetch(`${API_BASE}/admin/tickets/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/tickets/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: getHeaders(adminToken),
       body: JSON.stringify(data)
@@ -432,7 +432,7 @@ export const api = {
   },
 
   async deletePlayer(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/players/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/players/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });

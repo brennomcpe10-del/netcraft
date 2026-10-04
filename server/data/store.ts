@@ -149,8 +149,13 @@ class Store {
   }
 
   deletePlayer(id: string): boolean {
+    const clean = id.trim().toLowerCase();
     const prevLen = this.data.players.length;
-    this.data.players = this.data.players.filter(p => p.id !== id);
+    this.data.players = this.data.players.filter(p => 
+      p.id !== id &&
+      p.id.toLowerCase() !== clean &&
+      p.nickname.toLowerCase() !== clean
+    );
     if (this.data.players.length !== prevLen) {
       this.saveDatabase();
       return true;
@@ -190,8 +195,9 @@ class Store {
   }
 
   deleteVip(id: string): boolean {
+    const clean = id.trim().toLowerCase();
     const prevLen = this.data.vips.length;
-    this.data.vips = this.data.vips.filter(v => v.id !== id);
+    this.data.vips = this.data.vips.filter(v => v.id !== id && v.id.toLowerCase() !== clean);
     if (this.data.vips.length !== prevLen) {
       this.saveDatabase();
       return true;
@@ -234,8 +240,9 @@ class Store {
   }
 
   deleteProduct(id: string): boolean {
+    const clean = id.trim().toLowerCase();
     const prevLen = this.data.products.length;
-    this.data.products = this.data.products.filter(p => p.id !== id);
+    this.data.products = this.data.products.filter(p => p.id !== id && p.id.toLowerCase() !== clean);
     if (this.data.products.length !== prevLen) {
       this.saveDatabase();
       return true;
@@ -357,8 +364,13 @@ class Store {
   }
 
   deleteOrder(id: string): boolean {
+    const clean = id.trim().toLowerCase().replace(/^#/, '');
     const prevLen = this.data.orders.length;
-    this.data.orders = this.data.orders.filter(o => o.id !== id);
+    this.data.orders = this.data.orders.filter(o => 
+      o.id !== id && 
+      o.id.toLowerCase() !== id.toLowerCase() &&
+      o.id.toLowerCase().replace(/^#/, '') !== clean
+    );
     if (this.data.orders.length !== prevLen) {
       this.saveDatabase();
       return true;
@@ -394,8 +406,9 @@ class Store {
   }
 
   deleteEvent(id: string): boolean {
+    const clean = id.trim().toLowerCase();
     const prevLen = this.data.events.length;
-    this.data.events = this.data.events.filter(e => e.id !== id);
+    this.data.events = this.data.events.filter(e => e.id !== id && e.id.toLowerCase() !== clean);
     if (this.data.events.length !== prevLen) {
       this.saveDatabase();
       return true;
@@ -431,8 +444,9 @@ class Store {
   }
 
   deleteNews(id: string): boolean {
+    const clean = id.trim().toLowerCase();
     const prevLen = this.data.news.length;
-    this.data.news = this.data.news.filter(n => n.id !== id);
+    this.data.news = this.data.news.filter(n => n.id !== id && n.id.toLowerCase() !== clean);
     if (this.data.news.length !== prevLen) {
       this.saveDatabase();
       return true;
@@ -464,8 +478,9 @@ class Store {
   }
 
   deleteSocialLink(id: string): boolean {
+    const clean = id.trim().toLowerCase();
     const prevLen = this.data.socialLinks.length;
-    this.data.socialLinks = this.data.socialLinks.filter(s => s.id !== id);
+    this.data.socialLinks = this.data.socialLinks.filter(s => s.id !== id && s.id.toLowerCase() !== clean);
     if (this.data.socialLinks.length !== prevLen) {
       this.saveDatabase();
       return true;
