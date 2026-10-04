@@ -160,84 +160,54 @@ export async function seedFirestoreIfEmpty() {
       return;
     }
 
-    // 1. VIPs
-    const vipsSnap = await getDocs(collection(db, 'vips'));
-    if (vipsSnap.empty) {
-      for (const vip of initialVips) {
-        await setDoc(doc(db, 'vips', vip.id), vip);
-      }
-    }
-
-    // 2. Products
-    const prodsSnap = await getDocs(collection(db, 'products'));
-    if (prodsSnap.empty) {
-      for (const prod of initialProducts) {
-        await setDoc(doc(db, 'products', prod.id), prod);
-      }
-    }
-
-    // 3. Server Settings
-    const settingsSnap = await getDoc(doc(db, 'serverSettings', 'default'));
-    if (!settingsSnap.exists()) {
-      await setDoc(doc(db, 'serverSettings', 'default'), initialSettings);
-    }
-
-    // 4. Social Links
-    const socSnap = await getDocs(collection(db, 'socialLinks'));
-    if (socSnap.empty) {
-      for (const link of initialSocialLinks) {
-        await setDoc(doc(db, 'socialLinks', link.id), link);
-      }
-    }
-
-    // 5. Events
-    const evSnap = await getDocs(collection(db, 'events'));
-    if (evSnap.empty) {
-      for (const ev of initialEvents) {
-        await setDoc(doc(db, 'events', ev.id), ev);
-      }
-    }
-
-    // 6. News
-    const newsSnap = await getDocs(collection(db, 'news'));
-    if (newsSnap.empty) {
-      for (const n of initialNews) {
-        await setDoc(doc(db, 'news', n.id), n);
-      }
-    }
-
-    // 7. Home Config
-    const homeSnap = await getDoc(doc(db, 'homeConfig', 'default'));
-    if (!homeSnap.exists()) {
-      await setDoc(doc(db, 'homeConfig', 'default'), initialHomeConfig);
-    }
-
-    // 8. Menu Items
-    const menuSnap = await getDocs(collection(db, 'menuItems'));
-    if (menuSnap.empty) {
-      for (const item of initialMenuItems) {
-        await setDoc(doc(db, 'menuItems', item.id), item);
-      }
-    }
-
-    // 9. Appearance Config
-    const appSnap = await getDoc(doc(db, 'appearanceConfig', 'default'));
-    if (!appSnap.exists()) {
-      await setDoc(doc(db, 'appearanceConfig', 'default'), initialAppearance);
-    }
-
-    // 10. FAQ Items
-    const faqSnap = await getDocs(collection(db, 'faqItems'));
-    if (faqSnap.empty) {
-      for (const f of initialFaqs) {
-        await setDoc(doc(db, 'faqItems', f.id), f);
-      }
-    }
-
-    // Mark system as initialized so subsequent page loads never resurrect deleted records
+    // Mark system as initialized FIRST before inserting any first-boot baseline data
     await setDoc(initRef, { initializedAt: new Date().toISOString(), version: 1 }).catch(() => {});
     if (typeof window !== 'undefined') {
       localStorage.setItem('netcraftbr_seeded', 'true');
+    }
+
+    // 1. VIPs (Initial installation baseline only)
+    for (const vip of initialVips) {
+      await setDoc(doc(db, 'vips', vip.id), vip);
+    }
+
+    // 2. Products (Initial installation baseline only)
+    for (const prod of initialProducts) {
+      await setDoc(doc(db, 'products', prod.id), prod);
+    }
+
+    // 3. Server Settings
+    await setDoc(doc(db, 'serverSettings', 'default'), initialSettings);
+
+    // 4. Social Links
+    for (const link of initialSocialLinks) {
+      await setDoc(doc(db, 'socialLinks', link.id), link);
+    }
+
+    // 5. Events
+    for (const ev of initialEvents) {
+      await setDoc(doc(db, 'events', ev.id), ev);
+    }
+
+    // 6. News
+    for (const n of initialNews) {
+      await setDoc(doc(db, 'news', n.id), n);
+    }
+
+    // 7. Home Config
+    await setDoc(doc(db, 'homeConfig', 'default'), initialHomeConfig);
+
+    // 8. Menu Items
+    for (const item of initialMenuItems) {
+      await setDoc(doc(db, 'menuItems', item.id), item);
+    }
+
+    // 9. Appearance Config
+    await setDoc(doc(db, 'appearanceConfig', 'default'), initialAppearance);
+
+    // 10. FAQ Items
+    for (const f of initialFaqs) {
+      await setDoc(doc(db, 'faqItems', f.id), f);
     }
   } catch (err) {
     console.warn('Firestore seeding check notice:', err);
