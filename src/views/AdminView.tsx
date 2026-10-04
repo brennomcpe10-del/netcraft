@@ -21,19 +21,29 @@ import { compressImageFile } from '../lib/imageUtils.ts';
 import {
   saveVipToFirestore,
   deleteVipFromFirestore,
+  getVipsFromFirestore,
   saveProductToFirestore,
   deleteProductFromFirestore,
+  getProductsFromFirestore,
   saveSettingsToFirestore,
+  getSettingsFromFirestore,
   saveEventToFirestore,
   deleteEventFromFirestore,
+  getEventsFromFirestore,
   saveNewsToFirestore,
   deleteNewsFromFirestore,
-  saveSocialLinkToFirestore,
-  deleteSocialLinkFromFirestore,
+  getNewsFromFirestore,
+  saveCommunityLinkToFirestore,
+  deleteCommunityLinkFromFirestore,
+  getCommunityFromFirestore,
   saveOrderToFirestore,
   deleteOrderFromFirestore,
   deleteOrdersBulkFromFirestore,
-  deleteUserFromFirestore
+  getOrdersFromFirestore,
+  deletePlayerFromFirestore,
+  getPlayersFromFirestore,
+  savePlayerToFirestore,
+  getStatsFromFirestore
 } from '../lib/firestoreSync.ts';
 
 interface AdminViewProps {
@@ -109,15 +119,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         socialResult,
         settingsResult
       ] = await Promise.allSettled([
-        api.getAdminStats(adminToken),
-        api.getVips(true),
-        api.getProducts(true),
-        api.getAllOrders(adminToken),
-        api.getAdminPlayers(adminToken),
-        api.getEvents(true),
-        api.getNews(true),
-        api.getCommunity(),
-        api.getSettings()
+        getStatsFromFirestore(),
+        getVipsFromFirestore(),
+        getProductsFromFirestore(),
+        getOrdersFromFirestore(),
+        getPlayersFromFirestore(),
+        getEventsFromFirestore(),
+        getNewsFromFirestore(),
+        getCommunityFromFirestore(),
+        getSettingsFromFirestore()
       ]);
 
       const loadedOrders = ordersResult.status === 'fulfilled' ? ordersResult.value : [];
@@ -130,7 +140,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       if (eventsResult.status === 'fulfilled') setEvents(eventsResult.value);
       if (newsResult.status === 'fulfilled') setNews(newsResult.value);
       if (socialResult.status === 'fulfilled') setSocialLinks(socialResult.value);
-      if (settingsResult.status === 'fulfilled') setServerSettings(settingsResult.value);
+      if (settingsResult.status === 'fulfilled' && settingsResult.value) setServerSettings(settingsResult.value);
 
       if (dashResult.status === 'fulfilled') {
         setStats(dashResult.value);

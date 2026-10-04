@@ -293,6 +293,15 @@
     "/settings/{settingId}": {
       "schema": { "$ref": "ServerSettings" },
       "description": "Configurações de infraestrutura do NetCraftBR"
+    },
+    "/tickets/{ticketId}": {
+      "description": "Chamados de suporte abertos pelos jogadores"
+    },
+    "/stats/{statId}": {
+      "description": "Métricas e estatísticas consolidadas do servidor"
+    },
+    "/community/{communityId}": {
+      "description": "Links oficiais e redes sociais da comunidade"
     }
   }
 }

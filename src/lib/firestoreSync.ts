@@ -23,7 +23,9 @@ import {
   HomeConfig,
   MenuItem,
   AppearanceConfig,
-  FaqItem
+  FaqItem,
+  SupportTicket,
+  DashboardStats
 } from '../types/index.ts';
 
 import {
@@ -146,6 +148,174 @@ export async function seedFirestoreIfEmpty() {
 }
 
 // -------------------------------------------------------------
+// DIRECT FIRESTORE GETTERS (OFFICIAL SOURCE OF TRUTH)
+// -------------------------------------------------------------
+export async function getVipsFromFirestore(): Promise<VIP[]> {
+  try {
+    const snap = await getDocs(collection(db, 'vips'));
+    const list: VIP[] = [];
+    snap.forEach(d => list.push({ ...d.data(), id: d.id } as VIP));
+    list.sort((a, b) => (a.order || 0) - (b.order || 0));
+    return list;
+  } catch (err) {
+    console.warn('Error fetching VIPs from Firestore:', err);
+    return [];
+  }
+}
+
+export async function getProductsFromFirestore(): Promise<Product[]> {
+  try {
+    const snap = await getDocs(collection(db, 'products'));
+    const list: Product[] = [];
+    snap.forEach(d => list.push({ ...d.data(), id: d.id } as Product));
+    list.sort((a, b) => (a.order || 0) - (b.order || 0));
+    return list;
+  } catch (err) {
+    console.warn('Error fetching Products from Firestore:', err);
+    return [];
+  }
+}
+
+export async function getOrdersFromFirestore(): Promise<Order[]> {
+  try {
+    const snap = await getDocs(collection(db, 'orders'));
+    const list: Order[] = [];
+    snap.forEach(d => list.push({ ...d.data(), id: d.id } as Order));
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return list;
+  } catch (err) {
+    console.warn('Error fetching Orders from Firestore:', err);
+    return [];
+  }
+}
+
+export async function getPlayersFromFirestore(): Promise<Player[]> {
+  try {
+    let snap = await getDocs(collection(db, 'players'));
+    const list: Player[] = [];
+    snap.forEach(d => list.push({ ...d.data(), id: d.id } as Player));
+    // Fallback to users if players empty
+    if (list.length === 0) {
+      const uSnap = await getDocs(collection(db, 'users'));
+      uSnap.forEach(d => list.push({ ...d.data(), id: d.id } as Player));
+    }
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return list;
+  } catch (err) {
+    console.warn('Error fetching Players from Firestore:', err);
+    return [];
+  }
+}
+
+export async function getEventsFromFirestore(): Promise<ServerEvent[]> {
+  try {
+    const snap = await getDocs(collection(db, 'events'));
+    const list: ServerEvent[] = [];
+    snap.forEach(d => list.push({ ...d.data(), id: d.id } as ServerEvent));
+    list.sort((a, b) => (a.order || 0) - (b.order || 0));
+    return list;
+  } catch (err) {
+    console.warn('Error fetching Events from Firestore:', err);
+    return [];
+  }
+}
+
+export async function getNewsFromFirestore(): Promise<NewsArticle[]> {
+  try {
+    const snap = await getDocs(collection(db, 'news'));
+    const list: NewsArticle[] = [];
+    snap.forEach(d => list.push({ ...d.data(), id: d.id } as NewsArticle));
+    list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return list;
+  } catch (err) {
+    console.warn('Error fetching News from Firestore:', err);
+    return [];
+  }
+}
+
+export async function getCommunityFromFirestore(): Promise<SocialLink[]> {
+  try {
+    let snap = await getDocs(collection(db, 'community'));
+    if (snap.empty) {
+      snap = await getDocs(collection(db, 'socialLinks'));
+    }
+    const list: SocialLink[] = [];
+    snap.forEach(d => list.push({ ...d.data(), id: d.id } as SocialLink));
+    list.sort((a, b) => (a.order || 0) - (b.order || 0));
+    return list;
+  } catch (err) {
+    console.warn('Error fetching Community links from Firestore:', err);
+    return [];
+  }
+}
+
+export async function getSettingsFromFirestore(): Promise<ServerSettings | null> {
+  try {
+    let snap = await getDoc(doc(db, 'settings', 'general'));
+    if (!snap.exists()) {
+      snap = await getDoc(doc(db, 'serverSettings', 'default'));
+    }
+    if (snap.exists()) {
+      return snap.data() as ServerSettings;
+    }
+    return null;
+  } catch (err) {
+    console.warn('Error fetching Settings from Firestore:', err);
+    return null;
+  }
+}
+
+export async function getTicketsFromFirestore(): Promise<SupportTicket[]> {
+  try {
+    const snap = await getDocs(collection(db, 'tickets'));
+    const list: SupportTicket[] = [];
+    snap.forEach(d => list.push({ ...d.data(), id: d.id } as SupportTicket));
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return list;
+  } catch (err) {
+    console.warn('Error fetching Tickets from Firestore:', err);
+    return [];
+  }
+}
+
+export async function getStatsFromFirestore(): Promise<DashboardStats> {
+  try {
+    const [pSnap, oSnap] = await Promise.all([
+      getDocs(collection(db, 'players')).catch(() => ({ docs: [] } as any)),
+      getDocs(collection(db, 'orders')).catch(() => ({ docs: [] } as any))
+    ]);
+
+    const orders: Order[] = oSnap.docs ? oSnap.docs.map((d: any) => ({ ...d.data(), id: d.id })) : [];
+    const players: Player[] = pSnap.docs ? pSnap.docs.map((d: any) => ({ ...d.data(), id: d.id })) : [];
+    const paid = orders.filter((o: Order) => o.status === 'Pago' || o.status === 'Entregue');
+    const rev = paid.reduce((acc: number, o: Order) => acc + (o.amount || 0), 0);
+
+    return {
+      playersCount: players.length,
+      ordersCount: orders.length,
+      pendingOrdersCount: orders.filter((o: Order) => o.status === 'Pendente').length,
+      paidOrdersCount: paid.length,
+      vipsSoldCount: paid.filter((o: Order) => o.productType === 'vip').length,
+      totalRevenue: Number(rev.toFixed(2)),
+      recentOrders: orders.slice(-10).reverse(),
+      recentPlayers: players.slice(-10).reverse()
+    };
+  } catch (err) {
+    console.warn('Error calculating Stats from Firestore:', err);
+    return {
+      playersCount: 0,
+      ordersCount: 0,
+      pendingOrdersCount: 0,
+      paidOrdersCount: 0,
+      vipsSoldCount: 0,
+      totalRevenue: 0,
+      recentOrders: [],
+      recentPlayers: []
+    };
+  }
+}
+
+// -------------------------------------------------------------
 // REAL-TIME LISTENERS
 // -------------------------------------------------------------
 export function subscribeToVips(callback: (vips: VIP[]) => void) {
@@ -171,21 +341,48 @@ export function subscribeToProducts(callback: (products: Product[]) => void) {
 }
 
 export function subscribeToServerSettings(callback: (settings: ServerSettings) => void) {
-  return onSnapshot(doc(db, 'serverSettings', 'default'), docSnap => {
+  // Listen to official settings/general, with fallback to serverSettings/default
+  return onSnapshot(doc(db, 'settings', 'general'), docSnap => {
     if (docSnap.exists()) {
       callback(docSnap.data() as ServerSettings);
+    } else {
+      // fallback
+      getDoc(doc(db, 'serverSettings', 'default')).then(legacySnap => {
+        if (legacySnap.exists()) {
+          callback(legacySnap.data() as ServerSettings);
+        }
+      }).catch(() => {});
     }
-  }, err => console.error('Settings sync error:', err));
+  }, () => {
+    // If permission or error, attempt legacy
+    getDoc(doc(db, 'serverSettings', 'default')).then(legacySnap => {
+      if (legacySnap.exists()) {
+        callback(legacySnap.data() as ServerSettings);
+      }
+    }).catch(() => {});
+  });
 }
 
 export function subscribeToSocialLinks(callback: (links: SocialLink[]) => void) {
-  return onSnapshot(collection(db, 'socialLinks'), snapshot => {
-    const list: SocialLink[] = [];
-    snapshot.forEach(docSnap => {
-      list.push({ ...docSnap.data(), id: docSnap.id } as SocialLink);
-    });
-    list.sort((a, b) => (a.order || 0) - (b.order || 0));
-    callback(list);
+  return onSnapshot(collection(db, 'community'), snapshot => {
+    if (!snapshot.empty) {
+      const list: SocialLink[] = [];
+      snapshot.forEach(docSnap => {
+        list.push({ ...docSnap.data(), id: docSnap.id } as SocialLink);
+      });
+      list.sort((a, b) => (a.order || 0) - (b.order || 0));
+      callback(list);
+    } else {
+      // fallback to legacy socialLinks
+      getDocs(collection(db, 'socialLinks')).then(legacySnap => {
+        const list: SocialLink[] = [];
+        legacySnap.forEach(docSnap => {
+          list.push({ ...docSnap.data(), id: docSnap.id } as SocialLink);
+        });
+        list.sort((a, b) => (a.order || 0) - (b.order || 0));
+        callback(list);
+      }).catch(() => {});
+    }
   }, err => console.error('Social links sync error:', err));
 }
 
@@ -222,15 +419,39 @@ export function subscribeToOrders(callback: (orders: Order[]) => void) {
   }, err => console.error('Orders sync error:', err));
 }
 
-export function subscribeToUsers(callback: (users: Player[]) => void) {
-  return onSnapshot(collection(db, 'users'), snapshot => {
-    const list: Player[] = [];
+export function subscribeToPlayers(callback: (players: Player[]) => void) {
+  return onSnapshot(collection(db, 'players'), snapshot => {
+    if (!snapshot.empty) {
+      const list: Player[] = [];
+      snapshot.forEach(docSnap => {
+        list.push({ ...docSnap.data(), id: docSnap.id } as Player);
+      });
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      callback(list);
+    } else {
+      getDocs(collection(db, 'users')).then(legacySnap => {
+        const list: Player[] = [];
+        legacySnap.forEach(docSnap => {
+          list.push({ ...docSnap.data(), id: docSnap.id } as Player);
+        });
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        callback(list);
+      }).catch(() => {});
+    }
+  }, err => console.error('Players sync error:', err));
+}
+
+export const subscribeToUsers = subscribeToPlayers;
+
+export function subscribeToTickets(callback: (tickets: SupportTicket[]) => void) {
+  return onSnapshot(collection(db, 'tickets'), snapshot => {
+    const list: SupportTicket[] = [];
     snapshot.forEach(docSnap => {
-      list.push({ ...docSnap.data(), id: docSnap.id } as Player);
+      list.push({ ...docSnap.data(), id: docSnap.id } as SupportTicket);
     });
     list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     callback(list);
-  }, err => console.error('Users sync error:', err));
+  }, err => console.error('Tickets sync error:', err));
 }
 
 export function subscribeToHomeConfig(callback: (config: HomeConfig) => void) {
@@ -331,7 +552,10 @@ export async function deleteProductFromFirestore(id: string, name?: string) {
 }
 
 export async function saveSettingsToFirestore(settings: ServerSettings) {
-  await setDoc(doc(db, 'serverSettings', 'default'), settings);
+  await Promise.all([
+    setDoc(doc(db, 'settings', 'general'), settings, { merge: true }),
+    setDoc(doc(db, 'serverSettings', 'default'), settings, { merge: true })
+  ]);
 }
 
 export async function saveEventToFirestore(ev: ServerEvent) {
@@ -391,31 +615,56 @@ export async function deleteNewsFromFirestore(id: string, title?: string) {
 }
 
 export async function saveSocialLinkToFirestore(link: SocialLink) {
-  await setDoc(doc(db, 'socialLinks', link.id), link);
+  await Promise.all([
+    setDoc(doc(db, 'community', link.id), link, { merge: true }),
+    setDoc(doc(db, 'socialLinks', link.id), link, { merge: true })
+  ]);
 }
+
+export const saveCommunityLinkToFirestore = saveSocialLinkToFirestore;
 
 export async function deleteSocialLinkFromFirestore(id: string, name?: string) {
   try {
     const cleanId = id.trim().toLowerCase();
     const cleanName = (name || '').trim().toLowerCase();
-    await deleteDoc(doc(db, 'socialLinks', id)).catch(() => {});
+    await Promise.all([
+      deleteDoc(doc(db, 'community', id)).catch(() => {}),
+      deleteDoc(doc(db, 'socialLinks', id)).catch(() => {})
+    ]);
     if (cleanId !== id) {
-      await deleteDoc(doc(db, 'socialLinks', cleanId)).catch(() => {});
+      await Promise.all([
+        deleteDoc(doc(db, 'community', cleanId)).catch(() => {}),
+        deleteDoc(doc(db, 'socialLinks', cleanId)).catch(() => {})
+      ]);
     }
-    const snap = await getDocs(collection(db, 'socialLinks'));
-    const deletePromises: Promise<void>[] = [];
-    for (const docSnap of snap.docs) {
-      const data = docSnap.data();
-      const matchId = docSnap.id === id || docSnap.id.toLowerCase() === cleanId || data.id === id || (data.id && String(data.id).toLowerCase() === cleanId);
-      const matchName = cleanName && data.name && String(data.name).trim().toLowerCase() === cleanName;
-      if (matchId || matchName) {
-        deletePromises.push(deleteDoc(doc(db, 'socialLinks', docSnap.id)).catch(() => {}));
-      }
+    for (const col of ['community', 'socialLinks']) {
+      try {
+        const snap = await getDocs(collection(db, col));
+        const deletePromises: Promise<void>[] = [];
+        for (const docSnap of snap.docs) {
+          const data = docSnap.data();
+          const matchId = docSnap.id === id || docSnap.id.toLowerCase() === cleanId || data.id === id || (data.id && String(data.id).toLowerCase() === cleanId);
+          const matchName = cleanName && data.name && String(data.name).trim().toLowerCase() === cleanName;
+          if (matchId || matchName) {
+            deletePromises.push(deleteDoc(doc(db, col, docSnap.id)).catch(() => {}));
+          }
+        }
+        await Promise.all(deletePromises);
+      } catch {}
     }
-    await Promise.all(deletePromises);
   } catch (err) {
     console.warn('Error in deleteSocialLinkFromFirestore:', err);
   }
+}
+
+export const deleteCommunityLinkFromFirestore = deleteSocialLinkFromFirestore;
+
+export async function saveTicketToFirestore(ticket: SupportTicket) {
+  await setDoc(doc(db, 'tickets', ticket.id), ticket, { merge: true });
+}
+
+export async function deleteTicketFromFirestore(id: string) {
+  await deleteDoc(doc(db, 'tickets', id)).catch(() => {});
 }
 
 export async function saveOrderToFirestore(order: Order) {
@@ -488,7 +737,7 @@ function playerDocIdFromNickname(nickname: string): string {
 
 export async function getOrCreatePlayerInFirestore(nickname: string): Promise<Player> {
   const clean = nickname.trim();
-  const playerRef = doc(db, 'users', playerDocIdFromNickname(clean));
+  const playerRef = doc(db, 'players', playerDocIdFromNickname(clean));
   const snapshot = await getDoc(playerRef);
 
   if (snapshot.exists()) {
@@ -498,7 +747,8 @@ export async function getOrCreatePlayerInFirestore(nickname: string): Promise<Pl
       nickname: existing.nickname || clean,
       lastActive: new Date().toISOString()
     };
-    await setDoc(playerRef, updated);
+    await setDoc(playerRef, updated, { merge: true });
+    await setDoc(doc(db, 'users', playerRef.id), updated, { merge: true }).catch(() => {});
     return updated;
   }
 
@@ -514,12 +764,19 @@ export async function getOrCreatePlayerInFirestore(nickname: string): Promise<Pl
   };
 
   await setDoc(playerRef, player);
+  await setDoc(doc(db, 'users', playerRef.id), player).catch(() => {});
   return player;
 }
 
-export async function saveUserToFirestore(player: Player) {
-  await setDoc(doc(db, 'users', player.id), player);
+export async function savePlayerToFirestore(player: Player) {
+  await Promise.all([
+    setDoc(doc(db, 'players', player.id), player, { merge: true }),
+    setDoc(doc(db, 'users', player.id), player, { merge: true })
+  ]);
 }
+
+export const saveUserToFirestore = savePlayerToFirestore;
+export const deletePlayerFromFirestore = deleteUserFromFirestore;
 
 export async function getUserByNicknameFromFirestore(nickname: string): Promise<Player | null> {
   try {

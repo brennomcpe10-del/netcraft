@@ -21,7 +21,6 @@ import { ProfileView } from './views/ProfileView.tsx';
 import { AdminView } from './views/AdminView.tsx';
 
 import { VIP, Product, ServerEvent, NewsArticle, ServerSettings, SocialLink } from './types/index.ts';
-import { api } from './lib/api.ts';
 import {
   seedFirestoreIfEmpty,
   subscribeToVips,
@@ -29,7 +28,13 @@ import {
   subscribeToServerSettings,
   subscribeToEvents,
   subscribeToNews,
-  subscribeToSocialLinks
+  subscribeToSocialLinks,
+  getVipsFromFirestore,
+  getProductsFromFirestore,
+  getEventsFromFirestore,
+  getNewsFromFirestore,
+  getSettingsFromFirestore,
+  getCommunityFromFirestore
 } from './lib/firestoreSync.ts';
 
 function MainAppContent() {
@@ -50,25 +55,25 @@ function MainAppContent() {
 
   const { isAdminLoggedIn, openAdminModal } = useAdmin();
 
-  // 1. Initial fallback API fetch and Firestore check
+  // 1. Initial Firestore data fetch (Official Source of Truth)
   const fetchGlobalData = useCallback(async () => {
     try {
       const [st, v, p, ev, nw, soc] = await Promise.all([
-        api.getSettings(),
-        api.getVips(false),
-        api.getProducts(false),
-        api.getEvents(false),
-        api.getNews(false),
-        api.getCommunity()
+        getSettingsFromFirestore(),
+        getVipsFromFirestore(),
+        getProductsFromFirestore(),
+        getEventsFromFirestore(),
+        getNewsFromFirestore(),
+        getCommunityFromFirestore()
       ]);
-      setSettings(st);
-      setVips(v);
-      setProducts(p);
-      setEvents(ev);
-      setNews(nw);
-      setSocialLinks(soc);
+      if (st) setSettings(st);
+      if (v) setVips(v);
+      if (p) setProducts(p);
+      if (ev) setEvents(ev);
+      if (nw) setNews(nw);
+      if (soc) setSocialLinks(soc);
     } catch (err) {
-      console.warn('API fetch notice:', err);
+      console.warn('Firestore initial fetch notice:', err);
     } finally {
       setLoading(false);
     }

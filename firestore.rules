@@ -46,6 +46,26 @@ service cloud.firestore {
       allow write: if isValidId(settingId);
     }
 
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isValidId(settingId);
+    }
+
+    match /tickets/{ticketId} {
+      allow read: if true;
+      allow write: if isValidId(ticketId);
+    }
+
+    match /stats/{statId} {
+      allow read: if true;
+      allow write: if isValidId(statId);
+    }
+
+    match /community/{communityId} {
+      allow read: if true;
+      allow write: if isValidId(communityId);
+    }
+
     match /socialLinks/{linkId} {
       allow read: if true;
       allow write: if isValidId(linkId);
