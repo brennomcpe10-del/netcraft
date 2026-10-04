@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-heading: 'Rajdhani', 'Chakra Petch', sans-serif;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #06090e;
+    color: #f1f5f9;
+    overflow-x: hidden;
+    letter-spacing: -0.01em;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, .font-heading {
+    font-family: var(--font-heading);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+}
+
+/* 3D Minecraft Text Shadow */
+.mc-3d-text {
+  text-shadow: 
+    0 2px 0 #000,
+    0 4px 0 #000,
+    0 6px 12px rgba(0, 0, 0, 0.9),
+    0 0 25px rgba(255, 122, 0, 0.45);
+}
+
+.mc-green-glow {
+  text-shadow: 
+    0 2px 0 #005a20,
+    0 4px 0 #003612,
+    0 0 20px rgba(0, 230, 118, 0.7);
+}
+
+.mc-pumpkin-glow {
+  text-shadow: 
+    0 2px 0 #7c2d12,
+    0 4px 0 #451a03,
+    0 0 24px rgba(255, 122, 0, 0.85);
+}
+
+.mc-purple-glow {
+  text-shadow: 
+    0 2px 0 #581c87,
+    0 4px 0 #3b0764,
+    0 0 24px rgba(168, 85, 247, 0.75);
+}
+
+@keyframes halloween-flicker {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 14px rgba(255, 122, 0, 0.75)); }
+  25% { opacity: 0.9; filter: drop-shadow(0 0 8px rgba(255, 90, 0, 0.45)); }
+  50% { opacity: 1; filter: drop-shadow(0 0 20px rgba(255, 150, 0, 0.9)); }
+  75% { opacity: 0.85; filter: drop-shadow(0 0 10px rgba(255, 100, 0, 0.5)); }
+}
+
+.halloween-flicker {
+  animation: halloween-flicker 2.8s ease-in-out infinite;
+}
+
+@keyframes float-spark {
+  0% { transform: translateY(0) scale(0.8); opacity: 0; }
+  25% { opacity: 0.7; }
+  75% { opacity: 0.5; }
+  100% { transform: translateY(-70px) scale(1.2); opacity: 0; }
+}
+
+.spark-float {
+  animation: float-spark 4s ease-in-out infinite;
+}
+
+/* Subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #08070d;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 122, 0, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 122, 0, 0.6);
+}

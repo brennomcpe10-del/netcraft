@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isValidId(userId);
+    }
+
+    match /players/{playerId} {
+      allow read: if true;
+      allow write: if isValidId(playerId);
+    }
+
+    match /vips/{vipId} {
+      allow read: if true;
+      allow write: if isValidId(vipId);
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isValidId(productId);
+    }
+
+    match /orders/{orderId} {
+      allow read: if true;
+      allow write: if isValidId(orderId);
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isValidId(eventId);
+    }
+
+    match /news/{newsId} {
+      allow read: if true;
+      allow write: if isValidId(newsId);
+    }
+
+    match /serverSettings/{settingId} {
+      allow read: if true;
+      allow write: if isValidId(settingId);
+    }
+
+    match /socialLinks/{linkId} {
+      allow read: if true;
+      allow write: if isValidId(linkId);
+    }
+
+    match /homeConfig/{docId} {
+      allow read: if true;
+      allow write: if isValidId(docId);
+    }
+
+    match /pagesConfig/{pageId} {
+      allow read: if true;
+      allow write: if isValidId(pageId);
+    }
+
+    match /menuItems/{itemId} {
+      allow read: if true;
+      allow write: if isValidId(itemId);
+    }
+
+    match /appearanceConfig/{docId} {
+      allow read: if true;
+      allow write: if isValidId(docId);
+    }
+
+    match /faqItems/{faqId} {
+      allow read: if true;
+      allow write: if isValidId(faqId);
+    }
+
+    match /test/{testId} {
+      allow read, write: if isValidId(testId);
+    }
+  }
+}

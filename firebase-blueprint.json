@@ -1,0 +1,298 @@
+{
+  "entities": {
+    "Player": {
+      "title": "Player",
+      "description": "Jogador cadastrado no servidor NetCraftBR com seu nickname Bedrock",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identificador único do jogador"
+        },
+        "nickname": {
+          "type": "string",
+          "description": "Nickname do jogador no Minecraft Bedrock",
+          "minLength": 3,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_ ]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data de cadastro do jogador"
+        },
+        "lastActive": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Última atividade registrada"
+        },
+        "totalSpent": {
+          "type": "number",
+          "description": "Valor total gasto no servidor em R$"
+        },
+        "ordersCount": {
+          "type": "number",
+          "description": "Total de pedidos realizados"
+        }
+      },
+      "required": ["id", "nickname", "createdAt", "lastActive"]
+    },
+    "VIP": {
+      "title": "VIP",
+      "description": "Pacote VIP disponível no servidor NetCraftBR",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identificador do VIP"
+        },
+        "name": {
+          "type": "string",
+          "description": "Nome do VIP",
+          "minLength": 2,
+          "maxLength": 50
+        },
+        "price": {
+          "type": "number",
+          "description": "Preço do VIP em R$"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Duração do pacote VIP"
+        },
+        "description": {
+          "type": "string",
+          "description": "Descrição do VIP"
+        },
+        "benefits": {
+          "type": "array",
+          "description": "Lista de benefícios e vantagens do VIP"
+        },
+        "color": {
+          "type": "string",
+          "description": "Tema visual do VIP"
+        },
+        "image": {
+          "type": "string",
+          "description": "Ícone ou URL da imagem"
+        },
+        "order": {
+          "type": "number",
+          "description": "Ordem de prioridade na exibição"
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Se o VIP está ativo para venda"
+        }
+      },
+      "required": ["id", "name", "price", "duration", "description", "active"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Produto da loja do servidor",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identificador do produto"
+        },
+        "name": {
+          "type": "string",
+          "description": "Nome do item ou kit"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["vips", "kits", "itens", "cosmeticos", "outros"],
+          "description": "Categoria da loja"
+        },
+        "price": {
+          "type": "number",
+          "description": "Preço do item"
+        },
+        "description": {
+          "type": "string",
+          "description": "Descrição detalhada"
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Disponibilidade na loja"
+        }
+      },
+      "required": ["id", "name", "category", "price", "active"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Registro de pedido de VIP ou item",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Código do pedido"
+        },
+        "buyerNickname": {
+          "type": "string",
+          "description": "Nickname do pagador"
+        },
+        "recipientNickname": {
+          "type": "string",
+          "description": "Nickname que receberá o VIP ou item"
+        },
+        "productId": {
+          "type": "string",
+          "description": "Identificador do produto"
+        },
+        "productName": {
+          "type": "string",
+          "description": "Nome do produto adquirido"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Valor final da compra"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Pendente", "Pago", "Cancelado", "Expirado", "Entregue"],
+          "description": "Status de pagamento e entrega"
+        },
+        "transactionId": {
+          "type": "string",
+          "description": "ID gerado pelo gateway de pagamento"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["PIX", "Cartao", "Boleto"],
+          "description": "Método de pagamento"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data do pedido"
+        }
+      },
+      "required": ["id", "buyerNickname", "recipientNickname", "productId", "amount", "status"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "Evento programado no servidor NetCraftBR",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identificador do evento"
+        },
+        "name": {
+          "type": "string",
+          "description": "Nome do evento"
+        },
+        "description": {
+          "type": "string",
+          "description": "Regras e descrição do evento"
+        },
+        "date": {
+          "type": "string",
+          "description": "Data do evento"
+        },
+        "time": {
+          "type": "string",
+          "description": "Horário do evento"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Próximo", "Em andamento", "Encerrado"],
+          "description": "Status do evento"
+        },
+        "published": {
+          "type": "boolean",
+          "description": "Se está visível para os jogadores"
+        }
+      },
+      "required": ["id", "name", "description", "date", "status", "published"]
+    },
+    "News": {
+      "title": "News",
+      "description": "Notícia ou anúncio oficial",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID da notícia"
+        },
+        "title": {
+          "type": "string",
+          "description": "Título da notícia"
+        },
+        "content": {
+          "type": "string",
+          "description": "Texto completo"
+        },
+        "author": {
+          "type": "string",
+          "description": "Autor da postagem"
+        },
+        "published": {
+          "type": "boolean",
+          "description": "Status de publicação"
+        }
+      },
+      "required": ["id", "title", "content", "author", "published"]
+    },
+    "ServerSettings": {
+      "title": "ServerSettings",
+      "description": "Configurações gerais do servidor NetCraftBR",
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "description": "Nome do servidor"
+        },
+        "ip": {
+          "type": "string",
+          "description": "Endereço IP do servidor"
+        },
+        "port": {
+          "type": "number",
+          "description": "Porta Bedrock"
+        },
+        "version": {
+          "type": "string",
+          "description": "Versão compatível"
+        },
+        "isOnline": {
+          "type": "boolean",
+          "description": "Status do servidor"
+        }
+      },
+      "required": ["serverName", "ip", "port", "version"]
+    }
+  },
+  "firestore": {
+    "/players/{playerId}": {
+      "schema": { "$ref": "Player" },
+      "description": "Dados públicos e perfil dos jogadores cadastrados"
+    },
+    "/vips/{vipId}": {
+      "schema": { "$ref": "VIP" },
+      "description": "Pacotes VIP configurados no sistema"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "Product" },
+      "description": "Itens e kits disponíveis na loja"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "Order" },
+      "description": "Histórico de compras e transações de jogadores"
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "Event" },
+      "description": "Eventos da comunidade e do servidor"
+    },
+    "/news/{newsId}": {
+      "schema": { "$ref": "News" },
+      "description": "Notícias e atualizações oficiais"
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "ServerSettings" },
+      "description": "Configurações de infraestrutura do NetCraftBR"
+    }
+  }
+}

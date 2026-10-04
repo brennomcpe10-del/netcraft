@@ -1,0 +1,8 @@
+{
+  "name": "Remix NetCraftBR - Servidor de Minecraft Bedrock",
+  "description": "Site oficial do servidor NetCraftBR para Minecraft Bedrock. Sobrevivência, economia, VIPs exclusivos, eventos e comunidade.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
