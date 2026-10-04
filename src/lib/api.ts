@@ -14,6 +14,23 @@ import {
 
 const API_BASE = '/api';
 
+function notifyIfSessionExpired(status: number) {
+  if (status === 401 || status === 403) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('admin:session_expired'));
+    }
+  }
+}
+
+async function handleAdminFetch<T>(res: Response, defaultError: string): Promise<T> {
+  if (!res.ok) {
+    notifyIfSessionExpired(res.status);
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || defaultError);
+  }
+  return res.json();
+}
+
 function getHeaders(adminToken?: string | null) {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json'
@@ -97,8 +114,7 @@ export const api = {
       headers: getHeaders(adminToken),
       body: JSON.stringify(settings)
     });
-    if (!res.ok) throw new Error('Erro ao atualizar configurações.');
-    return res.json();
+    return handleAdminFetch<ServerSettings>(res, 'Erro ao atualizar configurações.');
   },
 
   async updateLivePixUrl(livePixUrl: string, adminToken: string): Promise<{ success: boolean; message: string; livePixUrl: string; settings: ServerSettings }> {
@@ -107,11 +123,10 @@ export const api = {
       headers: getHeaders(adminToken),
       body: JSON.stringify({ livePixUrl })
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Erro ao atualizar link do LivePix.');
-    }
-    return res.json();
+    return handleAdminFetch<{ success: boolean; message: string; livePixUrl: string; settings: ServerSettings }>(
+      res,
+      'Erro ao atualizar link do LivePix.'
+    );
   },
 
   // --- VIPS ---
@@ -393,8 +408,7 @@ export const api = {
     const res = await fetch(`${API_BASE}/admin/stats`, {
       headers: getHeaders(adminToken)
     });
-    if (!res.ok) throw new Error('Erro ao carregar estatísticas do painel.');
-    return res.json();
+    return handleAdminFetch<DashboardStats>(res, 'Erro ao carregar estatísticas do painel.');
   },
 
   async getAdminPlayers(adminToken: string, search?: string): Promise<Player[]> {
@@ -402,8 +416,7 @@ export const api = {
     const res = await fetch(`${API_BASE}/admin/players${params}`, {
       headers: getHeaders(adminToken)
     });
-    if (!res.ok) throw new Error('Erro ao carregar lista de jogadores.');
-    return res.json();
+    return handleAdminFetch<Player[]>(res, 'Erro ao carregar lista de jogadores.');
   },
 
   async deletePlayer(id: string, adminToken: string): Promise<void> {

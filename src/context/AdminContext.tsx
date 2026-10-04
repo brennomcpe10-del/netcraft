@@ -39,7 +39,20 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     verifySavedSession();
-  }, [verifySavedSession]);
+
+    const handleExpired = () => {
+      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+      setAdminToken(null);
+      setIsAdminLoggedIn(false);
+      setIsAdminModalOpen(true);
+      showError('Sua sessão de administrador expirou. Digite a credencial para continuar.');
+    };
+
+    window.addEventListener('admin:session_expired', handleExpired);
+    return () => {
+      window.removeEventListener('admin:session_expired', handleExpired);
+    };
+  }, [verifySavedSession, showError]);
 
   const loginAdmin = async (password: string): Promise<boolean> => {
     try {

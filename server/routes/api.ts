@@ -8,8 +8,54 @@ export const apiRouter = express.Router();
 // Default: 'brennomcpe' as instructed by the server owner
 const ADMIN_SECRET = process.env.ADMIN_KEYWORD || 'brennomcpe';
 
-// In-memory set of active admin tokens
-const activeAdminTokens = new Set<string>();
+// In-memory set of explicitly revoked admin tokens
+const revokedAdminTokens = new Set<string>();
+
+// Generate cryptographic HMAC-signed token
+export function generateAdminToken(): string {
+  const timestamp = Date.now().toString();
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const payload = `${timestamp}.${nonce}`;
+  const hmac = crypto.createHmac('sha256', ADMIN_SECRET).update(payload).digest('hex');
+  return `adm_${payload}.${hmac}`;
+}
+
+// Validate admin token (cryptographically verified, immune to server restarts and multi-instance statelessness)
+export function isValidAdminToken(token: string): boolean {
+  if (!token || typeof token !== 'string') return false;
+  if (revokedAdminTokens.has(token)) return false;
+
+  // Master recovery fallback: allow direct keyword
+  if (token === ADMIN_SECRET) return true;
+
+  // Validate HMAC token format: adm_<timestamp>.<nonce>.<signature>
+  if (token.startsWith('adm_')) {
+    const raw = token.substring(4);
+    const parts = raw.split('.');
+    if (parts.length === 3) {
+      const [timestampStr, nonce, sig] = parts;
+      const timestamp = parseInt(timestampStr, 10);
+      if (!isNaN(timestamp)) {
+        // Valid for 30 days
+        const MAX_AGE = 30 * 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        if (now - timestamp <= MAX_AGE && timestamp <= now + 5 * 60 * 1000) {
+          const payload = `${timestampStr}.${nonce}`;
+          const expectedSig = crypto.createHmac('sha256', ADMIN_SECRET).update(payload).digest('hex');
+          try {
+            if (crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) {
+              return true;
+            }
+          } catch {
+            return false;
+          }
+        }
+      }
+    }
+  }
+
+  return false;
+}
 
 // Middleware to protect admin routes
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
@@ -19,7 +65,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   }
 
   const token = authHeader.substring(7);
-  if (!activeAdminTokens.has(token)) {
+  if (!isValidAdminToken(token)) {
     return res.status(403).json({ error: 'Sessão administrativa inválida ou expirada.' });
   }
 
@@ -36,8 +82,7 @@ apiRouter.post('/admin/login', (req, res) => {
   }
 
   if (password.trim() === ADMIN_SECRET) {
-    const token = 'adm_' + crypto.randomBytes(32).toString('hex');
-    activeAdminTokens.add(token);
+    const token = generateAdminToken();
     return res.json({
       success: true,
       token,
@@ -52,7 +97,7 @@ apiRouter.post('/admin/logout', (req, res) => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
-    activeAdminTokens.delete(token);
+    revokedAdminTokens.add(token);
   }
   res.json({ success: true });
 });
@@ -63,7 +108,7 @@ apiRouter.get('/admin/verify', (req, res) => {
     return res.json({ authenticated: false });
   }
   const token = authHeader.substring(7);
-  return res.json({ authenticated: activeAdminTokens.has(token) });
+  return res.json({ authenticated: isValidAdminToken(token) });
 });
 
 // -------------------------------------------------------------
@@ -245,7 +290,7 @@ apiRouter.get('/orders', (req, res) => {
   }
   // All orders requires admin
   const authHeader = req.headers.authorization;
-  if (!authHeader || !activeAdminTokens.has(authHeader.replace('Bearer ', ''))) {
+  if (!authHeader || !isValidAdminToken(authHeader.replace('Bearer ', '').trim())) {
     return res.status(401).json({ error: 'Acesso restrito ao administrador.' });
   }
   res.json(dbStore.getOrders());
@@ -488,7 +533,7 @@ apiRouter.delete('/admin/community/:id', requireAdmin, (req, res) => {
 // -------------------------------------------------------------
 apiRouter.get('/tickets', (req, res) => {
   const authHeader = req.headers.authorization;
-  if (authHeader && activeAdminTokens.has(authHeader.replace('Bearer ', ''))) {
+  if (authHeader && isValidAdminToken(authHeader.replace('Bearer ', '').trim())) {
     return res.json(dbStore.getTickets());
   }
   const nickname = typeof req.query.nickname === 'string' ? req.query.nickname.toLowerCase() : null;

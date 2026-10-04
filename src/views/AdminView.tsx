@@ -84,7 +84,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const loadData = async () => {
     if (!adminToken) return;
     try {
-      const [dash, v, p, o, pl, ev, nw, soc, st] = await Promise.all([
+      const [
+        dashResult,
+        vipsResult,
+        prodsResult,
+        ordersResult,
+        playersResult,
+        eventsResult,
+        newsResult,
+        socialResult,
+        settingsResult
+      ] = await Promise.allSettled([
         api.getAdminStats(adminToken),
         api.getVips(true),
         api.getProducts(true),
@@ -95,17 +105,38 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         api.getCommunity(),
         api.getSettings()
       ]);
-      setStats(dash);
-      setVips(v);
-      setProducts(p);
-      setOrders(o);
-      setPlayers(pl);
-      setEvents(ev);
-      setNews(nw);
-      setSocialLinks(soc);
-      setServerSettings(st);
+
+      const loadedOrders = ordersResult.status === 'fulfilled' ? ordersResult.value : [];
+      const loadedPlayers = playersResult.status === 'fulfilled' ? playersResult.value : [];
+
+      if (vipsResult.status === 'fulfilled') setVips(vipsResult.value);
+      if (prodsResult.status === 'fulfilled') setProducts(prodsResult.value);
+      if (ordersResult.status === 'fulfilled') setOrders(loadedOrders);
+      if (playersResult.status === 'fulfilled') setPlayers(loadedPlayers);
+      if (eventsResult.status === 'fulfilled') setEvents(eventsResult.value);
+      if (newsResult.status === 'fulfilled') setNews(newsResult.value);
+      if (socialResult.status === 'fulfilled') setSocialLinks(socialResult.value);
+      if (settingsResult.status === 'fulfilled') setServerSettings(settingsResult.value);
+
+      if (dashResult.status === 'fulfilled') {
+        setStats(dashResult.value);
+      } else {
+        // Fallback: calculate stats from orders & players so dashboard never crashes
+        const paid = loadedOrders.filter(o => o.status === 'Pago' || o.status === 'Entregue');
+        const rev = paid.reduce((sum, o) => sum + (o.amount || 0), 0);
+        setStats({
+          playersCount: loadedPlayers.length,
+          ordersCount: loadedOrders.length,
+          pendingOrdersCount: loadedOrders.filter(o => o.status === 'Pendente').length,
+          paidOrdersCount: paid.length,
+          vipsSoldCount: paid.filter(o => o.productType === 'vip').length,
+          totalRevenue: Number(rev.toFixed(2)),
+          recentOrders: loadedOrders.slice(-10).reverse(),
+          recentPlayers: loadedPlayers.slice(-10).reverse()
+        });
+      }
     } catch (err: unknown) {
-      showError(err instanceof Error ? err.message : 'Erro ao carregar dados');
+      showError(err instanceof Error ? err.message : 'Erro ao carregar dados do painel');
     }
   };
 
@@ -1244,6 +1275,47 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                     className="px-3.5 py-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-300 text-xs font-semibold cursor-pointer transition-colors"
                   >
                     Restaurar Imagem Padrão
+                  </button>
+                </div>
+              </div>
+
+              {/* Link Padrão do LivePix */}
+              <div className="pt-4 border-t border-white/[0.08] space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-4 bg-[#00e676] rounded-full shadow-[0_0_8px_#00e676]" />
+                  <label className="block text-xs font-black font-heading text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="text-[#00e676]">⚡</span>
+                    <span>Link Padrão do LivePix do Servidor</span>
+                  </label>
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Link principal do LivePix da sua conta/servidor (ex: <code className="text-[#00e676] font-mono">https://livepix.gg/netcraftbr</code>). Usado automaticamente no checkout quando um VIP ou item não tiver um link individual cadastrado.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="url"
+                    value={serverSettings.livePixUrl || ''}
+                    onChange={e => setServerSettings({ ...serverSettings, livePixUrl: e.target.value })}
+                    placeholder="https://livepix.gg/seunick"
+                    className="flex-1 px-3.5 py-2.5 bg-white/[0.03] border border-white/[0.08] focus:border-[#00e676] rounded-lg text-xs font-mono text-white outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!adminToken) return;
+                      try {
+                        const clean = (serverSettings.livePixUrl || '').trim();
+                        await api.updateLivePixUrl(clean, adminToken);
+                        await saveSettingsToFirestore({ ...serverSettings, livePixUrl: clean }).catch(() => {});
+                        showSuccess('Link do LivePix salvo com sucesso!');
+                        await onRefreshGlobalData();
+                      } catch (err: unknown) {
+                        showError(err instanceof Error ? err.message : 'Erro ao salvar link do LivePix.');
+                      }
+                    }}
+                    className="px-4 py-2.5 bg-[#00e676] hover:bg-[#00c853] text-black font-bold font-heading text-xs rounded-lg transition-colors cursor-pointer shrink-0"
+                  >
+                    Salvar LivePix
                   </button>
                 </div>
               </div>
