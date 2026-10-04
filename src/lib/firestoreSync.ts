@@ -134,7 +134,26 @@ export async function seedFirestoreIfEmpty() {
     const initSnap = await getDoc(initRef);
     if (initSnap.exists()) {
       // Database has already been initialized previously.
-      // Do not re-insert items that were deleted by an administrator!
+      // NEVER re-insert items that were deleted or modified by an administrator!
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('netcraftbr_seeded', 'true');
+      }
+      return;
+    }
+
+    // Check if any collections already have persisted data
+    const [vipsCheck, prodsCheck, settingsCheck, newsCheck, eventsCheck, socCheck] = await Promise.all([
+      getDocs(collection(db, 'vips')),
+      getDocs(collection(db, 'products')),
+      getDoc(doc(db, 'serverSettings', 'default')),
+      getDocs(collection(db, 'news')),
+      getDocs(collection(db, 'events')),
+      getDocs(collection(db, 'socialLinks'))
+    ]);
+
+    // If ANY persisted data already exists, mark initialized and NEVER seed default presets
+    if (!vipsCheck.empty || !prodsCheck.empty || settingsCheck.exists() || !newsCheck.empty || !eventsCheck.empty || !socCheck.empty) {
+      await setDoc(initRef, { initializedAt: new Date().toISOString(), version: 1 }).catch(() => {});
       if (typeof window !== 'undefined') {
         localStorage.setItem('netcraftbr_seeded', 'true');
       }

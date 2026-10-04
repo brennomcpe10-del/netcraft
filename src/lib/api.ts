@@ -162,7 +162,7 @@ export const api = {
   },
 
   async updateVip(id: string, vipData: Partial<VIP>, adminToken: string): Promise<VIP> {
-    const res = await fetch(`${API_BASE}/admin/vips/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/vips/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: getHeaders(adminToken),
       body: JSON.stringify(vipData)

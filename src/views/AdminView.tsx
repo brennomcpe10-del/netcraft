@@ -153,9 +153,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       if (editingVip.id) {
         savedVip = await api.updateVip(editingVip.id, editingVip, adminToken);
         showSuccess('VIP atualizado com sucesso');
+        setVips(prev => prev.map(v => v.id === savedVip.id ? savedVip : v));
       } else {
         savedVip = await api.createVip(editingVip, adminToken);
         showSuccess('VIP criado com sucesso');
+        setVips(prev => [...prev.filter(v => v.id !== savedVip.id), savedVip]);
       }
       await saveVipToFirestore(savedVip).catch(() => {});
       setEditingVip(null);
@@ -174,9 +176,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       if (editingProduct.id) {
         savedProd = await api.updateProduct(editingProduct.id, editingProduct, adminToken);
         showSuccess('Item da loja atualizado');
+        setProducts(prev => prev.map(p => p.id === savedProd.id ? savedProd : p));
       } else {
         savedProd = await api.createProduct(editingProduct, adminToken);
         showSuccess('Item criado na loja');
+        setProducts(prev => [...prev.filter(p => p.id !== savedProd.id), savedProd]);
       }
       await saveProductToFirestore(savedProd).catch(() => {});
       setEditingProduct(null);
@@ -195,9 +199,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       if (editingEvent.id) {
         savedEv = await api.updateEvent(editingEvent.id, editingEvent, adminToken);
         showSuccess('Evento atualizado');
+        setEvents(prev => prev.map(ev => ev.id === savedEv.id ? savedEv : ev));
       } else {
         savedEv = await api.createEvent(editingEvent, adminToken);
         showSuccess('Evento criado');
+        setEvents(prev => [...prev.filter(ev => ev.id !== savedEv.id), savedEv]);
       }
       await saveEventToFirestore(savedEv).catch(() => {});
       setEditingEvent(null);
@@ -216,9 +222,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       if (editingNews.id) {
         savedN = await api.updateNews(editingNews.id, editingNews, adminToken);
         showSuccess('Notícia atualizada');
+        setNews(prev => prev.map(n => n.id === savedN.id ? savedN : n));
       } else {
         savedN = await api.createNews(editingNews, adminToken);
         showSuccess('Notícia publicada');
+        setNews(prev => [...prev.filter(n => n.id !== savedN.id), savedN]);
       }
       await saveNewsToFirestore(savedN).catch(() => {});
       setEditingNews(null);
@@ -237,9 +245,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       if (editingSocial.id) {
         savedSoc = await api.updateSocialLink(editingSocial.id, editingSocial, adminToken);
         showSuccess('Rede social atualizada');
+        setSocialLinks(prev => prev.map(s => s.id === savedSoc.id ? savedSoc : s));
       } else {
         savedSoc = await api.createSocialLink(editingSocial, adminToken);
         showSuccess('Rede social adicionada');
+        setSocialLinks(prev => [...prev.filter(s => s.id !== savedSoc.id), savedSoc]);
       }
       await saveSocialLinkToFirestore(savedSoc).catch(() => {});
       setEditingSocial(null);

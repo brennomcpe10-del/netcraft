@@ -159,16 +159,24 @@ apiRouter.get('/player/:nickname/orders', (req, res) => {
 // -------------------------------------------------------------
 // SERVER SETTINGS & INFRASTRUCTURE
 // -------------------------------------------------------------
-apiRouter.get('/settings', (_req, res) => {
+apiRouter.get('/settings', async (_req, res) => {
+  await dbStore.syncFromFirestore().catch(() => {});
   res.json(dbStore.getSettings());
 });
 
-apiRouter.put('/admin/settings', requireAdmin, (req, res) => {
+apiRouter.put('/admin/settings', requireAdmin, async (req, res) => {
   const updated = dbStore.updateSettings(req.body);
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, setDoc } = await import('firebase/firestore');
+    await setDoc(doc(db, 'serverSettings', 'default'), updated);
+  } catch (err) {
+    console.warn('Firestore settings update notice:', err);
+  }
   res.json(updated);
 });
 
-apiRouter.put('/admin/settings/livepix', requireAdmin, (req, res) => {
+apiRouter.put('/admin/settings/livepix', requireAdmin, async (req, res) => {
   const { livePixUrl } = req.body;
   if (typeof livePixUrl !== 'string') {
     return res.status(400).json({ error: 'URL do LivePix inválida.' });
@@ -178,6 +186,13 @@ apiRouter.put('/admin/settings/livepix', requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'O link deve começar com http:// ou https://' });
   }
   const updated = dbStore.updateSettings({ livePixUrl: clean });
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, setDoc } = await import('firebase/firestore');
+    await setDoc(doc(db, 'serverSettings', 'default'), updated);
+  } catch (err) {
+    console.warn('Firestore livepix update notice:', err);
+  }
   res.json({
     success: true,
     message: 'Link do LivePix atualizado com sucesso.',
@@ -186,13 +201,20 @@ apiRouter.put('/admin/settings/livepix', requireAdmin, (req, res) => {
   });
 });
 
-apiRouter.put('/admin/settings/pix', requireAdmin, (req, res) => {
+apiRouter.put('/admin/settings/pix', requireAdmin, async (req, res) => {
   const { pixUrl } = req.body;
   if (typeof pixUrl !== 'string') {
     return res.status(400).json({ error: 'Link ou chave PIX inválido.' });
   }
   const clean = pixUrl.trim();
   const updated = dbStore.updateSettings({ pixUrl: clean });
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, setDoc } = await import('firebase/firestore');
+    await setDoc(doc(db, 'serverSettings', 'default'), updated);
+  } catch (err) {
+    console.warn('Firestore pix update notice:', err);
+  }
   res.json({
     success: true,
     message: 'Link de cobrança PIX atualizado com sucesso.',
@@ -204,12 +226,13 @@ apiRouter.put('/admin/settings/pix', requireAdmin, (req, res) => {
 // -------------------------------------------------------------
 // VIP PACKAGES
 // -------------------------------------------------------------
-apiRouter.get('/vips', (req, res) => {
+apiRouter.get('/vips', async (req, res) => {
   const includeInactive = req.query.all === 'true';
+  await dbStore.syncFromFirestore().catch(() => {});
   res.json(dbStore.getVips(includeInactive));
 });
 
-apiRouter.post('/admin/vips', requireAdmin, (req, res) => {
+apiRouter.post('/admin/vips', requireAdmin, async (req, res) => {
   const { name, price, duration, description, benefits, color, image, order, active, livepixUrl, pixUrl } = req.body;
   if (!name || price == null || !duration) {
     return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
@@ -230,35 +253,73 @@ apiRouter.post('/admin/vips', requireAdmin, (req, res) => {
     pixUrl: pixUrl ? String(pixUrl).trim() : ''
   });
 
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, setDoc } = await import('firebase/firestore');
+    await setDoc(doc(db, 'vips', newVip.id), newVip);
+  } catch (err) {
+    console.warn('Firestore VIP create notice:', err);
+  }
+
   res.status(201).json(newVip);
 });
 
-apiRouter.put('/admin/vips/:id', requireAdmin, (req, res) => {
+apiRouter.put('/admin/vips/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const updated = dbStore.updateVip(id, req.body);
   if (!updated) {
     return res.status(404).json({ error: 'VIP não encontrado.' });
   }
+
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, setDoc } = await import('firebase/firestore');
+    await setDoc(doc(db, 'vips', updated.id), updated);
+  } catch (err) {
+    console.warn('Firestore VIP update notice:', err);
+  }
+
   res.json(updated);
 });
 
-apiRouter.delete('/admin/vips/:id', requireAdmin, (req, res) => {
+apiRouter.delete('/admin/vips/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const name = typeof req.query.name === 'string' ? req.query.name : req.body?.name;
   const deleted = dbStore.deleteVip(id, name);
+
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, deleteDoc, collection, getDocs } = await import('firebase/firestore');
+    await deleteDoc(doc(db, 'vips', id)).catch(() => {});
+    const cleanId = id.trim().toLowerCase();
+    const cleanName = (name || '').trim().toLowerCase();
+    const snap = await getDocs(collection(db, 'vips'));
+    for (const d of snap.docs) {
+      const data = d.data();
+      const matchId = d.id === id || d.id.toLowerCase() === cleanId || data.id === id;
+      const matchName = cleanName && data.name && String(data.name).trim().toLowerCase() === cleanName;
+      if (matchId || matchName) {
+        await deleteDoc(doc(db, 'vips', d.id)).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn('Firestore VIP delete notice:', err);
+  }
+
   res.json({ success: true, message: 'VIP excluído com sucesso.', removed: deleted });
 });
 
 // -------------------------------------------------------------
 // STORE PRODUCTS
 // -------------------------------------------------------------
-apiRouter.get('/products', (req, res) => {
+apiRouter.get('/products', async (req, res) => {
   const includeInactive = req.query.all === 'true';
   const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+  await dbStore.syncFromFirestore().catch(() => {});
   res.json(dbStore.getProducts(includeInactive, category));
 });
 
-apiRouter.post('/admin/products', requireAdmin, (req, res) => {
+apiRouter.post('/admin/products', requireAdmin, async (req, res) => {
   const { name, category, price, description, image, active, highlights, order, livepixUrl, pixUrl } = req.body;
   if (!name || !category || price == null) {
     return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
@@ -277,22 +338,59 @@ apiRouter.post('/admin/products', requireAdmin, (req, res) => {
     pixUrl: pixUrl ? String(pixUrl).trim() : ''
   });
 
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, setDoc } = await import('firebase/firestore');
+    await setDoc(doc(db, 'products', newProd.id), newProd);
+  } catch (err) {
+    console.warn('Firestore product create notice:', err);
+  }
+
   res.status(201).json(newProd);
 });
 
-apiRouter.put('/admin/products/:id', requireAdmin, (req, res) => {
+apiRouter.put('/admin/products/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const updated = dbStore.updateProduct(id, req.body);
   if (!updated) {
     return res.status(404).json({ error: 'Produto não encontrado.' });
   }
+
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, setDoc } = await import('firebase/firestore');
+    await setDoc(doc(db, 'products', updated.id), updated);
+  } catch (err) {
+    console.warn('Firestore product update notice:', err);
+  }
+
   res.json(updated);
 });
 
-apiRouter.delete('/admin/products/:id', requireAdmin, (req, res) => {
+apiRouter.delete('/admin/products/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const name = typeof req.query.name === 'string' ? req.query.name : req.body?.name;
   const deleted = dbStore.deleteProduct(id, name);
+
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, deleteDoc, collection, getDocs } = await import('firebase/firestore');
+    await deleteDoc(doc(db, 'products', id)).catch(() => {});
+    const cleanId = id.trim().toLowerCase();
+    const cleanName = (name || '').trim().toLowerCase();
+    const snap = await getDocs(collection(db, 'products'));
+    for (const d of snap.docs) {
+      const data = d.data();
+      const matchId = d.id === id || d.id.toLowerCase() === cleanId || data.id === id;
+      const matchName = cleanName && data.name && String(data.name).trim().toLowerCase() === cleanName;
+      if (matchId || matchName) {
+        await deleteDoc(doc(db, 'products', d.id)).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn('Firestore product delete notice:', err);
+  }
+
   res.json({ success: true, message: 'Produto excluído com sucesso.', removed: deleted });
 });
 

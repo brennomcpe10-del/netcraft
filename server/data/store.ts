@@ -38,6 +38,7 @@ interface DatabaseSchema {
   socialLinks: SocialLink[];
   players: Player[];
   tickets: SupportTicket[];
+  initialized?: boolean;
 }
 
 class Store {
@@ -52,22 +53,26 @@ class Store {
       if (fs.existsSync(DB_FILE)) {
         const fileContent = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(fileContent);
+        // CRITICAL: When the database file exists, NEVER fallback to initial hardcoded arrays.
+        // Doing so would resurrect items that were deleted or modified by an administrator.
         return {
           settings: parsed.settings || initialSettings,
-          vips: Array.isArray(parsed.vips) ? parsed.vips : initialVips,
-          products: Array.isArray(parsed.products) ? parsed.products : initialProducts,
-          orders: Array.isArray(parsed.orders) ? parsed.orders : initialOrders,
-          events: Array.isArray(parsed.events) ? parsed.events : initialEvents,
-          news: Array.isArray(parsed.news) ? parsed.news : initialNews,
-          socialLinks: Array.isArray(parsed.socialLinks) ? parsed.socialLinks : initialSocialLinks,
-          players: Array.isArray(parsed.players) ? parsed.players : initialPlayers,
-          tickets: Array.isArray(parsed.tickets) ? parsed.tickets : []
+          vips: Array.isArray(parsed.vips) ? parsed.vips : [],
+          products: Array.isArray(parsed.products) ? parsed.products : [],
+          orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+          events: Array.isArray(parsed.events) ? parsed.events : [],
+          news: Array.isArray(parsed.news) ? parsed.news : [],
+          socialLinks: Array.isArray(parsed.socialLinks) ? parsed.socialLinks : [],
+          players: Array.isArray(parsed.players) ? parsed.players : [],
+          tickets: Array.isArray(parsed.tickets) ? parsed.tickets : [],
+          initialized: true
         };
       }
     } catch (err) {
       console.error('Error reading database file, using fallback initial data:', err);
     }
 
+    // Only on brand new initial creation if no database.json exists at all
     const defaultData: DatabaseSchema = {
       settings: initialSettings,
       vips: initialVips,
@@ -77,7 +82,8 @@ class Store {
       news: initialNews,
       socialLinks: initialSocialLinks,
       players: initialPlayers,
-      tickets: []
+      tickets: [],
+      initialized: true
     };
 
     this.saveDatabase(defaultData);
@@ -188,8 +194,28 @@ class Store {
   }
 
   updateVip(id: string, partial: Partial<VIP>): VIP | null {
-    const index = this.data.vips.findIndex(v => v.id === id);
-    if (index === -1) return null;
+    const cleanId = id.trim().toLowerCase();
+    const index = this.data.vips.findIndex(
+      v => v.id === id || v.id.trim().toLowerCase() === cleanId
+    );
+    if (index === -1) {
+      const newVip: VIP = {
+        id,
+        name: partial.name || 'VIP',
+        price: Number(partial.price) || 0,
+        duration: partial.duration || '30 dias',
+        description: partial.description || '',
+        benefits: Array.isArray(partial.benefits) ? partial.benefits : [],
+        color: partial.color || 'emerald',
+        image: partial.image || 'crown',
+        order: Number(partial.order) || 1,
+        active: partial.active !== false,
+        ...partial
+      } as VIP;
+      this.data.vips.push(newVip);
+      this.saveDatabase();
+      return newVip;
+    }
     this.data.vips[index] = { ...this.data.vips[index], ...partial };
     this.saveDatabase();
     return this.data.vips[index];
@@ -238,8 +264,27 @@ class Store {
   }
 
   updateProduct(id: string, partial: Partial<Product>): Product | null {
-    const index = this.data.products.findIndex(p => p.id === id);
-    if (index === -1) return null;
+    const cleanId = id.trim().toLowerCase();
+    const index = this.data.products.findIndex(
+      p => p.id === id || p.id.trim().toLowerCase() === cleanId
+    );
+    if (index === -1) {
+      const newProd: Product = {
+        id,
+        name: partial.name || 'Produto',
+        category: partial.category || 'coins',
+        price: Number(partial.price) || 0,
+        description: partial.description || '',
+        image: partial.image || 'cube',
+        active: partial.active !== false,
+        highlights: Array.isArray(partial.highlights) ? partial.highlights : [],
+        order: Number(partial.order) || 1,
+        ...partial
+      } as Product;
+      this.data.products.push(newProd);
+      this.saveDatabase();
+      return newProd;
+    }
     this.data.products[index] = { ...this.data.products[index], ...partial };
     this.saveDatabase();
     return this.data.products[index];
@@ -409,8 +454,28 @@ class Store {
   }
 
   updateEvent(id: string, partial: Partial<ServerEvent>): ServerEvent | null {
-    const index = this.data.events.findIndex(e => e.id === id);
-    if (index === -1) return null;
+    const cleanId = id.trim().toLowerCase();
+    const index = this.data.events.findIndex(
+      e => e.id === id || e.id.trim().toLowerCase() === cleanId
+    );
+    if (index === -1) {
+      const newEv: ServerEvent = {
+        id,
+        name: partial.name || 'Evento',
+        description: partial.description || '',
+        date: partial.date || new Date().toISOString().split('T')[0],
+        time: partial.time || '19:00',
+        status: partial.status || 'Próximo',
+        image: partial.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80',
+        rewards: Array.isArray(partial.rewards) ? partial.rewards : [],
+        published: partial.published !== false,
+        location: partial.location || '/warp eventos',
+        ...partial
+      } as ServerEvent;
+      this.data.events.push(newEv);
+      this.saveDatabase();
+      return newEv;
+    }
     this.data.events[index] = { ...this.data.events[index], ...partial };
     this.saveDatabase();
     return this.data.events[index];
@@ -452,8 +517,27 @@ class Store {
   }
 
   updateNews(id: string, partial: Partial<NewsArticle>): NewsArticle | null {
-    const index = this.data.news.findIndex(n => n.id === id);
-    if (index === -1) return null;
+    const cleanId = id.trim().toLowerCase();
+    const index = this.data.news.findIndex(
+      n => n.id === id || n.id.trim().toLowerCase() === cleanId
+    );
+    if (index === -1) {
+      const newNews: NewsArticle = {
+        id,
+        title: partial.title || 'Notícia',
+        content: partial.content || '',
+        summary: partial.summary || partial.title || '',
+        image: partial.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80',
+        date: partial.date || new Date().toISOString().split('T')[0],
+        author: partial.author || 'Equipe NetCraftBR',
+        published: partial.published !== false,
+        category: partial.category || 'Atualização',
+        ...partial
+      } as NewsArticle;
+      this.data.news.push(newNews);
+      this.saveDatabase();
+      return newNews;
+    }
     this.data.news[index] = { ...this.data.news[index], ...partial };
     this.saveDatabase();
     return this.data.news[index];
@@ -481,8 +565,27 @@ class Store {
   }
 
   updateSocialLink(id: string, partial: Partial<SocialLink>): SocialLink | null {
-    const index = this.data.socialLinks.findIndex(s => s.id === id);
-    if (index === -1) return null;
+    const cleanId = id.trim().toLowerCase();
+    const index = this.data.socialLinks.findIndex(
+      s => s.id === id || s.id.trim().toLowerCase() === cleanId
+    );
+    if (index === -1) {
+      const newLink: SocialLink = {
+        id,
+        name: partial.name || 'Comunidade',
+        platform: partial.platform || 'discord',
+        url: partial.url || '',
+        icon: partial.icon || 'message-square',
+        active: partial.active !== false,
+        description: partial.description || '',
+        memberCount: partial.memberCount || '',
+        order: Number(partial.order) || 1,
+        ...partial
+      } as SocialLink;
+      this.data.socialLinks.push(newLink);
+      this.saveDatabase();
+      return newLink;
+    }
     this.data.socialLinks[index] = { ...this.data.socialLinks[index], ...partial };
     this.saveDatabase();
     return this.data.socialLinks[index];
@@ -539,6 +642,85 @@ class Store {
     return this.data.tickets[index];
   }
 
+  async syncFromFirestore(): Promise<void> {
+    try {
+      const { db } = await import('../../src/lib/firebase.ts');
+      const { collection, getDocs, doc, getDoc } = await import('firebase/firestore');
+
+      const initSnap = await getDoc(doc(db, 'system', 'initialized'));
+      let isInitialized = initSnap.exists();
+      if (!isInitialized && (this.data.vips.length > 0 || this.data.products.length > 0 || this.data.initialized)) {
+        const { setDoc } = await import('firebase/firestore');
+        await setDoc(doc(db, 'system', 'initialized'), { initializedAt: new Date().toISOString(), version: 1 }).catch(() => {});
+        isInitialized = true;
+      }
+
+      // 1. VIPs
+      const vipsSnap = await getDocs(collection(db, 'vips'));
+      if (!vipsSnap.empty) {
+        const list: VIP[] = [];
+        vipsSnap.forEach(d => list.push({ ...d.data(), id: d.id } as VIP));
+        list.sort((a, b) => (a.order || 0) - (b.order || 0));
+        this.data.vips = list;
+      } else if (isInitialized) {
+        this.data.vips = [];
+      }
+
+      // 2. Products
+      const prodsSnap = await getDocs(collection(db, 'products'));
+      if (!prodsSnap.empty) {
+        const list: Product[] = [];
+        prodsSnap.forEach(d => list.push({ ...d.data(), id: d.id } as Product));
+        list.sort((a, b) => (a.order || 0) - (b.order || 0));
+        this.data.products = list;
+      } else if (isInitialized) {
+        this.data.products = [];
+      }
+
+      // 3. Social Links
+      const socSnap = await getDocs(collection(db, 'socialLinks'));
+      if (!socSnap.empty) {
+        const list: SocialLink[] = [];
+        socSnap.forEach(d => list.push({ ...d.data(), id: d.id } as SocialLink));
+        list.sort((a, b) => (a.order || 0) - (b.order || 0));
+        this.data.socialLinks = list;
+      } else if (isInitialized) {
+        this.data.socialLinks = [];
+      }
+
+      // 4. Events
+      const evSnap = await getDocs(collection(db, 'events'));
+      if (!evSnap.empty) {
+        const list: ServerEvent[] = [];
+        evSnap.forEach(d => list.push({ ...d.data(), id: d.id } as ServerEvent));
+        this.data.events = list;
+      } else if (isInitialized) {
+        this.data.events = [];
+      }
+
+      // 5. News
+      const newsSnap = await getDocs(collection(db, 'news'));
+      if (!newsSnap.empty) {
+        const list: NewsArticle[] = [];
+        newsSnap.forEach(d => list.push({ ...d.data(), id: d.id } as NewsArticle));
+        this.data.news = list;
+      } else if (isInitialized) {
+        this.data.news = [];
+      }
+
+      // 6. Server Settings
+      const setSnap = await getDoc(doc(db, 'serverSettings', 'default'));
+      if (setSnap.exists()) {
+        this.data.settings = { ...this.data.settings, ...(setSnap.data() as ServerSettings) };
+      }
+
+      this.saveDatabase();
+      console.log(`[Store] Synced with Firestore: ${this.data.vips.length} VIPs, ${this.data.products.length} Products, ${this.data.socialLinks.length} Social Links`);
+    } catch (err) {
+      console.warn('[Store] Firestore sync notice:', err);
+    }
+  }
+
   // --- DASHBOARD STATS ---
   getDashboardStats(): DashboardStats {
     const orders = this.data.orders;
@@ -560,3 +742,5 @@ class Store {
 }
 
 export const dbStore = new Store();
+// Automatically synchronize with Firestore cloud database on boot
+dbStore.syncFromFirestore().catch(() => {});
