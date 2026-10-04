@@ -72,16 +72,16 @@ class Store {
       console.error('Error reading database file, using fallback initial data:', err);
     }
 
-    // Only on brand new initial creation if no database.json exists at all
+    // Only on brand new initial creation if no database.json exists at all (leave empty for manual control)
     const defaultData: DatabaseSchema = {
       settings: initialSettings,
-      vips: initialVips,
-      products: initialProducts,
-      orders: initialOrders,
-      events: initialEvents,
-      news: initialNews,
-      socialLinks: initialSocialLinks,
-      players: initialPlayers,
+      vips: [],
+      products: [],
+      orders: [],
+      events: [],
+      news: [],
+      socialLinks: [],
+      players: [],
       tickets: [],
       initialized: true
     };
@@ -432,6 +432,39 @@ class Store {
       return true;
     }
     return false;
+  }
+
+  deleteOrdersBulk(filter: 'all' | 'concluidos' | 'pendentes' | 'cancelados'): { deletedCount: number; deletedIds: string[]; orders: Order[] } {
+    const toDelete: Order[] = [];
+    const toKeep: Order[] = [];
+
+    for (const order of this.data.orders) {
+      let matches = false;
+      if (filter === 'all') {
+        matches = true;
+      } else if (filter === 'concluidos') {
+        matches = order.status === 'Entregue' || order.status === 'Pago';
+      } else if (filter === 'pendentes') {
+        matches = order.status === 'Pendente';
+      } else if (filter === 'cancelados') {
+        matches = order.status === 'Cancelado';
+      }
+
+      if (matches) {
+        toDelete.push(order);
+      } else {
+        toKeep.push(order);
+      }
+    }
+
+    this.data.orders = toKeep;
+    this.saveDatabase();
+
+    return {
+      deletedCount: toDelete.length,
+      deletedIds: toDelete.map(o => o.id),
+      orders: this.data.orders
+    };
   }
 
   // --- EVENTS ---

@@ -272,6 +272,22 @@ export const api = {
     if (!res.ok) throw new Error('Erro ao excluir pedido.');
   },
 
+  async deleteOrdersBulk(
+    filter: 'all' | 'concluidos' | 'pendentes' | 'cancelados',
+    adminToken: string
+  ): Promise<{ success: boolean; message: string; deletedCount: number; deletedIds: string[]; orders: Order[] }> {
+    const res = await fetch(`${API_BASE}/admin/orders/bulk-delete`, {
+      method: 'POST',
+      headers: getHeaders(adminToken),
+      body: JSON.stringify({ filter })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Erro ao excluir pedidos em lote.');
+    }
+    return res.json();
+  },
+
   // Backend Webhook simulation (Delivers product securely)
   async simulatePayment(orderId: string): Promise<{ success: boolean; message: string; order: Order }> {
     const res = await fetch(`${API_BASE}/orders/${orderId}/simulate-payment`, {

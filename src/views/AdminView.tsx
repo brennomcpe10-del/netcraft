@@ -32,6 +32,7 @@ import {
   deleteSocialLinkFromFirestore,
   saveOrderToFirestore,
   deleteOrderFromFirestore,
+  deleteOrdersBulkFromFirestore,
   deleteUserFromFirestore
 } from '../lib/firestoreSync.ts';
 
@@ -76,6 +77,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     extraNickname?: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Bulk order deletion modal
+  const [isBulkDeleteOrdersOpen, setIsBulkDeleteOrdersOpen] = useState(false);
+  const [bulkOrderFilter, setBulkOrderFilter] = useState<'all' | 'concluidos' | 'pendentes' | 'cancelados'>('all');
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   useEffect(() => {
     if (adminToken) {
@@ -270,6 +276,34 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       await onRefreshGlobalData();
     } catch (err: unknown) {
       showError(err instanceof Error ? err.message : 'Erro ao atualizar pedido');
+    }
+  };
+
+  const handleBulkDeleteOrders = async () => {
+    if (!adminToken || isBulkDeleting) return;
+    try {
+      setIsBulkDeleting(true);
+      const res = await api.deleteOrdersBulk(bulkOrderFilter, adminToken);
+      await deleteOrdersBulkFromFirestore(bulkOrderFilter).catch(() => {});
+
+      if (bulkOrderFilter === 'all') {
+        setOrders([]);
+      } else if (bulkOrderFilter === 'concluidos') {
+        setOrders(prev => prev.filter(o => o.status !== 'Entregue' && o.status !== 'Pago'));
+      } else if (bulkOrderFilter === 'pendentes') {
+        setOrders(prev => prev.filter(o => o.status !== 'Pendente'));
+      } else if (bulkOrderFilter === 'cancelados') {
+        setOrders(prev => prev.filter(o => o.status !== 'Cancelado'));
+      }
+
+      showSuccess(`${res.deletedCount} pedidos excluídos com sucesso!`);
+      setIsBulkDeleteOrdersOpen(false);
+      await loadData();
+      await onRefreshGlobalData();
+    } catch (err: unknown) {
+      showError(err instanceof Error ? err.message : 'Falha ao excluir pedidos em massa.');
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -640,15 +674,26 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                 <h2 className="text-base font-bold text-white">Todos os Pedidos</h2>
                 <p className="text-zinc-500 text-[11px]">Altere status de entrega ou exclua pedidos cancelados/duplicados</p>
               </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Filtrar por nick ou #ID..."
-                  className="px-3 py-1.5 pl-8 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none w-64"
-                />
-                <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkDeleteOrdersOpen(true)}
+                  disabled={orders.length === 0}
+                  className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Excluir em Massa...</span>
+                </button>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Filtrar por nick ou #ID..."
+                    className="px-3 py-1.5 pl-8 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none w-56 sm:w-64"
+                  />
+                  <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
+                </div>
               </div>
             </div>
 
@@ -2148,6 +2193,140 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                   </>
                 ) : (
                   <span>Sim, Excluir</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* BULK DELETE ORDERS MODAL */}
+      {/* ============================================================== */}
+      {isBulkDeleteOrdersOpen && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-[#0d1017] border border-rose-500/30 rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white font-heading">Excluir Pedidos em Massa</h3>
+                <p className="text-xs text-zinc-400">Escolha quais pedidos deseja apagar permanentemente</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <label className="text-xs font-semibold text-zinc-300 block">Selecione o filtro de exclusão:</label>
+
+              {/* Opção 1: Todos */}
+              <div
+                onClick={() => setBulkOrderFilter('all')}
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                  bulkOrderFilter === 'all'
+                    ? 'border-rose-500/80 bg-rose-500/10 text-white'
+                    : 'border-white/[0.08] bg-white/[0.02] text-zinc-400 hover:border-white/20'
+                }`}
+              >
+                <div>
+                  <div className="text-xs font-bold text-white">Todos os Pedidos</div>
+                  <div className="text-[11px] text-zinc-400">Apaga absolutamente todos os pedidos do sistema</div>
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-white/[0.08] text-white">
+                  {orders.length}
+                </span>
+              </div>
+
+              {/* Opção 2: Concluídos */}
+              <div
+                onClick={() => setBulkOrderFilter('concluidos')}
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                  bulkOrderFilter === 'concluidos'
+                    ? 'border-rose-500/80 bg-rose-500/10 text-white'
+                    : 'border-white/[0.08] bg-white/[0.02] text-zinc-400 hover:border-white/20'
+                }`}
+              >
+                <div>
+                  <div className="text-xs font-bold text-white">Somente Concluídos</div>
+                  <div className="text-[11px] text-zinc-400">Pedidos com status 'Entregue' ou 'Pago'</div>
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/20 text-emerald-400">
+                  {orders.filter(o => o.status === 'Entregue' || o.status === 'Pago').length}
+                </span>
+              </div>
+
+              {/* Opção 3: Pendentes */}
+              <div
+                onClick={() => setBulkOrderFilter('pendentes')}
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                  bulkOrderFilter === 'pendentes'
+                    ? 'border-rose-500/80 bg-rose-500/10 text-white'
+                    : 'border-white/[0.08] bg-white/[0.02] text-zinc-400 hover:border-white/20'
+                }`}
+              >
+                <div>
+                  <div className="text-xs font-bold text-white">Somente Pendentes</div>
+                  <div className="text-[11px] text-zinc-400">Pedidos aguardando pagamento</div>
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/20 text-amber-400">
+                  {orders.filter(o => o.status === 'Pendente').length}
+                </span>
+              </div>
+
+              {/* Opção 4: Cancelados */}
+              <div
+                onClick={() => setBulkOrderFilter('cancelados')}
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                  bulkOrderFilter === 'cancelados'
+                    ? 'border-rose-500/80 bg-rose-500/10 text-white'
+                    : 'border-white/[0.08] bg-white/[0.02] text-zinc-400 hover:border-white/20'
+                }`}
+              >
+                <div>
+                  <div className="text-xs font-bold text-white">Somente Cancelados</div>
+                  <div className="text-[11px] text-zinc-400">Pedidos marcados como cancelados</div>
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-rose-500/20 text-rose-400">
+                  {orders.filter(o => o.status === 'Cancelado').length}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-zinc-500 pt-1">
+              Esta ação é permanente e removerá os pedidos selecionados do servidor e da base de dados.
+            </p>
+
+            <div className="flex gap-2 justify-end pt-3">
+              <button
+                type="button"
+                disabled={isBulkDeleting}
+                onClick={() => setIsBulkDeleteOrdersOpen(false)}
+                className="px-4 py-2 rounded-lg border border-white/[0.08] text-xs text-zinc-300 hover:bg-white/[0.05] disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={
+                  isBulkDeleting ||
+                  (bulkOrderFilter === 'all' && orders.length === 0) ||
+                  (bulkOrderFilter === 'concluidos' && orders.filter(o => o.status === 'Entregue' || o.status === 'Pago').length === 0) ||
+                  (bulkOrderFilter === 'pendentes' && orders.filter(o => o.status === 'Pendente').length === 0) ||
+                  (bulkOrderFilter === 'cancelados' && orders.filter(o => o.status === 'Cancelado').length === 0)
+                }
+                onClick={handleBulkDeleteOrders}
+                className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-rose-950/50 transition-colors cursor-pointer"
+              >
+                {isBulkDeleting ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+                    <span>Excluindo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirmar e Excluir</span>
+                  </>
                 )}
               </button>
             </div>

@@ -495,6 +495,42 @@ apiRouter.put('/admin/orders/:id/status', requireAdmin, (req, res) => {
   res.json(order);
 });
 
+apiRouter.post('/admin/orders/bulk-delete', requireAdmin, async (req, res) => {
+  const { filter } = req.body;
+  const validFilters = ['all', 'concluidos', 'pendentes', 'cancelados'];
+  if (!filter || !validFilters.includes(filter)) {
+    return res.status(400).json({ error: 'Filtro de exclusão inválido. Escolha: all, concluidos, pendentes ou cancelados.' });
+  }
+
+  const result = dbStore.deleteOrdersBulk(filter as 'all' | 'concluidos' | 'pendentes' | 'cancelados');
+
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, deleteDoc, getDocs, collection } = await import('firebase/firestore');
+
+    if (filter === 'all') {
+      const snap = await getDocs(collection(db, 'orders'));
+      const delPromises = snap.docs.map(d => deleteDoc(doc(db, 'orders', d.id)).catch(() => {}));
+      await Promise.all(delPromises);
+    } else {
+      for (const id of result.deletedIds) {
+        await deleteDoc(doc(db, 'orders', id)).catch(() => {});
+        await deleteDoc(doc(db, 'orders', id.replace(/^#/, ''))).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn('Firestore bulk delete notice:', err);
+  }
+
+  res.json({
+    success: true,
+    message: `${result.deletedCount} pedidos excluídos com sucesso.`,
+    deletedCount: result.deletedCount,
+    deletedIds: result.deletedIds,
+    orders: result.orders
+  });
+});
+
 apiRouter.delete('/admin/orders/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   const deleted = dbStore.deleteOrder(id);
