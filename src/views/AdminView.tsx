@@ -286,15 +286,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     setIsDeleting(true);
 
     const lowerId = id.trim().toLowerCase();
+    const cleanName = name.trim().toLowerCase();
     const cleanNick = (extraNickname || name).trim().toLowerCase();
 
     // 1. OPTIMISTIC UI: Instantly remove item from view so user never sees lag
     switch (type) {
       case 'vip':
-        setVips(prev => prev.filter(v => v.id !== id && v.id.toLowerCase() !== lowerId));
+        setVips(prev => prev.filter(v => v.id !== id && v.id.toLowerCase() !== lowerId && v.name.trim().toLowerCase() !== cleanName));
         break;
       case 'product':
-        setProducts(prev => prev.filter(p => p.id !== id && p.id.toLowerCase() !== lowerId));
+        setProducts(prev => prev.filter(p => p.id !== id && p.id.toLowerCase() !== lowerId && p.name.trim().toLowerCase() !== cleanName));
         break;
       case 'order':
         setOrders(prev => prev.filter(o => o.id !== id && o.id.toLowerCase() !== lowerId && o.id.toLowerCase().replace(/^#/, '') !== lowerId.replace(/^#/, '')));
@@ -303,13 +304,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         setPlayers(prev => prev.filter(p => p.id !== id && p.id.toLowerCase() !== lowerId && p.nickname.toLowerCase() !== cleanNick));
         break;
       case 'event':
-        setEvents(prev => prev.filter(e => e.id !== id && e.id.toLowerCase() !== lowerId));
+        setEvents(prev => prev.filter(e => e.id !== id && e.id.toLowerCase() !== lowerId && e.name.trim().toLowerCase() !== cleanName));
         break;
       case 'news':
-        setNews(prev => prev.filter(n => n.id !== id && n.id.toLowerCase() !== lowerId));
+        setNews(prev => prev.filter(n => n.id !== id && n.id.toLowerCase() !== lowerId && n.title.trim().toLowerCase() !== cleanName));
         break;
       case 'community':
-        setSocialLinks(prev => prev.filter(s => s.id !== id && s.id.toLowerCase() !== lowerId));
+        setSocialLinks(prev => prev.filter(s => s.id !== id && s.id.toLowerCase() !== lowerId && s.name.trim().toLowerCase() !== cleanName));
         break;
     }
 
@@ -318,15 +319,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       switch (type) {
         case 'vip':
           await Promise.allSettled([
-            api.deleteVip(id, adminToken),
-            deleteVipFromFirestore(id)
+            api.deleteVip(id, adminToken, name),
+            deleteVipFromFirestore(id, name)
           ]);
           showSuccess(`VIP ${name} excluído com sucesso`);
           break;
         case 'product':
           await Promise.allSettled([
-            api.deleteProduct(id, adminToken),
-            deleteProductFromFirestore(id)
+            api.deleteProduct(id, adminToken, name),
+            deleteProductFromFirestore(id, name)
           ]);
           showSuccess(`Item ${name} excluído com sucesso`);
           break;
@@ -339,36 +340,38 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           break;
         case 'player':
           await Promise.allSettled([
-            api.deletePlayer(id, adminToken),
+            api.deletePlayer(id, adminToken, extraNickname || name),
             deleteUserFromFirestore(id, extraNickname || name)
           ]);
           showSuccess(`Jogador ${name} removido do sistema`);
           break;
         case 'event':
           await Promise.allSettled([
-            api.deleteEvent(id, adminToken),
-            deleteEventFromFirestore(id)
+            api.deleteEvent(id, adminToken, name),
+            deleteEventFromFirestore(id, name)
           ]);
           showSuccess(`Evento ${name} excluído com sucesso`);
           break;
         case 'news':
           await Promise.allSettled([
-            api.deleteNews(id, adminToken),
-            deleteNewsFromFirestore(id)
+            api.deleteNews(id, adminToken, name),
+            deleteNewsFromFirestore(id, name)
           ]);
           showSuccess(`Notícia ${name} excluída com sucesso`);
           break;
         case 'community':
           await Promise.allSettled([
-            api.deleteSocialLink(id, adminToken),
-            deleteSocialLinkFromFirestore(id)
+            api.deleteSocialLink(id, adminToken, name),
+            deleteSocialLinkFromFirestore(id, name)
           ]);
           showSuccess(`Comunidade ${name} excluída com sucesso`);
           break;
       }
       setDeleteConfirm(null);
-      await loadData();
+      // Synchronize global application state so the public site immediately reflects the deletion
       await onRefreshGlobalData();
+      // Reload admin stats and data so all lists and metrics are 100% updated
+      await loadData();
     } catch (err: unknown) {
       showError(err instanceof Error ? err.message : 'Erro ao processar exclusão');
       await loadData();

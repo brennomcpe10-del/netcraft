@@ -126,11 +126,18 @@ export const initialFaqs: FaqItem[] = [
 // -------------------------------------------------------------
 export async function seedFirestoreIfEmpty() {
   try {
+    if (typeof window !== 'undefined' && localStorage.getItem('netcraftbr_seeded') === 'true') {
+      return;
+    }
+
     const initRef = doc(db, 'system', 'initialized');
     const initSnap = await getDoc(initRef);
     if (initSnap.exists()) {
       // Database has already been initialized previously.
       // Do not re-insert items that were deleted by an administrator!
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('netcraftbr_seeded', 'true');
+      }
       return;
     }
 
@@ -210,6 +217,9 @@ export async function seedFirestoreIfEmpty() {
 
     // Mark system as initialized so subsequent page loads never resurrect deleted records
     await setDoc(initRef, { initializedAt: new Date().toISOString(), version: 1 }).catch(() => {});
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('netcraftbr_seeded', 'true');
+    }
   } catch (err) {
     console.warn('Firestore seeding check notice:', err);
   }
@@ -348,19 +358,25 @@ export async function saveVipToFirestore(vip: VIP) {
   await setDoc(doc(db, 'vips', vip.id), vip);
 }
 
-export async function deleteVipFromFirestore(id: string) {
+export async function deleteVipFromFirestore(id: string, name?: string) {
   try {
+    const cleanId = id.trim().toLowerCase();
+    const cleanName = (name || '').trim().toLowerCase();
     await deleteDoc(doc(db, 'vips', id)).catch(() => {});
-    if (id.toLowerCase() !== id) {
-      await deleteDoc(doc(db, 'vips', id.toLowerCase())).catch(() => {});
+    if (cleanId !== id) {
+      await deleteDoc(doc(db, 'vips', cleanId)).catch(() => {});
     }
     const snap = await getDocs(collection(db, 'vips'));
-    snap.forEach(async docSnap => {
+    const deletePromises: Promise<void>[] = [];
+    for (const docSnap of snap.docs) {
       const data = docSnap.data();
-      if (docSnap.id === id || docSnap.id.toLowerCase() === id.toLowerCase() || data.id === id) {
-        await deleteDoc(doc(db, 'vips', docSnap.id)).catch(() => {});
+      const matchId = docSnap.id === id || docSnap.id.toLowerCase() === cleanId || data.id === id || (data.id && String(data.id).toLowerCase() === cleanId);
+      const matchName = cleanName && data.name && String(data.name).trim().toLowerCase() === cleanName;
+      if (matchId || matchName) {
+        deletePromises.push(deleteDoc(doc(db, 'vips', docSnap.id)).catch(() => {}));
       }
-    });
+    }
+    await Promise.all(deletePromises);
   } catch (err) {
     console.warn('Error in deleteVipFromFirestore:', err);
   }
@@ -370,19 +386,25 @@ export async function saveProductToFirestore(prod: Product) {
   await setDoc(doc(db, 'products', prod.id), prod);
 }
 
-export async function deleteProductFromFirestore(id: string) {
+export async function deleteProductFromFirestore(id: string, name?: string) {
   try {
+    const cleanId = id.trim().toLowerCase();
+    const cleanName = (name || '').trim().toLowerCase();
     await deleteDoc(doc(db, 'products', id)).catch(() => {});
-    if (id.toLowerCase() !== id) {
-      await deleteDoc(doc(db, 'products', id.toLowerCase())).catch(() => {});
+    if (cleanId !== id) {
+      await deleteDoc(doc(db, 'products', cleanId)).catch(() => {});
     }
     const snap = await getDocs(collection(db, 'products'));
-    snap.forEach(async docSnap => {
+    const deletePromises: Promise<void>[] = [];
+    for (const docSnap of snap.docs) {
       const data = docSnap.data();
-      if (docSnap.id === id || docSnap.id.toLowerCase() === id.toLowerCase() || data.id === id) {
-        await deleteDoc(doc(db, 'products', docSnap.id)).catch(() => {});
+      const matchId = docSnap.id === id || docSnap.id.toLowerCase() === cleanId || data.id === id || (data.id && String(data.id).toLowerCase() === cleanId);
+      const matchName = cleanName && data.name && String(data.name).trim().toLowerCase() === cleanName;
+      if (matchId || matchName) {
+        deletePromises.push(deleteDoc(doc(db, 'products', docSnap.id)).catch(() => {}));
       }
-    });
+    }
+    await Promise.all(deletePromises);
   } catch (err) {
     console.warn('Error in deleteProductFromFirestore:', err);
   }
@@ -396,19 +418,25 @@ export async function saveEventToFirestore(ev: ServerEvent) {
   await setDoc(doc(db, 'events', ev.id), ev);
 }
 
-export async function deleteEventFromFirestore(id: string) {
+export async function deleteEventFromFirestore(id: string, name?: string) {
   try {
+    const cleanId = id.trim().toLowerCase();
+    const cleanName = (name || '').trim().toLowerCase();
     await deleteDoc(doc(db, 'events', id)).catch(() => {});
-    if (id.toLowerCase() !== id) {
-      await deleteDoc(doc(db, 'events', id.toLowerCase())).catch(() => {});
+    if (cleanId !== id) {
+      await deleteDoc(doc(db, 'events', cleanId)).catch(() => {});
     }
     const snap = await getDocs(collection(db, 'events'));
-    snap.forEach(async docSnap => {
+    const deletePromises: Promise<void>[] = [];
+    for (const docSnap of snap.docs) {
       const data = docSnap.data();
-      if (docSnap.id === id || docSnap.id.toLowerCase() === id.toLowerCase() || data.id === id) {
-        await deleteDoc(doc(db, 'events', docSnap.id)).catch(() => {});
+      const matchId = docSnap.id === id || docSnap.id.toLowerCase() === cleanId || data.id === id || (data.id && String(data.id).toLowerCase() === cleanId);
+      const matchName = cleanName && data.name && String(data.name).trim().toLowerCase() === cleanName;
+      if (matchId || matchName) {
+        deletePromises.push(deleteDoc(doc(db, 'events', docSnap.id)).catch(() => {}));
       }
-    });
+    }
+    await Promise.all(deletePromises);
   } catch (err) {
     console.warn('Error in deleteEventFromFirestore:', err);
   }
@@ -418,19 +446,25 @@ export async function saveNewsToFirestore(n: NewsArticle) {
   await setDoc(doc(db, 'news', n.id), n);
 }
 
-export async function deleteNewsFromFirestore(id: string) {
+export async function deleteNewsFromFirestore(id: string, title?: string) {
   try {
+    const cleanId = id.trim().toLowerCase();
+    const cleanTitle = (title || '').trim().toLowerCase();
     await deleteDoc(doc(db, 'news', id)).catch(() => {});
-    if (id.toLowerCase() !== id) {
-      await deleteDoc(doc(db, 'news', id.toLowerCase())).catch(() => {});
+    if (cleanId !== id) {
+      await deleteDoc(doc(db, 'news', cleanId)).catch(() => {});
     }
     const snap = await getDocs(collection(db, 'news'));
-    snap.forEach(async docSnap => {
+    const deletePromises: Promise<void>[] = [];
+    for (const docSnap of snap.docs) {
       const data = docSnap.data();
-      if (docSnap.id === id || docSnap.id.toLowerCase() === id.toLowerCase() || data.id === id) {
-        await deleteDoc(doc(db, 'news', docSnap.id)).catch(() => {});
+      const matchId = docSnap.id === id || docSnap.id.toLowerCase() === cleanId || data.id === id || (data.id && String(data.id).toLowerCase() === cleanId);
+      const matchTitle = cleanTitle && data.title && String(data.title).trim().toLowerCase() === cleanTitle;
+      if (matchId || matchTitle) {
+        deletePromises.push(deleteDoc(doc(db, 'news', docSnap.id)).catch(() => {}));
       }
-    });
+    }
+    await Promise.all(deletePromises);
   } catch (err) {
     console.warn('Error in deleteNewsFromFirestore:', err);
   }
@@ -440,19 +474,25 @@ export async function saveSocialLinkToFirestore(link: SocialLink) {
   await setDoc(doc(db, 'socialLinks', link.id), link);
 }
 
-export async function deleteSocialLinkFromFirestore(id: string) {
+export async function deleteSocialLinkFromFirestore(id: string, name?: string) {
   try {
+    const cleanId = id.trim().toLowerCase();
+    const cleanName = (name || '').trim().toLowerCase();
     await deleteDoc(doc(db, 'socialLinks', id)).catch(() => {});
-    if (id.toLowerCase() !== id) {
-      await deleteDoc(doc(db, 'socialLinks', id.toLowerCase())).catch(() => {});
+    if (cleanId !== id) {
+      await deleteDoc(doc(db, 'socialLinks', cleanId)).catch(() => {});
     }
     const snap = await getDocs(collection(db, 'socialLinks'));
-    snap.forEach(async docSnap => {
+    const deletePromises: Promise<void>[] = [];
+    for (const docSnap of snap.docs) {
       const data = docSnap.data();
-      if (docSnap.id === id || docSnap.id.toLowerCase() === id.toLowerCase() || data.id === id) {
-        await deleteDoc(doc(db, 'socialLinks', docSnap.id)).catch(() => {});
+      const matchId = docSnap.id === id || docSnap.id.toLowerCase() === cleanId || data.id === id || (data.id && String(data.id).toLowerCase() === cleanId);
+      const matchName = cleanName && data.name && String(data.name).trim().toLowerCase() === cleanName;
+      if (matchId || matchName) {
+        deletePromises.push(deleteDoc(doc(db, 'socialLinks', docSnap.id)).catch(() => {}));
       }
-    });
+    }
+    await Promise.all(deletePromises);
   } catch (err) {
     console.warn('Error in deleteSocialLinkFromFirestore:', err);
   }
@@ -468,7 +508,8 @@ export async function deleteOrderFromFirestore(id: string) {
     await deleteDoc(doc(db, 'orders', id)).catch(() => {});
     await deleteDoc(doc(db, 'orders', id.replace(/^#/, ''))).catch(() => {});
     const snap = await getDocs(collection(db, 'orders'));
-    snap.forEach(async docSnap => {
+    const deletePromises: Promise<void>[] = [];
+    for (const docSnap of snap.docs) {
       const data = docSnap.data();
       const docClean = docSnap.id.toLowerCase().replace(/^#/, '');
       const dataIdClean = (data.id || '').toLowerCase().replace(/^#/, '');
@@ -477,9 +518,10 @@ export async function deleteOrderFromFirestore(id: string) {
         docClean === cleanId ||
         dataIdClean === cleanId
       ) {
-        await deleteDoc(doc(db, 'orders', docSnap.id)).catch(() => {});
+        deletePromises.push(deleteDoc(doc(db, 'orders', docSnap.id)).catch(() => {}));
       }
-    });
+    }
+    await Promise.all(deletePromises);
   } catch (err) {
     console.warn('Error in deleteOrderFromFirestore:', err);
   }
@@ -623,7 +665,8 @@ export async function deleteUserFromFirestore(id: string, nickname?: string) {
     for (const colName of ['users', 'players']) {
       try {
         const snap = await getDocs(collection(db, colName));
-        snap.forEach(async docSnap => {
+        const delPromises: Promise<void>[] = [];
+        for (const docSnap of snap.docs) {
           const data = docSnap.data();
           const dNick = (data.nickname || '').trim().toLowerCase();
           const dId = (data.id || '').trim().toLowerCase();
@@ -633,9 +676,10 @@ export async function deleteUserFromFirestore(id: string, nickname?: string) {
             dId === cleanId ||
             (cleanNick && (dNick === cleanNick || docSnap.id.includes(cleanNick)))
           ) {
-            await deleteDoc(doc(db, colName, docSnap.id)).catch(() => {});
+            delPromises.push(deleteDoc(doc(db, colName, docSnap.id)).catch(() => {}));
           }
-        });
+        }
+        await Promise.all(delPromises);
       } catch (err) {
         console.warn(`Notice scanning ${colName} during user deletion:`, err);
       }

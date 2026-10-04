@@ -49,15 +49,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (p) {
           setPlayer(p);
         } else {
-          setPlayer({
-            id: `player-${savedNick.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-            nickname: savedNick,
-            createdAt: new Date().toISOString(),
-            lastActive: new Date().toISOString(),
-            activeVips: [],
-            totalSpent: 0,
-            ordersCount: 0
-          });
+          // If player was deleted by admin from both server and Firestore, clear local session
+          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(PROFILE_KEY);
+          setPlayer(null);
         }
       } else {
         // If not logged in yet, prompt the user smoothly with the nickname modal

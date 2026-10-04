@@ -171,8 +171,9 @@ export const api = {
     return res.json();
   },
 
-  async deleteVip(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/vips/${encodeURIComponent(id)}`, {
+  async deleteVip(id: string, adminToken: string, name?: string): Promise<void> {
+    const q = name ? `?name=${encodeURIComponent(name)}` : '';
+    const res = await fetch(`${API_BASE}/admin/vips/${encodeURIComponent(id)}${q}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
@@ -210,8 +211,9 @@ export const api = {
     return res.json();
   },
 
-  async deleteProduct(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/products/${encodeURIComponent(id)}`, {
+  async deleteProduct(id: string, adminToken: string, name?: string): Promise<void> {
+    const q = name ? `?name=${encodeURIComponent(name)}` : '';
+    const res = await fetch(`${API_BASE}/admin/products/${encodeURIComponent(id)}${q}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
@@ -307,8 +309,9 @@ export const api = {
     return res.json();
   },
 
-  async deleteEvent(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/events/${encodeURIComponent(id)}`, {
+  async deleteEvent(id: string, adminToken: string, name?: string): Promise<void> {
+    const q = name ? `?name=${encodeURIComponent(name)}` : '';
+    const res = await fetch(`${API_BASE}/admin/events/${encodeURIComponent(id)}${q}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
@@ -342,8 +345,9 @@ export const api = {
     return res.json();
   },
 
-  async deleteNews(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/news/${encodeURIComponent(id)}`, {
+  async deleteNews(id: string, adminToken: string, title?: string): Promise<void> {
+    const q = title ? `?name=${encodeURIComponent(title)}` : '';
+    const res = await fetch(`${API_BASE}/admin/news/${encodeURIComponent(id)}${q}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
@@ -377,8 +381,9 @@ export const api = {
     return res.json();
   },
 
-  async deleteSocialLink(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/community/${encodeURIComponent(id)}`, {
+  async deleteSocialLink(id: string, adminToken: string, name?: string): Promise<void> {
+    const q = name ? `?name=${encodeURIComponent(name)}` : '';
+    const res = await fetch(`${API_BASE}/admin/community/${encodeURIComponent(id)}${q}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
@@ -431,8 +436,9 @@ export const api = {
     return handleAdminFetch<Player[]>(res, 'Erro ao carregar lista de jogadores.');
   },
 
-  async deletePlayer(id: string, adminToken: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/players/${encodeURIComponent(id)}`, {
+  async deletePlayer(id: string, adminToken: string, nickname?: string): Promise<void> {
+    const q = nickname ? `?nickname=${encodeURIComponent(nickname)}` : '';
+    const res = await fetch(`${API_BASE}/admin/players/${encodeURIComponent(id)}${q}`, {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
