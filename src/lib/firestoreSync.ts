@@ -176,6 +176,62 @@ export async function getProductsFromFirestore(): Promise<Product[]> {
   }
 }
 
+export async function getVipByIdFromFirestore(id: string): Promise<VIP | null> {
+  try {
+    const cleanId = String(id).trim();
+    const docRef = doc(db, 'vips', cleanId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return { ...snap.data(), id: snap.id } as VIP;
+    }
+    const colSnap = await getDocs(collection(db, 'vips'));
+    const lower = cleanId.toLowerCase();
+    for (const d of colSnap.docs) {
+      const data = d.data();
+      if (
+        d.id === cleanId ||
+        d.id.toLowerCase() === lower ||
+        data.id === cleanId ||
+        (data.id && String(data.id).toLowerCase() === lower)
+      ) {
+        return { ...data, id: d.id } as VIP;
+      }
+    }
+    return null;
+  } catch (err) {
+    console.warn('Error fetching VIP by ID from Firestore:', err);
+    return null;
+  }
+}
+
+export async function getProductByIdFromFirestore(id: string): Promise<Product | null> {
+  try {
+    const cleanId = String(id).trim();
+    const docRef = doc(db, 'products', cleanId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return { ...snap.data(), id: snap.id } as Product;
+    }
+    const colSnap = await getDocs(collection(db, 'products'));
+    const lower = cleanId.toLowerCase();
+    for (const d of colSnap.docs) {
+      const data = d.data();
+      if (
+        d.id === cleanId ||
+        d.id.toLowerCase() === lower ||
+        data.id === cleanId ||
+        (data.id && String(data.id).toLowerCase() === lower)
+      ) {
+        return { ...data, id: d.id } as Product;
+      }
+    }
+    return null;
+  } catch (err) {
+    console.warn('Error fetching Product by ID from Firestore:', err);
+    return null;
+  }
+}
+
 export async function getOrdersFromFirestore(): Promise<Order[]> {
   try {
     const snap = await getDocs(collection(db, 'orders'));

@@ -180,15 +180,24 @@ class Store {
   }
 
   getVipById(id: string): VIP | undefined {
-    return this.data.vips.find(v => v.id === id);
+    if (!id) return undefined;
+    const cleanId = String(id).trim().toLowerCase();
+    return this.data.vips.find(
+      v => v.id === id || String(v.id).trim().toLowerCase() === cleanId
+    );
   }
 
-  createVip(vip: Omit<VIP, 'id'>): VIP {
+  createVip(vip: Omit<VIP, 'id'> & { id?: string }): VIP {
     const newVip: VIP = {
       ...vip,
-      id: `vip-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
+      id: vip.id || `vip-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
     };
-    this.data.vips.push(newVip);
+    const existingIdx = this.data.vips.findIndex(v => v.id === newVip.id);
+    if (existingIdx !== -1) {
+      this.data.vips[existingIdx] = newVip;
+    } else {
+      this.data.vips.push(newVip);
+    }
     this.saveDatabase();
     return newVip;
   }
@@ -250,15 +259,24 @@ class Store {
   }
 
   getProductById(id: string): Product | undefined {
-    return this.data.products.find(p => p.id === id);
+    if (!id) return undefined;
+    const cleanId = String(id).trim().toLowerCase();
+    return this.data.products.find(
+      p => p.id === id || String(p.id).trim().toLowerCase() === cleanId
+    );
   }
 
-  createProduct(prod: Omit<Product, 'id'>): Product {
+  createProduct(prod: Omit<Product, 'id'> & { id?: string }): Product {
     const newProduct: Product = {
       ...prod,
-      id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
+      id: prod.id || `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
     };
-    this.data.products.push(newProduct);
+    const existingIdx = this.data.products.findIndex(p => p.id === newProduct.id);
+    if (existingIdx !== -1) {
+      this.data.products[existingIdx] = newProduct;
+    } else {
+      this.data.products.push(newProduct);
+    }
     this.saveDatabase();
     return newProduct;
   }

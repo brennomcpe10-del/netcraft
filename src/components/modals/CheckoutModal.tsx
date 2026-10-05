@@ -3,7 +3,11 @@ import { VIP, Product, Order } from '../../types/index.ts';
 import { usePlayer } from '../../context/PlayerContext.tsx';
 import { useToast } from '../../context/ToastContext.tsx';
 import { api } from '../../lib/api.ts';
-import { saveOrderToFirestore } from '../../lib/firestoreSync.ts';
+import {
+  saveOrderToFirestore,
+  getVipByIdFromFirestore,
+  getProductByIdFromFirestore
+} from '../../lib/firestoreSync.ts';
 import { extractUrlFromText } from '../../lib/urlUtils.ts';
 import { X, ExternalLink, Zap, AlertCircle, CheckCircle2, QrCode, Copy } from 'lucide-react';
 
@@ -93,6 +97,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     try {
       setLoading(true);
+
+      // Verify and fetch freshest item data directly from Firestore
+      let freshItem: VIP | Product | null = null;
+      try {
+        freshItem = itemType === 'vip'
+          ? await getVipByIdFromFirestore(item.id)
+          : await getProductByIdFromFirestore(item.id);
+      } catch (err) {
+        console.warn('Firestore direct verify notice:', err);
+      }
+
+      if (freshItem && freshItem.active === false) {
+        showError(`O ${itemType === 'vip' ? 'VIP' : 'produto'} "${freshItem.name}" está temporariamente desativado para novas compras.`);
+        return;
+      }
+
       const order = await api.createOrder({
         buyerNickname: player.nickname,
         recipientNickname: finalRecipient,
@@ -104,29 +124,35 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setActiveOrder(order);
       await saveOrderToFirestore(order).catch(() => {});
 
+      // Determine the most accurate payment links (from backend order response, fresh item, or prop fallback)
+      const effectivePixUrl = (order as any).pixUrl || (freshItem && freshItem.pixUrl) || rawPixText;
+      const effectiveLivePixUrl = (order as any).livepixUrl || (freshItem && freshItem.livepixUrl) || rawLivePixText;
+      const cleanTargetPix = extractUrlFromText(effectivePixUrl);
+      const cleanTargetLivePix = extractUrlFromText(effectiveLivePixUrl) || (effectiveLivePixUrl.startsWith('http') ? effectiveLivePixUrl : '');
+
       if (paymentMethod === 'PIX') {
-        if (targetPixUrl) {
-          window.open(targetPixUrl, '_blank');
+        if (cleanTargetPix) {
+          window.open(cleanTargetPix, '_blank');
           showSuccess(
             `Pedido #${order.id} gerado! Redirecionando para a cobrança PIX...`
           );
-        } else if (rawPixText) {
-          navigator.clipboard.writeText(rawPixText);
+        } else if (effectivePixUrl && effectivePixUrl.trim().length > 0) {
+          navigator.clipboard.writeText(effectivePixUrl.trim());
           showSuccess(`Pedido #${order.id} gerado! Chave PIX copiada para a área de transferência.`);
         } else {
-          showError('Aviso: O administrador ainda não configurou o link de cobrança PIX para este item.');
+          showError('Link ou chave de cobrança PIX não está configurado para este item. Solicite ao administrador.');
         }
       } else {
-        if (targetLivePixUrl) {
-          window.open(targetLivePixUrl, '_blank');
+        if (cleanTargetLivePix) {
+          window.open(cleanTargetLivePix, '_blank');
           showSuccess(
             `Pedido #${order.id} gerado! Redirecionando para o LivePix...`
           );
-        } else if (rawLivePixText) {
-          navigator.clipboard.writeText(rawLivePixText);
+        } else if (effectiveLivePixUrl && effectiveLivePixUrl.trim().length > 0) {
+          navigator.clipboard.writeText(effectiveLivePixUrl.trim());
           showSuccess(`Pedido #${order.id} gerado! Link do LivePix copiado.`);
         } else {
-          showError('Aviso: O administrador ainda não configurou o link de LivePix para este item.');
+          showError('Link do LivePix não está configurado para este item. Solicite ao administrador.');
         }
       }
     } catch (err: unknown) {

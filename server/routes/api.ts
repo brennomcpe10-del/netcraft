@@ -244,12 +244,13 @@ apiRouter.get('/vips', async (req, res) => {
 });
 
 apiRouter.post('/admin/vips', requireAdmin, async (req, res) => {
-  const { name, price, duration, description, benefits, color, image, order, active, livepixUrl, pixUrl } = req.body;
+  const { id, name, price, duration, description, benefits, color, image, order, active, livepixUrl, pixUrl } = req.body;
   if (!name || price == null || !duration) {
     return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
   }
 
   const newVip = dbStore.createVip({
+    ...(id ? { id: String(id).trim() } : {}),
     name,
     price: Number(price),
     duration,
@@ -331,12 +332,13 @@ apiRouter.get('/products', async (req, res) => {
 });
 
 apiRouter.post('/admin/products', requireAdmin, async (req, res) => {
-  const { name, category, price, description, image, active, highlights, order, livepixUrl, pixUrl } = req.body;
+  const { id, name, category, price, description, image, active, highlights, order, livepixUrl, pixUrl } = req.body;
   if (!name || !category || price == null) {
     return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
   }
 
   const newProd = dbStore.createProduct({
+    ...(id ? { id: String(id).trim() } : {}),
     name,
     category,
     price: Number(price),
@@ -430,62 +432,158 @@ apiRouter.get('/orders/:id', (req, res) => {
   res.json(order);
 });
 
-apiRouter.post('/orders', (req, res) => {
+apiRouter.post('/orders', async (req, res) => {
   const { buyerNickname, recipientNickname, productId, productType, paymentMethod } = req.body;
 
   if (!buyerNickname || !recipientNickname || !productId || !productType) {
     return res.status(400).json({ error: 'Dados do pedido incompletos.' });
   }
 
-  // Security check: Never trust client price! Fetch actual price from DB
-  let amount = 0;
-  let productName = '';
+  try {
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, getDoc, collection, getDocs, setDoc } = await import('firebase/firestore');
 
-  if (productType === 'vip') {
-    const vip = dbStore.getVipById(productId);
-    if (!vip || !vip.active) {
-      return res.status(400).json({ error: 'VIP selecionado não está disponível.' });
+    const cleanProductId = String(productId).trim();
+    const cleanLowerId = cleanProductId.toLowerCase();
+    const targetType: 'vip' | 'product' = productType === 'vip' ? 'vip' : 'product';
+
+    let itemData: any = null;
+    let foundType: 'vip' | 'product' = targetType;
+
+    // 1. Primary lookup in the specified collection in Firestore
+    const primaryCollection = targetType === 'vip' ? 'vips' : 'products';
+    const primaryDocRef = doc(db, primaryCollection, cleanProductId);
+    const primarySnap = await getDoc(primaryDocRef).catch(() => null);
+
+    if (primarySnap && primarySnap.exists()) {
+      itemData = { ...primarySnap.data(), id: primarySnap.id };
+    } else {
+      // 1b. Fallback lookup in primary collection (case-insensitive or by data.id)
+      const colSnap = await getDocs(collection(db, primaryCollection)).catch(() => null);
+      if (colSnap && !colSnap.empty) {
+        for (const d of colSnap.docs) {
+          const data = d.data();
+          if (
+            d.id === cleanProductId ||
+            d.id.toLowerCase() === cleanLowerId ||
+            data.id === cleanProductId ||
+            (data.id && String(data.id).toLowerCase() === cleanLowerId)
+          ) {
+            itemData = { ...data, id: d.id };
+            break;
+          }
+        }
+      }
     }
-    amount = vip.price;
-    productName = `VIP ${vip.name}`;
-  } else {
-    const product = dbStore.getProductById(productId);
-    if (!product || !product.active) {
-      return res.status(400).json({ error: 'Produto selecionado não está disponível.' });
+
+    // 2. If not found in primary collection, check alternate collection (handles kit/vip categorization)
+    if (!itemData) {
+      const altCollection = targetType === 'vip' ? 'products' : 'vips';
+      const altDocRef = doc(db, altCollection, cleanProductId);
+      const altSnap = await getDoc(altDocRef).catch(() => null);
+
+      if (altSnap && altSnap.exists()) {
+        itemData = { ...altSnap.data(), id: altSnap.id };
+        foundType = targetType === 'vip' ? 'product' : 'vip';
+      } else {
+        const altColSnap = await getDocs(collection(db, altCollection)).catch(() => null);
+        if (altColSnap && !altColSnap.empty) {
+          for (const d of altColSnap.docs) {
+            const data = d.data();
+            if (
+              d.id === cleanProductId ||
+              d.id.toLowerCase() === cleanLowerId ||
+              data.id === cleanProductId ||
+              (data.id && String(data.id).toLowerCase() === cleanLowerId)
+            ) {
+              itemData = { ...data, id: d.id };
+              foundType = targetType === 'vip' ? 'product' : 'vip';
+              break;
+            }
+          }
+        }
+      }
     }
-    amount = product.price;
-    productName = product.name;
+
+    // 3. Fallback to dbStore RAM cache if Firestore lookup was somehow empty
+    if (!itemData) {
+      if (targetType === 'vip') {
+        const memoryVip = dbStore.getVipById(cleanProductId);
+        if (memoryVip) itemData = memoryVip;
+      } else {
+        const memoryProd = dbStore.getProductById(cleanProductId);
+        if (memoryProd) itemData = memoryProd;
+      }
+    }
+
+    // 4. If item really does not exist, return explicit descriptive error
+    if (!itemData) {
+      const typeLabel = targetType === 'vip' ? 'VIP' : 'Produto';
+      return res.status(404).json({
+        error: `${typeLabel} selecionado não foi encontrado no sistema (ID: ${cleanProductId}).`
+      });
+    }
+
+    // 5. Check if item is available / active
+    if (itemData.active === false) {
+      const typeLabel = foundType === 'vip' ? 'VIP' : 'Produto';
+      return res.status(400).json({
+        error: `O ${typeLabel} "${itemData.name}" está temporariamente desativado para novas compras.`
+      });
+    }
+
+    // 6. Security: Fetch actual price and name from verified database document
+    const amount = Number(itemData.price) || 0;
+    const productName = foundType === 'vip'
+      ? (itemData.name.startsWith('VIP') ? itemData.name : `VIP ${itemData.name}`)
+      : itemData.name;
+
+    // 7. Extract payment URLs
+    const livepixUrl = itemData.livepixUrl ? String(itemData.livepixUrl).trim() : '';
+    const pixUrl = itemData.pixUrl ? String(itemData.pixUrl).trim() : '';
+
+    // 8. Create the order
+    const order = dbStore.createOrder({
+      buyerNickname,
+      recipientNickname,
+      productId: itemData.id,
+      productName,
+      productType: foundType,
+      amount,
+      paymentMethod: paymentMethod || 'PIX'
+    });
+
+    // 9. Register players in dbStore and Firestore players collection
+    const buyerPlayer = dbStore.getOrCreatePlayer(buyerNickname);
+    const recipientPlayer = dbStore.getOrCreatePlayer(recipientNickname);
+
+    // Save directly to Firestore orders and players collections
+    await Promise.all([
+      setDoc(doc(db, 'orders', order.id), order),
+      setDoc(doc(db, 'players', buyerPlayer.id), buyerPlayer, { merge: true }),
+      setDoc(doc(db, 'players', recipientPlayer.id), recipientPlayer, { merge: true })
+    ]).catch(err => {
+      console.warn('Firestore order persistence notice:', err);
+    });
+
+    // Keep RAM memory synced
+    if (foundType === 'vip') {
+      dbStore.updateVip(itemData.id, itemData);
+    } else {
+      dbStore.updateProduct(itemData.id, itemData);
+    }
+
+    return res.status(201).json({
+      ...order,
+      livepixUrl,
+      pixUrl
+    });
+  } catch (err: unknown) {
+    console.error('Error creating order in Firestore:', err);
+    return res.status(500).json({
+      error: 'Erro interno ao consultar dados do produto no Firestore.'
+    });
   }
-
-  const order = dbStore.createOrder({
-    buyerNickname,
-    recipientNickname,
-    productId,
-    productName,
-    productType,
-    amount,
-    paymentMethod: paymentMethod || 'PIX'
-  });
-
-  // Ensure both buyer and recipient are immediately registered as players
-  const buyerPlayer = dbStore.getOrCreatePlayer(buyerNickname);
-  const recipientPlayer = dbStore.getOrCreatePlayer(recipientNickname);
-
-  // Background sync to Firestore users collection
-  (async () => {
-    try {
-      const { db } = await import('../../src/lib/firebase.ts');
-      const { doc, setDoc } = await import('firebase/firestore');
-      await Promise.all([
-        setDoc(doc(db, 'users', buyerPlayer.id), buyerPlayer).catch(() => {}),
-        setDoc(doc(db, 'users', recipientPlayer.id), recipientPlayer).catch(() => {})
-      ]);
-    } catch {
-      // ignore
-    }
-  })();
-
-  res.status(201).json(order);
 });
 
 // Webhook / Simulated Payment Confirmation

@@ -168,23 +168,45 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   };
 
   // -------------------------------------------------------------
-  // SAVE HANDLERS
+  // SAVE HANDLERS (GUARANTEES STABLE IDs & DIRECT FIRESTORE FIRST)
   // -------------------------------------------------------------
   const handleSaveVip = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingVip || !adminToken) return;
     try {
-      let savedVip: VIP;
-      if (editingVip.id) {
-        savedVip = await api.updateVip(editingVip.id, editingVip, adminToken);
+      const isEditing = !!editingVip.id;
+      const vipId = editingVip.id ? String(editingVip.id).trim() : `vip-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const savedVip: VIP = {
+        ...editingVip,
+        id: vipId,
+        name: editingVip.name || 'VIP Novo',
+        price: Number(editingVip.price) || 0,
+        duration: editingVip.duration || '30 dias',
+        description: editingVip.description || '',
+        benefits: Array.isArray(editingVip.benefits) ? editingVip.benefits : [],
+        color: editingVip.color || 'emerald',
+        image: editingVip.image || 'crown',
+        order: Number(editingVip.order) || 1,
+        active: editingVip.active !== false,
+        isPopular: !!editingVip.isPopular,
+        livepixUrl: editingVip.livepixUrl ? String(editingVip.livepixUrl).trim() : '',
+        pixUrl: editingVip.pixUrl ? String(editingVip.pixUrl).trim() : ''
+      };
+
+      // 1. Direct write to Firestore FIRST (Official Source of Truth)
+      await saveVipToFirestore(savedVip);
+
+      // 2. Sync with backend API
+      if (isEditing) {
+        await api.updateVip(vipId, savedVip, adminToken).catch(() => {});
         showSuccess('VIP atualizado com sucesso');
-        setVips(prev => prev.map(v => v.id === savedVip.id ? savedVip : v));
+        setVips(prev => prev.map(v => v.id === vipId ? savedVip : v));
       } else {
-        savedVip = await api.createVip(editingVip, adminToken);
+        await api.createVip(savedVip, adminToken).catch(() => {});
         showSuccess('VIP criado com sucesso');
-        setVips(prev => [...prev.filter(v => v.id !== savedVip.id), savedVip]);
+        setVips(prev => [...prev.filter(v => v.id !== vipId), savedVip]);
       }
-      await saveVipToFirestore(savedVip).catch(() => {});
+
       setEditingVip(null);
       await loadData();
       await onRefreshGlobalData();
@@ -197,17 +219,37 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     e.preventDefault();
     if (!editingProduct || !adminToken) return;
     try {
-      let savedProd: Product;
-      if (editingProduct.id) {
-        savedProd = await api.updateProduct(editingProduct.id, editingProduct, adminToken);
+      const isEditing = !!editingProduct.id;
+      const prodId = editingProduct.id ? String(editingProduct.id).trim() : `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const savedProd: Product = {
+        ...editingProduct,
+        id: prodId,
+        name: editingProduct.name || 'Novo Item',
+        category: editingProduct.category || 'outros',
+        price: Number(editingProduct.price) || 0,
+        description: editingProduct.description || '',
+        image: editingProduct.image || 'cube',
+        active: editingProduct.active !== false,
+        highlights: Array.isArray(editingProduct.highlights) ? editingProduct.highlights : [],
+        order: Number(editingProduct.order) || 1,
+        livepixUrl: editingProduct.livepixUrl ? String(editingProduct.livepixUrl).trim() : '',
+        pixUrl: editingProduct.pixUrl ? String(editingProduct.pixUrl).trim() : ''
+      };
+
+      // 1. Direct write to Firestore FIRST (Official Source of Truth)
+      await saveProductToFirestore(savedProd);
+
+      // 2. Sync with backend API
+      if (isEditing) {
+        await api.updateProduct(prodId, savedProd, adminToken).catch(() => {});
         showSuccess('Item da loja atualizado');
-        setProducts(prev => prev.map(p => p.id === savedProd.id ? savedProd : p));
+        setProducts(prev => prev.map(p => p.id === prodId ? savedProd : p));
       } else {
-        savedProd = await api.createProduct(editingProduct, adminToken);
+        await api.createProduct(savedProd, adminToken).catch(() => {});
         showSuccess('Item criado na loja');
-        setProducts(prev => [...prev.filter(p => p.id !== savedProd.id), savedProd]);
+        setProducts(prev => [...prev.filter(p => p.id !== prodId), savedProd]);
       }
-      await saveProductToFirestore(savedProd).catch(() => {});
+
       setEditingProduct(null);
       await loadData();
       await onRefreshGlobalData();
