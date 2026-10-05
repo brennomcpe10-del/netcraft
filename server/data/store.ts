@@ -710,8 +710,11 @@ class Store {
         this.data.products = [];
       }
 
-      // 3. Social Links
-      const socSnap = await getDocs(collection(db, 'socialLinks'));
+      // 3. Social / Community Links
+      let socSnap = await getDocs(collection(db, 'community'));
+      if (socSnap.empty) {
+        socSnap = await getDocs(collection(db, 'socialLinks'));
+      }
       if (!socSnap.empty) {
         const list: SocialLink[] = [];
         socSnap.forEach(d => list.push({ ...d.data(), id: d.id } as SocialLink));
@@ -741,14 +744,36 @@ class Store {
         this.data.news = [];
       }
 
-      // 6. Server Settings
-      const setSnap = await getDoc(doc(db, 'serverSettings', 'default'));
+      // 6. Players
+      let playersSnap = await getDocs(collection(db, 'players'));
+      if (playersSnap.empty) {
+        playersSnap = await getDocs(collection(db, 'users'));
+      }
+      if (!playersSnap.empty) {
+        const pList: Player[] = [];
+        playersSnap.forEach(d => pList.push({ ...d.data(), id: d.id } as Player));
+        this.data.players = pList;
+      }
+
+      // 7. Orders
+      const ordersSnap = await getDocs(collection(db, 'orders'));
+      if (!ordersSnap.empty) {
+        const oList: Order[] = [];
+        ordersSnap.forEach(d => oList.push({ ...d.data(), id: d.id } as Order));
+        this.data.orders = oList;
+      }
+
+      // 8. Server Settings
+      let setSnap = await getDoc(doc(db, 'settings', 'general'));
+      if (!setSnap.exists()) {
+        setSnap = await getDoc(doc(db, 'serverSettings', 'default'));
+      }
       if (setSnap.exists()) {
         this.data.settings = { ...this.data.settings, ...(setSnap.data() as ServerSettings) };
       }
 
       this.saveDatabase();
-      console.log(`[Store] Synced with Firestore: ${this.data.vips.length} VIPs, ${this.data.products.length} Products, ${this.data.socialLinks.length} Social Links`);
+      console.log(`[Store] Synced with Firestore: ${this.data.vips.length} VIPs, ${this.data.products.length} Products, ${this.data.players.length} Players, ${this.data.orders.length} Orders`);
     } catch (err) {
       console.warn('[Store] Firestore sync notice:', err);
     }
