@@ -519,38 +519,60 @@ apiRouter.post('/orders', async (req, res) => {
     // 4. If item really does not exist, return explicit descriptive error
     if (!itemData) {
       const typeLabel = targetType === 'vip' ? 'VIP' : 'Produto';
+      console.warn(`CHECKOUT AVISO: ${typeLabel} não localizado no Firestore:`, {
+        targetCollection: primaryCollection,
+        searchedId: cleanProductId,
+        type: targetType
+      });
       return res.status(404).json({
-        error: `${typeLabel} selecionado não foi encontrado no sistema (ID: ${cleanProductId}).`
+        error: `${typeLabel} selecionado não foi encontrado no sistema (ID: ${cleanProductId}).`,
+        code: 'NOT_FOUND',
+        collection: primaryCollection,
+        productId: cleanProductId
       });
     }
 
     // 5. Check if item is available / active
     if (itemData.active === false) {
       const typeLabel = foundType === 'vip' ? 'VIP' : 'Produto';
+      const safeName = String(itemData.name || 'Item').trim();
       return res.status(400).json({
-        error: `O ${typeLabel} "${itemData.name}" está temporariamente desativado para novas compras.`
+        error: `O ${typeLabel} "${safeName}" está temporariamente desativado para novas compras.`,
+        code: 'ITEM_INACTIVE',
+        collection: foundType === 'vip' ? 'vips' : 'products',
+        productId: cleanProductId
       });
     }
 
-    // 6. Security: Fetch actual price and name from verified database document
+    // 6. Security: Fetch actual price and name from verified database document safely
     const amount = Number(itemData.price) || 0;
+    const rawName = String(itemData.name || itemData.title || (foundType === 'vip' ? 'VIP' : 'Produto')).trim();
     const productName = foundType === 'vip'
-      ? (itemData.name.startsWith('VIP') ? itemData.name : `VIP ${itemData.name}`)
-      : itemData.name;
+      ? (rawName.toLowerCase().startsWith('vip') ? rawName : `VIP ${rawName}`)
+      : rawName;
 
     // 7. Extract payment URLs
     const livepixUrl = itemData.livepixUrl ? String(itemData.livepixUrl).trim() : '';
     const pixUrl = itemData.pixUrl ? String(itemData.pixUrl).trim() : '';
 
+    console.log('CHECKOUT SUCESSO: Documento Firestore validado:', {
+      collection: foundType === 'vip' ? 'vips' : 'products',
+      id: itemData.id,
+      productName,
+      amount,
+      buyerNickname,
+      recipientNickname
+    });
+
     // 8. Create the order
     const order = dbStore.createOrder({
       buyerNickname,
       recipientNickname,
-      productId: itemData.id,
+      productId: String(itemData.id || cleanProductId),
       productName,
       productType: foundType,
       amount,
-      paymentMethod: paymentMethod || 'PIX'
+      paymentMethod: (paymentMethod === 'LIVEPIX' ? 'PIX' : (paymentMethod || 'PIX')) as any
     });
 
     // 9. Register players in dbStore and Firestore players collection
@@ -579,9 +601,20 @@ apiRouter.post('/orders', async (req, res) => {
       pixUrl
     });
   } catch (err: unknown) {
-    console.error('Error creating order in Firestore:', err);
+    const errorObj = err instanceof Error ? err : new Error(String(err));
+    const errorCode = (err as any)?.code || 'INTERNAL_ERROR';
+    console.error('DIAGNÓSTICO ERRO FIRESTORE CHECKOUT:', {
+      code: errorCode,
+      message: errorObj.message,
+      name: errorObj.name,
+      searchedId: productId,
+      productType,
+      stack: errorObj.stack
+    });
     return res.status(500).json({
-      error: 'Erro interno ao consultar dados do produto no Firestore.'
+      error: `Erro ao consultar dados no Firestore: ${errorObj.message}`,
+      code: errorCode,
+      productId: String(productId || '')
     });
   }
 });

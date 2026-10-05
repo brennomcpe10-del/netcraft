@@ -14,120 +14,120 @@
     "pixUrl": "",
     "rules": [
       {
+        "category": "Geral",
         "id": "rule-1",
         "description": "Proibido qualquer tipo de ofensa, preconceito, discurso de ódio, assédio ou toxicidade no chat global ou privado.",
-        "category": "Geral",
         "title": "Respeito Mútuo e Comunidade"
       },
       {
-        "title": "Proibido Trapaças (Hacks / Cheats / X-Ray)",
-        "category": "Geral",
         "description": "O uso de qualquer cliente modificado que proporcione vantagens injustas (Fly, Killaura, Speed, X-Ray) resultará em banimento permanente imediato.",
-        "id": "rule-2"
+        "id": "rule-2",
+        "title": "Proibido Trapaças (Hacks / Cheats / X-Ray)",
+        "category": "Geral"
       },
       {
         "category": "Construções",
-        "title": "Proteção de Terrenos e Anti-Grief",
+        "id": "rule-3",
         "description": "Não destrua construções de outros jogadores nem tente roubar através de bugs de blocos. Utilize sempre o bloco de proteção de terreno.",
-        "id": "rule-3"
+        "title": "Proteção de Terrenos e Anti-Grief"
       },
       {
-        "description": "Qualquer tentativa de duplicar itens ou explorar falhas no sistema econômico resultará em reset de conta e banimento sem aviso prévio.",
-        "category": "Economia",
+        "id": "rule-4",
         "title": "Economia Justa e Anti-Duplicação",
-        "id": "rule-4"
+        "category": "Economia",
+        "description": "Qualquer tentativa de duplicar itens ou explorar falhas no sistema econômico resultará em reset de conta e banimento sem aviso prévio."
       },
       {
         "description": "O combate entre jogadores é liberado apenas em áreas permitidas (Arenas e /warp pvp). Combat logging (desconectar durante combate) é punido automaticamente.",
         "title": "Regras de PvP e Combate",
-        "category": "PvP",
-        "id": "rule-5"
+        "id": "rule-5",
+        "category": "PvP"
       }
     ],
     "systems": [
       {
         "icon": "Coins",
-        "id": "sys-eco",
         "command": "/money, /mercado",
+        "id": "sys-eco",
         "description": "Sistema completo de coins, mercado de jogadores, leilões em tempo real, banco com juros e lojas automáticas.",
         "title": "Economia Global"
       },
       {
+        "command": "/terreno, /bloco",
         "title": "Terrenos & Proteção",
         "icon": "Shield",
         "description": "Proteja suas vilas, castelos e baús com blocos de proteção inteligentes. Compartilhe permissões com amigos.",
-        "id": "sys-terrenos",
-        "command": "/terreno, /bloco"
+        "id": "sys-terrenos"
       },
       {
         "title": "Sistema de Casas (/sethome)",
-        "icon": "Home",
         "id": "sys-casas",
         "description": "Defina múltiplos pontos de retorno rápidos e seguros para nunca se perder pelo imenso mundo de sobrevivência.",
-        "command": "/sethome, /home"
+        "command": "/sethome, /home",
+        "icon": "Home"
       },
       {
+        "icon": "Compass",
         "title": "Warps & Mundos",
-        "description": "Teleportes instantâneos para o Spawn, Mina Resetável, Arena PvP, Loja Central, Nether e The End.",
         "command": "/warp, /spawn",
-        "id": "sys-warps",
-        "icon": "Compass"
+        "description": "Teleportes instantâneos para o Spawn, Mina Resetável, Arena PvP, Loja Central, Nether e The End.",
+        "id": "sys-warps"
       },
       {
-        "description": "Gladiador semanal, Caça ao Dragão, Corrida de Barcos no Gelo, Caça ao Tesouro e Quiz no chat.",
-        "icon": "Trophy",
         "command": "/eventos",
+        "icon": "Trophy",
         "id": "sys-eventos",
+        "description": "Gladiador semanal, Caça ao Dragão, Corrida de Barcos no Gelo, Caça ao Tesouro e Quiz no chat.",
         "title": "Eventos Automáticos"
       },
       {
-        "description": "Crie ou junte-se a uma aliança, conquiste territórios, dispute o ranking dos clãs mais poderosos e dispute guerras.",
+        "icon": "Users",
+        "title": "Clãs & Grupos",
         "command": "/cla, /clan",
         "id": "sys-grupos",
-        "title": "Clãs & Grupos",
-        "icon": "Users"
+        "description": "Crie ou junte-se a uma aliança, conquiste territórios, dispute o ranking dos clãs mais poderosos e dispute guerras."
       },
       {
-        "title": "Teleporte Entre Amigos (TPA)",
-        "description": "Envie e aceite pedidos de teleporte para jogar em conjunto com seus amigos a qualquer hora.",
         "id": "sys-tpa",
+        "description": "Envie e aceite pedidos de teleporte para jogar em conjunto com seus amigos a qualquer hora.",
+        "title": "Teleporte Entre Amigos (TPA)",
         "icon": "Zap",
         "command": "/tpa, /tpaccept"
       },
       {
-        "icon": "Crown",
-        "title": "Vantagens VIP",
         "id": "sys-vips",
+        "description": "Acesse kits exclusivos, comando /fly em seus terrenos, multiplicadores de moedas, chat colorido e prioridade na fila.",
         "command": "/vip",
-        "description": "Acesse kits exclusivos, comando /fly em seus terrenos, multiplicadores de moedas, chat colorido e prioridade na fila."
+        "title": "Vantagens VIP",
+        "icon": "Crown"
       },
       {
-        "command": "/criadores",
         "id": "sys-criadores",
         "description": "Programa oficial para streamers e criadores de conteúdo do YouTube e TikTok com tag exclusiva e recompensas.",
         "title": "Apoio a Criadores",
+        "command": "/criadores",
         "icon": "Video"
       },
       {
-        "id": "sys-procurados",
-        "title": "Sistema de Procurados (Bounties)",
-        "description": "Coloque a cabeça dos seus rivais a prêmio ou torne-se um caçador de recompensas temido em todo o mapa.",
         "icon": "Target",
-        "command": "/bounty, /procurados"
+        "id": "sys-procurados",
+        "description": "Coloque a cabeça dos seus rivais a prêmio ou torne-se um caçador de recompensas temido em todo o mapa.",
+        "command": "/bounty, /procurados",
+        "title": "Sistema de Procurados (Bounties)"
       },
       {
-        "command": "/bosses",
-        "icon": "Skull",
         "id": "sys-bosses",
         "title": "Bosses Customizados",
+        "icon": "Skull",
+        "command": "/bosses",
         "description": "Chefões ancestrais surgem em masmorras secretas no Nether e End com padrões de ataque únicos e drops lendários."
       },
       {
-        "description": "Compre e venda minérios, blocos raros e itens de agricultura com preços que variam conforme a oferta e demanda.",
-        "title": "Loja Dinâmica",
         "command": "/loja",
+        "id": "sys-loja",
+        "title": "Loja Dinâmica",
         "icon": "ShoppingBag",
-        "id": "sys-loja"
+        "description": "Compre e venda minérios, blocos raros e itens de agricultura com preços que variam conforme a oferta e demanda."
       }
     ],
     "gallery": [],
@@ -138,36 +138,35 @@
   },
   "vips": [
     {
-      "livepixUrl": "https://livepix.gg/halzintv/plano-explorer",
-      "name": "Explorer",
       "benefits": [
         "Prefixo VIP exclusivo no chat.",
         "Kit vip simples",
         "Acesso a área vip (Farm de XP infinita)",
         "Canal exclusivo no Discord"
       ],
-      "active": true,
-      "order": 1,
-      "description": "",
-      "isPopular": false,
-      "pixUrl": "https://nubank.com.br/cobrar/b49ns/6ac25a7e-ffac-4003-908f-6e616cff7381",
       "color": "emerald",
       "image": "crown",
-      "price": 4.9,
+      "duration": "30 dias",
+      "livepixUrl": "https://livepix.gg/halzintv/plano-explorer",
       "id": "vip-1791128040888-vvek",
-      "duration": "30 dias"
+      "order": 1,
+      "isPopular": false,
+      "price": 4.9,
+      "description": "",
+      "pixUrl": "https://nubank.com.br/cobrar/b49ns/6ac25a7e-ffac-4003-908f-6e616cff7381",
+      "active": true,
+      "name": "Explorer"
     },
     {
-      "description": "",
-      "name": "Supreme",
-      "duration": "30 dias",
+      "id": "vip-1791128111086-kw5n",
+      "price": 24.9,
+      "color": "emerald",
+      "image": "crown",
+      "pixUrl": "https://nubank.com.br/cobrar/b49ns/6ac25c34-6abf-4a5d-84aa-98db091c8118",
+      "isPopular": false,
       "active": true,
       "order": 1,
-      "livepixUrl": "https://livepix.gg/halzintv/plano-supreme",
-      "isPopular": false,
-      "pixUrl": "https://nubank.com.br/cobrar/b49ns/6ac25c34-6abf-4a5d-84aa-98db091c8118",
-      "image": "crown",
-      "price": 24.9,
+      "description": "",
       "benefits": [
         "Prefixo VIP exclusivo no chat.",
         "Kit semanal lendário",
@@ -176,236 +175,326 @@
         "Efeitos visuais de caminhada ",
         "Pet exclusivo raro (Imortal)"
       ],
-      "color": "emerald",
-      "id": "vip-1791128111086-kw5n"
+      "livepixUrl": "https://livepix.gg/halzintv/plano-supreme",
+      "duration": "30 dias",
+      "name": "Supreme"
     },
     {
-      "image": "crown",
-      "price": 12.9,
+      "active": true,
+      "pixUrl": "https://nubank.com.br/cobrar/b49ns/6ac25bd1-9ac1-4df8-a17c-a47c708950ca",
+      "description": "",
+      "livepixUrl": "https://livepix.gg/halzintv/plano-elite",
+      "order": 2,
       "isPopular": false,
       "name": "Elite",
+      "id": "vip-1791128072288-kztd",
+      "color": "emerald",
+      "image": "crown",
+      "price": 12.9,
+      "duration": "30 dias",
       "benefits": [
         "Prefixo VIP exclusivo no chat.",
         "Kit semanal avançado ",
         "Acesso a área vip (Farm de XP infinita)",
         "Canal exclusivo no Discord",
         "Efeitos visuais de caminhada"
-      ],
-      "color": "emerald",
-      "pixUrl": "https://nubank.com.br/cobrar/b49ns/6ac25bd1-9ac1-4df8-a17c-a47c708950ca",
-      "id": "vip-1791128072288-kztd",
-      "order": 2,
-      "active": true,
-      "duration": "30 dias",
-      "description": "",
-      "livepixUrl": "https://livepix.gg/halzintv/plano-elite"
-    },
-    {
-      "id": "vip-teste-checkout-1791224100681",
-      "name": "VIP Teste Validação",
-      "price": 15.5,
-      "duration": "30 dias",
-      "description": "VIP para teste de checkout direto com Firestore",
-      "benefits": [
-        "Tag Especial",
-        "Kit Diário"
-      ],
-      "color": "emerald",
-      "image": "crown",
-      "order": 10,
-      "active": true,
-      "livepixUrl": "https://livepix.gg/netcraftbr/NOVO-LIVEPIX-456",
-      "isPopular": false,
-      "pixUrl": "https://nubank.com.br/cobrar/NOVO-LINK-PIX-123"
+      ]
     }
   ],
   "products": [
     {
-      "description": "Com esse item seu ban temporário é removido. Mas atenção, bans permanentes não há como ser removido!",
-      "price": 9.9,
-      "image": "cube",
-      "active": true,
       "id": "prod-1791210646508-v59f",
-      "name": "UnBan",
-      "order": 1,
-      "pixUrl": "https://nubank.com.br/cobrar/b49ns/6ac3b465-88bf-4b9b-9129-cac14f0519dd",
       "highlights": [
         "Unban"
       ],
-      "livepixUrl": "",
-      "category": "outros"
-    },
-    {
-      "id": "prod-teste-checkout-1791224102609",
-      "name": "Kit Diamante Teste",
-      "category": "kits",
-      "price": 12,
-      "description": "Kit de teste para validação de produto",
-      "image": "cube",
+      "pixUrl": "https://nubank.com.br/cobrar/b49ns/6ac3b465-88bf-4b9b-9129-cac14f0519dd",
       "active": true,
-      "highlights": [
-        "Espada Full"
-      ],
-      "order": 1,
-      "pixUrl": "https://nubank.com.br/cobrar/kit-dia",
-      "livepixUrl": "https://livepix.gg/netcraftbr/kit-dia"
+      "price": 9.9,
+      "category": "outros",
+      "livepixUrl": "",
+      "description": "Com esse item seu ban temporário é removido. Mas atenção, bans permanentes não há como ser removido!",
+      "image": "cube",
+      "name": "UnBan",
+      "order": 1
     }
   ],
   "orders": [
     {
-      "status": "Entregue",
-      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654029.905802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304NQES",
-      "deliveredAt": "2026-10-05T00:11:04.941Z",
-      "recipientNickname": "MissedTuba62916",
-      "id": "ORD-477944",
-      "amount": 29.9,
-      "productId": "vip-1791128111086-kw5n",
-      "buyerNickname": "MissedTuba62916",
-      "paymentMethod": "PIX",
-      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654029.905802BR5910NETCRAFTBR6009SAO PAULO62070503***6304NQES",
-      "productType": "vip",
-      "productName": "VIP Supreme",
-      "transactionId": "TX-PIX-921140",
-      "createdAt": "2026-10-05T00:08:41.140Z"
-    },
-    {
-      "id": "ORD-586687",
-      "buyerNickname": "PlayerTeste1",
-      "recipientNickname": "PlayerTeste1",
-      "productId": "vip-teste-checkout-1791224100681",
-      "productName": "VIP Teste Validação",
-      "productType": "vip",
-      "amount": 15.5,
-      "createdAt": "2026-10-05T18:15:01.039Z",
-      "status": "Pendente",
-      "transactionId": "TX-PIX-101039",
-      "paymentMethod": "PIX",
-      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654015.505802BR5910NETCRAFTBR6009SAO PAULO62070503***6304C4Y5",
-      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654015.505802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304C4Y5"
-    },
-    {
-      "id": "ORD-497932",
-      "buyerNickname": "PlayerTeste2",
-      "recipientNickname": "PlayerTeste2",
-      "productId": "vip-teste-checkout-1791224100681",
-      "productName": "VIP Teste Validação",
-      "productType": "vip",
-      "amount": 15.5,
-      "createdAt": "2026-10-05T18:15:02.231Z",
-      "status": "Pendente",
-      "transactionId": "TX-LIVEPIX-102231",
-      "paymentMethod": "LIVEPIX",
-      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654015.505802BR5910NETCRAFTBR6009SAO PAULO62070503***6304DM7V",
-      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654015.505802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304DM7V"
-    },
-    {
-      "id": "ORD-134342",
       "buyerNickname": "PlayerTeste3",
+      "status": "Pendente",
       "recipientNickname": "PlayerTeste3",
+      "transactionId": "TX-PIX-102470",
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654015.505802BR5910NETCRAFTBR6009SAO PAULO62070503***630419ZZ",
+      "createdAt": "2026-10-05T18:15:02.470Z",
+      "amount": 15.5,
+      "paymentMethod": "PIX",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654015.505802BR5910NETCRAFTBR6009SAO%20PAULO62070503***630419ZZ",
+      "id": "ORD-134342",
       "productId": "vip-teste-checkout-1791224100681",
       "productName": "VIP Teste Validação",
-      "productType": "vip",
-      "amount": 15.5,
-      "createdAt": "2026-10-05T18:15:02.470Z",
-      "status": "Pendente",
-      "transactionId": "TX-PIX-102470",
-      "paymentMethod": "PIX",
-      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654015.505802BR5910NETCRAFTBR6009SAO PAULO62070503***630419ZZ",
-      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654015.505802BR5910NETCRAFTBR6009SAO%20PAULO62070503***630419ZZ"
+      "productType": "vip"
     },
     {
-      "id": "ORD-353806",
-      "buyerNickname": "PlayerTesteProd",
-      "recipientNickname": "PlayerTesteProd",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654012.005802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304R00I",
+      "transactionId": "TX-PIX-102695",
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654012.005802BR5910NETCRAFTBR6009SAO PAULO62070503***6304R00I",
       "productId": "prod-teste-checkout-1791224102609",
-      "productName": "Kit Diamante Teste",
+      "recipientNickname": "PlayerTesteProd",
+      "buyerNickname": "PlayerTesteProd",
       "productType": "product",
       "amount": 12,
-      "createdAt": "2026-10-05T18:15:02.695Z",
+      "productName": "Kit Diamante Teste",
+      "id": "ORD-353806",
       "status": "Pendente",
-      "transactionId": "TX-PIX-102695",
       "paymentMethod": "PIX",
-      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654012.005802BR5910NETCRAFTBR6009SAO PAULO62070503***6304R00I",
-      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654012.005802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304R00I"
+      "createdAt": "2026-10-05T18:15:02.695Z"
+    },
+    {
+      "amount": 29.9,
+      "paymentMethod": "PIX",
+      "deliveredAt": "2026-10-05T00:11:04.941Z",
+      "createdAt": "2026-10-05T00:08:41.140Z",
+      "status": "Entregue",
+      "productName": "VIP Supreme",
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654029.905802BR5910NETCRAFTBR6009SAO PAULO62070503***6304NQES",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654029.905802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304NQES",
+      "transactionId": "TX-PIX-921140",
+      "id": "ORD-477944",
+      "buyerNickname": "MissedTuba62916",
+      "productType": "vip",
+      "recipientNickname": "MissedTuba62916",
+      "productId": "vip-1791128111086-kw5n"
+    },
+    {
+      "paymentMethod": "LIVEPIX",
+      "recipientNickname": "PlayerTeste2",
+      "createdAt": "2026-10-05T18:15:02.231Z",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654015.505802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304DM7V",
+      "amount": 15.5,
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654015.505802BR5910NETCRAFTBR6009SAO PAULO62070503***6304DM7V",
+      "id": "ORD-497932",
+      "buyerNickname": "PlayerTeste2",
+      "status": "Pendente",
+      "productType": "vip",
+      "productId": "vip-teste-checkout-1791224100681",
+      "transactionId": "TX-LIVEPIX-102231",
+      "productName": "VIP Teste Validação"
+    },
+    {
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com5204000053039865404.905802BR5910NETCRAFTBR6009SAO PAULO62070503***6304W3K5",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com5204000053039865404.905802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304W3K5",
+      "paymentMethod": "PIX",
+      "productId": "vip-1791128040888-vvek",
+      "amount": 4.9,
+      "transactionId": "TX-PIX-786013",
+      "buyerNickname": "TesteNick",
+      "createdAt": "2026-10-05T18:26:26.013Z",
+      "recipientNickname": "TesteNick",
+      "status": "Pendente",
+      "productType": "vip",
+      "productName": "VIP Explorer",
+      "id": "ORD-561349"
+    },
+    {
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654015.505802BR5910NETCRAFTBR6009SAO PAULO62070503***6304C4Y5",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654015.505802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304C4Y5",
+      "productId": "vip-teste-checkout-1791224100681",
+      "paymentMethod": "PIX",
+      "transactionId": "TX-PIX-101039",
+      "amount": 15.5,
+      "buyerNickname": "PlayerTeste1",
+      "createdAt": "2026-10-05T18:15:01.039Z",
+      "recipientNickname": "PlayerTeste1",
+      "status": "Pendente",
+      "productType": "vip",
+      "productName": "VIP Teste Validação",
+      "id": "ORD-586687"
+    },
+    {
+      "productName": "VIP Supreme",
+      "recipientNickname": "Tester",
+      "productType": "vip",
+      "paymentMethod": "PIX",
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654024.905802BR5910NETCRAFTBR6009SAO PAULO62070503***6304Y5TK",
+      "productId": "vip-1791128111086-kw5n",
+      "status": "Pendente",
+      "amount": 24.9,
+      "id": "ORD-777586",
+      "buyerNickname": "Tester",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654024.905802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304Y5TK",
+      "createdAt": "2026-10-05T18:26:42.543Z",
+      "transactionId": "TX-PIX-802543"
+    },
+    {
+      "productName": "VIP Explorer",
+      "amount": 4.9,
+      "productType": "vip",
+      "paymentMethod": "PIX",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com5204000053039865404.905802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304LYST",
+      "id": "ORD-820657",
+      "createdAt": "2026-10-05T18:26:42.304Z",
+      "status": "Pendente",
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com5204000053039865404.905802BR5910NETCRAFTBR6009SAO PAULO62070503***6304LYST",
+      "buyerNickname": "Tester",
+      "productId": "vip-1791128040888-vvek",
+      "recipientNickname": "Tester",
+      "transactionId": "TX-PIX-802304"
+    },
+    {
+      "status": "Pendente",
+      "livepixUrl": "https://livepix.gg/halzintv/plano-explorer",
+      "productId": "vip-1791128040888-vvek",
+      "pixUrl": "https://nubank.com.br/cobrar/b49ns/6ac25a7e-ffac-4003-908f-6e616cff7381",
+      "recipientNickname": "Halzin",
+      "productName": "VIP Explorer",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com5204000053039865404.905802BR5910NETCRAFTBR6009SAO%20PAULO62070503***63046W0I",
+      "amount": 4.9,
+      "productType": "vip",
+      "paymentMethod": "PIX",
+      "id": "ORD-892593",
+      "createdAt": "2026-10-05T18:23:53.632Z",
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com5204000053039865404.905802BR5910NETCRAFTBR6009SAO PAULO62070503***63046W0I",
+      "transactionId": "TX-PIX-633632",
+      "buyerNickname": "Halzin"
+    },
+    {
+      "createdAt": "2026-10-05T18:26:42.664Z",
+      "recipientNickname": "Tester",
+      "productName": "UnBan",
+      "productType": "product",
+      "paymentMethod": "PIX",
+      "id": "ORD-983508",
+      "productId": "prod-1791210646508-v59f",
+      "status": "Pendente",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com5204000053039865409.905802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304MD23",
+      "buyerNickname": "Tester",
+      "amount": 9.9,
+      "transactionId": "TX-PIX-802664",
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com5204000053039865409.905802BR5910NETCRAFTBR6009SAO PAULO62070503***6304MD23"
+    },
+    {
+      "createdAt": "2026-10-05T18:26:42.432Z",
+      "recipientNickname": "Tester",
+      "productName": "VIP Elite",
+      "productType": "vip",
+      "paymentMethod": "PIX",
+      "id": "ORD-997240",
+      "productId": "vip-1791128072288-kztd",
+      "status": "Pendente",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com52040000530398654012.905802BR5910NETCRAFTBR6009SAO%20PAULO62070503***63042Z1Z",
+      "buyerNickname": "Tester",
+      "amount": 12.9,
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com52040000530398654012.905802BR5910NETCRAFTBR6009SAO PAULO62070503***63042Z1Z",
+      "transactionId": "TX-PIX-802432"
+    },
+    {
+      "id": "ORD-376217",
+      "buyerNickname": "PlayerFinalCheck",
+      "recipientNickname": "PlayerFinalCheck",
+      "productId": "vip-1791128040888-vvek",
+      "productName": "VIP Explorer",
+      "productType": "vip",
+      "amount": 4.9,
+      "createdAt": "2026-10-05T18:27:43.213Z",
+      "status": "Pendente",
+      "transactionId": "TX-PIX-863213",
+      "paymentMethod": "PIX",
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com5204000053039865404.905802BR5910NETCRAFTBR6009SAO PAULO62070503***6304IZW7",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com5204000053039865404.905802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304IZW7"
+    },
+    {
+      "id": "ORD-259040",
+      "buyerNickname": "PlayerFinalCheck",
+      "recipientNickname": "PlayerFinalCheck",
+      "productId": "prod-1791210646508-v59f",
+      "productName": "UnBan",
+      "productType": "product",
+      "amount": 9.9,
+      "createdAt": "2026-10-05T18:27:43.445Z",
+      "status": "Pendente",
+      "transactionId": "TX-PIX-863445",
+      "paymentMethod": "PIX",
+      "pixCode": "00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com5204000053039865409.905802BR5910NETCRAFTBR6009SAO PAULO62070503***6304BL5F",
+      "pixQrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix%40srvmc.com5204000053039865409.905802BR5910NETCRAFTBR6009SAO%20PAULO62070503***6304BL5F"
     }
   ],
   "events": [],
   "news": [],
   "socialLinks": [
     {
-      "order": 1,
-      "id": "soc-1791210750663-33p7",
-      "url": "https://discord.com/invite/ShvevwpygC",
-      "memberCount": "255",
-      "name": "Discord Oficial",
-      "description": "",
       "platform": "discord",
+      "memberCount": "255",
+      "active": true,
       "icon": "message-square",
-      "active": true
+      "id": "soc-1791210750663-33p7",
+      "description": "",
+      "url": "https://discord.com/invite/ShvevwpygC",
+      "name": "Discord Oficial",
+      "order": 1
     },
     {
-      "url": "https://www.tiktok.com/@halzi.n",
-      "order": 2,
-      "id": "soc-1791210773479-tqip",
       "name": "TikTok ",
+      "url": "https://www.tiktok.com/@halzi.n",
       "icon": "message-square",
-      "description": "",
-      "platform": "tiktok",
       "memberCount": "1720",
-      "active": true
+      "active": true,
+      "platform": "tiktok",
+      "order": 2,
+      "description": "",
+      "id": "soc-1791210773479-tqip"
     }
   ],
   "players": [
     {
       "ordersCount": 0,
-      "lastActive": "2026-10-04T23:49:49.354Z",
-      "totalSpent": 0,
-      "id": "player-1791157789354-vtcnl",
+      "createdAt": "2026-10-04T23:49:49.354Z",
       "nickname": "MissedTuba62916",
+      "totalSpent": 0,
+      "lastActive": "2026-10-04T23:49:49.354Z",
       "activeVips": [],
-      "createdAt": "2026-10-04T23:49:49.354Z"
+      "id": "player-1791157789354-vtcnl"
     },
     {
-      "id": "player-1791210285807-w6664",
       "activeVips": [],
+      "id": "player-1791210285807-w6664",
+      "nickname": "Halzin5212",
+      "lastActive": "2026-10-05T18:22:50.872Z",
+      "totalSpent": 0,
+      "createdAt": "2026-10-05T14:24:45.807Z",
+      "ordersCount": 0
+    },
+    {
+      "lastActive": "2026-10-05T18:23:53.633Z",
+      "nickname": "Halzin",
+      "activeVips": [],
+      "createdAt": "2026-10-05T18:23:53.633Z",
+      "ordersCount": 0,
+      "totalSpent": 0,
+      "id": "player-1791224633633-umqgw"
+    },
+    {
       "totalSpent": 0,
       "ordersCount": 0,
-      "lastActive": "2026-10-05T14:24:45.807Z",
-      "nickname": "Halzin5212",
-      "createdAt": "2026-10-05T14:24:45.807Z"
-    },
-    {
-      "id": "player-1791224101039-ypce8",
-      "nickname": "PlayerTeste1",
-      "createdAt": "2026-10-05T18:15:01.039Z",
-      "lastActive": "2026-10-05T18:15:01.040Z",
+      "nickname": "TesteNick",
+      "id": "player-1791224786013-gsa5w",
       "activeVips": [],
-      "totalSpent": 0,
-      "ordersCount": 0
+      "createdAt": "2026-10-05T18:26:26.013Z",
+      "lastActive": "2026-10-05T18:26:26.014Z"
     },
     {
-      "id": "player-1791224102232-t8ne9",
-      "nickname": "PlayerTeste2",
-      "createdAt": "2026-10-05T18:15:02.232Z",
-      "lastActive": "2026-10-05T18:15:02.232Z",
+      "ordersCount": 0,
       "activeVips": [],
-      "totalSpent": 0,
-      "ordersCount": 0
+      "lastActive": "2026-10-05T18:26:42.665Z",
+      "nickname": "Tester",
+      "createdAt": "2026-10-05T18:26:42.304Z",
+      "id": "player-1791224802304-15xs6",
+      "totalSpent": 0
     },
     {
-      "id": "player-1791224102470-ilf0e",
-      "nickname": "PlayerTeste3",
-      "createdAt": "2026-10-05T18:15:02.470Z",
-      "lastActive": "2026-10-05T18:15:02.470Z",
-      "activeVips": [],
-      "totalSpent": 0,
-      "ordersCount": 0
-    },
-    {
-      "id": "player-1791224102696-yga2u",
-      "nickname": "PlayerTesteProd",
-      "createdAt": "2026-10-05T18:15:02.696Z",
-      "lastActive": "2026-10-05T18:15:02.696Z",
+      "id": "player-1791224863214-kgz74",
+      "nickname": "PlayerFinalCheck",
+      "createdAt": "2026-10-05T18:27:43.214Z",
+      "lastActive": "2026-10-05T18:27:43.446Z",
       "activeVips": [],
       "totalSpent": 0,
       "ordersCount": 0
