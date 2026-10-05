@@ -41,28 +41,28 @@ export const StoreView: React.FC<StoreViewProps> = ({ products, vips, loading, o
   });
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-16 space-y-12">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-16 space-y-8 sm:space-y-12">
       {/* Header */}
       <div className="text-center max-w-xl mx-auto">
-        <h1 className="text-4xl sm:text-5xl font-bold font-heading text-white tracking-tight">
+        <h1 className="text-3xl sm:text-5xl font-bold font-heading text-white tracking-tight">
           Loja do Servidor
         </h1>
-        <p className="text-sm text-zinc-400 mt-3 leading-relaxed">
+        <p className="text-xs sm:text-sm text-zinc-400 mt-2 sm:mt-3 leading-relaxed">
           Adquira pacotes, kits e itens para aprimorar sua experiência.
         </p>
       </div>
 
       {/* Filter and Search */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 border-b border-white/[0.06] pb-4">
         {/* Categories */}
-        <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none flex-nowrap">
           {categories.map(cat => {
             const isSelected = selectedCategory === cat.id;
             return (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`text-xs px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                className={`text-xs px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
                   isSelected
                     ? 'bg-white text-zinc-950 font-semibold'
                     : 'text-zinc-400 hover:text-white'
@@ -89,21 +89,21 @@ export const StoreView: React.FC<StoreViewProps> = ({ products, vips, loading, o
 
       {/* Products Grid */}
       {loading ? (
-        <div className="text-center py-20 text-sm text-zinc-400">
+        <div className="text-center py-16 sm:py-20 text-sm text-zinc-400">
           Carregando catálogo...
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="text-center py-16 border border-white/[0.06] rounded-2xl bg-white/[0.01]">
+        <div className="text-center py-12 sm:py-16 border border-white/[0.06] rounded-2xl bg-white/[0.01]">
           <p className="text-sm text-zinc-400">Nenhum item encontrado.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
           {filteredItems.map(({ item, type }) => {
             const isVip = type === 'vip';
             return (
               <div
                 key={item.id}
-                className="p-6 rounded-2xl border border-white/[0.08] bg-white/[0.01] hover:border-white/20 transition-all flex flex-col justify-between"
+                className="p-5 sm:p-6 rounded-2xl border border-white/[0.08] bg-white/[0.01] hover:border-white/20 transition-all flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-center justify-between mb-2">

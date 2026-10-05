@@ -109,11 +109,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
   ];
 
   return (
-    <div className="space-y-24 md:space-y-32 pb-24">
+    <div className="space-y-8 sm:space-y-16 md:space-y-20 lg:space-y-28 pb-8 sm:pb-20">
       {/* ============================================================ */}
       {/* 1. HERO SECTION (HALLOWEEN THEMED) */}
       {/* ============================================================ */}
-      <section className="relative min-h-[580px] lg:min-h-[660px] flex items-center overflow-hidden border-b border-[#ea580c]/25">
+      <section className="relative min-h-[420px] sm:min-h-[580px] lg:min-h-[660px] flex items-center overflow-hidden border-b border-[#ea580c]/25">
         {/* Background Minecraft Halloween Landscape Image */}
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0 scale-105 transition-transform duration-1000"
@@ -141,9 +141,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div className="w-5 h-5 bg-[#c084fc]/30" />
         </div>
 
-        <div className="max-w-7xl mx-auto px-6 py-16 relative z-10 w-full flex flex-col lg:flex-row items-center justify-between gap-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-16 relative z-10 w-full flex flex-col lg:flex-row items-center justify-between gap-6 sm:gap-12">
           {/* Left content + Hanging Jack-o'-Lantern Banner */}
-          <div className="flex items-start gap-6 max-w-2xl">
+          <div className="flex items-start gap-4 sm:gap-6 max-w-2xl w-full">
             {/* Hanging Halloween Banner */}
             <div className="hidden sm:flex flex-col items-center shrink-0 pt-2 pointer-events-none select-none">
               {/* Wooden pole and mount */}
@@ -175,45 +175,45 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
 
             {/* Title, Subtitle, Text, CTA */}
-            <div>
+            <div className="w-full">
               {/* Kicker badge: HALLOWEEN 2026 */}
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ff7a00]/15 border border-[#ff7a00]/40 text-[#ff9800] text-xs font-black font-heading tracking-wider mb-4 shadow-[0_0_12px_rgba(255,122,0,0.25)] select-none">
-                <span className="halloween-flicker">🎃</span>
-                <span>TEMPORADA DE HALLOWEEN • NOITE DO TERROR NO BEDROCK</span>
+              <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-full bg-[#ff7a00]/15 border border-[#ff7a00]/40 text-[#ff9800] text-[10px] sm:text-xs font-black font-heading tracking-wide sm:tracking-wider mb-2.5 sm:mb-4 shadow-[0_0_12px_rgba(255,122,0,0.25)] select-none max-w-full leading-tight">
+                <span className="halloween-flicker shrink-0">🎃</span>
+                <span className="truncate">TEMPORADA DE HALLOWEEN <span className="hidden xs:inline">• NOITE DO TERROR</span></span>
               </div>
 
               {/* 3D Title: NETCRAFT BR */}
-              <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black font-heading tracking-tight text-white leading-none mb-3 mc-3d-text">
+              <h1 className="text-4xl xs:text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black font-heading tracking-tight text-white leading-none mb-2 sm:mb-3 mc-3d-text break-words">
                 <span>NETCRAFT</span>
                 <span className="text-[#ff7a00] drop-shadow-[0_4px_24px_rgba(255,122,0,0.85)] ml-1">BR</span>
               </h1>
 
               {/* Tagline: SOBREVIVA À NOITE DO TERROR */}
-              <div className="text-xl sm:text-2xl md:text-3xl font-black font-heading tracking-wide mb-4 flex items-center gap-2">
+              <div className="text-base xs:text-lg sm:text-2xl md:text-3xl font-black font-heading tracking-wide mb-3 sm:mb-4 flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <span className="text-white">SOBREVIVA À</span>
                 <span className="text-[#ff7a00] drop-shadow-[0_0_12px_rgba(255,122,0,0.7)]">NOITE DO TERROR</span>
               </div>
 
               {/* Description */}
-              <p className="text-sm sm:text-base text-zinc-300 max-w-xl mb-8 leading-relaxed font-normal">
+              <p className="text-xs sm:text-base text-zinc-300 max-w-xl mb-5 sm:mb-8 leading-relaxed font-normal">
                 O servidor oficial de Minecraft Bedrock entrou no clima de Halloween! Enfrente hordas nas Arenas do Terror, colete doces mágicos, participe de eventos comemorativos e jogue com uma comunidade incrível.
               </p>
 
               {/* Action Button: [ ▶ JOGAR HALLOWEEN ] */}
-              <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-4 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setShowPlayModal(true)}
-                  className="px-8 py-3.5 rounded-xl bg-gradient-to-r from-[#ff7a00] to-[#ea580c] hover:from-[#ff9800] hover:to-[#f97316] text-black font-black font-heading text-base tracking-wider transition-all duration-200 cursor-pointer flex items-center gap-2 shadow-[0_0_24px_rgba(255,122,0,0.6)] hover:shadow-[0_0_36px_rgba(255,122,0,0.9)] hover:scale-[1.02]"
+                  className="w-full sm:w-auto px-5 sm:px-8 py-3 sm:py-3.5 rounded-xl bg-gradient-to-r from-[#ff7a00] to-[#ea580c] hover:from-[#ff9800] hover:to-[#f97316] text-black font-black font-heading text-xs sm:text-base tracking-wider transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 shadow-[0_0_24px_rgba(255,122,0,0.6)] hover:shadow-[0_0_36px_rgba(255,122,0,0.9)] hover:scale-[1.02]"
                 >
-                  <Play className="w-4 h-4 fill-current" />
+                  <Play className="w-4 h-4 fill-current shrink-0" />
                   <span>JOGAR HALLOWEEN</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setCurrentTab('server')}
-                  className="px-6 py-3.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-white font-bold font-heading text-sm tracking-wider border border-white/[0.1] transition-all cursor-pointer hover:border-[#ff7a00]/40"
+                  className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-white font-bold font-heading text-xs sm:text-sm tracking-wider border border-white/[0.1] transition-all cursor-pointer hover:border-[#ff7a00]/40 flex items-center justify-center"
                 >
                   CONHECER O SERVIDOR
                 </button>
@@ -223,11 +223,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
           {/* Right Floating Card: SERVIDOR ONLINE (Halloween edition) */}
           <div className="lg:self-end w-full sm:w-auto">
-            <div className="p-4 sm:p-5 rounded-2xl bg-[#090812]/90 border border-[#ff7a00]/40 backdrop-blur-md shadow-[0_0_25px_rgba(255,122,0,0.25)] flex items-center gap-4 min-w-[240px]">
+            <div className="p-3.5 sm:p-5 rounded-2xl bg-[#090812]/90 border border-[#ff7a00]/40 backdrop-blur-md shadow-[0_0_25px_rgba(255,122,0,0.25)] flex items-center gap-3 sm:gap-4 w-full sm:min-w-[240px]">
               {/* Status Online Column */}
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="relative flex h-3 w-3">
+                  <span className="relative flex h-3 w-3 shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ff7a00] opacity-75" />
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-[#ff7a00]" />
                   </span>
@@ -247,8 +247,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* ============================================================ */}
       {/* 2. 5 FEATURE CARDS ROW (HALLOWEEN) */}
       {/* ============================================================ */}
-      <section className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
           {referenceFeatures.map((item, idx) => {
             const Icon = item.icon;
             return (
@@ -275,8 +275,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* ============================================================ */}
       {/* 3. "O QUE TE ESPERA?" SECTION (FROM REFERENCE IMAGE) */}
       {/* ============================================================ */}
-      <section className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
           {/* Left Column: Image with "EXPLORE CONSTRUA EVOLUA" badge */}
           <div className="relative rounded-2xl overflow-hidden border border-[#00e676]/30 bg-[#070b10] shadow-2xl group">
             <img
@@ -298,7 +298,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
 
           {/* Right Column: Title, Subtitle, Checklist & Button */}
-          <div className="space-y-6">
+          <div className="space-y-5 sm:space-y-6">
             <div>
               {/* Title with vertical green accent bar: | O QUE TE ESPERA? */}
               <div className="flex items-center gap-2 mb-3">
@@ -314,7 +314,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
 
             {/* 2-column checklist with green checkmarks */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 pt-1 sm:pt-2">
               {whatToExpectItems.map((item, idx) => (
                 <div key={idx} className="flex items-center gap-2.5 text-xs sm:text-sm text-zinc-300">
                   <CheckCircle2 className="w-4 h-4 text-[#00e676] shrink-0" />
@@ -324,11 +324,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
 
             {/* Action button: SAIBA MAIS SOBRE O SERVIDOR ➔ */}
-            <div className="pt-4">
+            <div className="pt-2 sm:pt-4">
               <button
                 type="button"
                 onClick={() => setCurrentTab('server')}
-                className="px-6 py-3 rounded-xl border border-[#00e676] bg-[#00e676]/10 hover:bg-[#00e676] text-[#00e676] hover:text-black font-extrabold font-heading text-xs sm:text-sm tracking-wider transition-all duration-200 cursor-pointer flex items-center gap-2 shadow-[0_0_14px_rgba(0,230,118,0.2)] hover:shadow-[0_0_24px_rgba(0,230,118,0.6)]"
+                className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl border border-[#00e676] bg-[#00e676]/10 hover:bg-[#00e676] text-[#00e676] hover:text-black font-extrabold font-heading text-xs sm:text-sm tracking-wider transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 shadow-[0_0_14px_rgba(0,230,118,0.2)] hover:shadow-[0_0_24px_rgba(0,230,118,0.6)]"
               >
                 <span>SAIBA MAIS SOBRE O SERVIDOR</span>
                 <ArrowRight className="w-4 h-4" />
@@ -341,8 +341,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* ============================================================ */}
       {/* 4. PLANOS VIP SECTION */}
       {/* ============================================================ */}
-      <section className="max-w-7xl mx-auto px-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4 mb-5 sm:mb-8">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <div className="w-1.5 h-5 bg-[#00e676] rounded-full shadow-[0_0_8px_#00e676]" />
@@ -364,11 +364,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
           {vips.slice(0, 3).map(vip => (
             <div
               key={vip.id}
-              className={`p-6 rounded-2xl bg-[#070c12] border transition-all flex flex-col justify-between hover:-translate-y-1 ${
+              className={`p-5 sm:p-6 rounded-2xl bg-[#070c12] border transition-all flex flex-col justify-between hover:-translate-y-1 ${
                 vip.isPopular
                   ? 'border-[#00e676] shadow-[0_0_24px_rgba(0,230,118,0.2)] relative'
                   : 'border-white/[0.08] hover:border-[#00e676]/40'
@@ -420,8 +420,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* 5. NOTÍCIAS RECENTES */}
       {/* ============================================================ */}
       {news.length > 0 && (
-        <section className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center justify-between mb-6">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-5 bg-[#00e676] rounded-full shadow-[0_0_8px_#00e676]" />
               <h2 className="text-2xl font-black font-heading text-white">
@@ -437,7 +437,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
             {news.slice(0, 3).map(article => (
               <div
                 key={article.id}

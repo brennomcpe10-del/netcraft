@@ -35,7 +35,7 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentTab, settings }) => {
   };
 
   return (
-    <footer className="w-full border-t border-[#00e676]/20 bg-[#05080c] relative overflow-hidden pt-14 pb-8 text-zinc-400 text-xs">
+    <footer className="w-full border-t border-[#00e676]/20 bg-[#05080c] relative overflow-hidden pt-10 sm:pt-14 pb-6 sm:pb-8 text-zinc-400 text-xs">
       {/* Subtle pixel block green decoration on left and right borders like the reference */}
       <div className="absolute top-0 left-0 w-32 h-32 bg-[#00e676]/[0.03] blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-48 h-48 bg-[#00e676]/[0.04] blur-3xl pointer-events-none" />
@@ -50,8 +50,8 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentTab, settings }) => {
         <div className="w-4 h-4 bg-[#00e676]/40" />
       </div>
 
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-7 sm:gap-10 mb-8 sm:mb-12">
           {/* Column 1: Brand Logo & Tagline */}
           <div className="space-y-3">
             <button
@@ -76,7 +76,7 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentTab, settings }) => {
 
             {/* Copy address box */}
             <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#080d14] border border-[#00e676]/30 hover:border-[#00e676]/60 transition-colors group">
-              <span className="font-mono text-xs text-white tracking-wide truncate">
+              <span className="font-mono text-xs text-white tracking-wide truncate min-w-0">
                 {fullAddress}
               </span>
               <button

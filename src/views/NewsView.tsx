@@ -13,23 +13,23 @@ export const NewsView: React.FC<NewsViewProps> = ({ news, loading }) => {
   const publishedNews = news.filter(n => n.published);
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-16 space-y-12">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-16 space-y-8 sm:space-y-12">
       {/* Header */}
       <div className="text-center max-w-xl mx-auto">
-        <h1 className="text-4xl sm:text-5xl font-bold font-heading text-white tracking-tight">
+        <h1 className="text-3xl sm:text-5xl font-bold font-heading text-white tracking-tight">
           Notícias
         </h1>
-        <p className="text-sm text-zinc-400 mt-3 leading-relaxed">
+        <p className="text-xs sm:text-sm text-zinc-400 mt-2 sm:mt-3 leading-relaxed">
           Atualizações oficiais, notas de versão e anúncios da equipe.
         </p>
       </div>
 
       {loading ? (
-        <div className="text-center py-20 text-sm text-zinc-400">
+        <div className="text-center py-16 sm:py-20 text-sm text-zinc-400">
           Carregando notícias...
         </div>
       ) : publishedNews.length === 0 ? (
-        <div className="text-center py-16 border border-white/[0.06] rounded-2xl bg-white/[0.01]">
+        <div className="text-center py-12 sm:py-16 border border-white/[0.06] rounded-2xl bg-white/[0.01]">
           <p className="text-sm text-zinc-400">Nenhuma notícia publicada ainda.</p>
         </div>
       ) : (
@@ -38,7 +38,7 @@ export const NewsView: React.FC<NewsViewProps> = ({ news, loading }) => {
             <div
               key={article.id}
               onClick={() => setSelectedArticle(article)}
-              className="py-6 flex flex-col sm:flex-row sm:items-baseline justify-between gap-4 hover:bg-white/[0.01] transition-colors cursor-pointer group"
+              className="py-4 sm:py-6 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 sm:gap-4 hover:bg-white/[0.01] transition-colors cursor-pointer group"
             >
               <div className="max-w-2xl">
                 <div className="flex items-center gap-2 text-xs text-zinc-400 mb-1.5 font-mono">
@@ -49,7 +49,7 @@ export const NewsView: React.FC<NewsViewProps> = ({ news, loading }) => {
                   <span>{article.author}</span>
                 </div>
 
-                <h2 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors font-heading">
+                <h2 className="text-base sm:text-lg font-bold text-white group-hover:text-emerald-400 transition-colors font-heading">
                   {article.title}
                 </h2>
 
@@ -68,8 +68,8 @@ export const NewsView: React.FC<NewsViewProps> = ({ news, loading }) => {
 
       {/* Clean Modal for Article Reader */}
       {selectedArticle && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-2xl bg-[#0d1017] border border-white/[0.08] rounded-2xl p-6 sm:p-8 max-h-[85vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-2xl bg-[#0d1017] border border-white/[0.08] rounded-2xl p-5 sm:p-8 max-h-[85vh] overflow-y-auto">
             <button
               onClick={() => setSelectedArticle(null)}
               className="absolute top-6 right-6 text-zinc-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"

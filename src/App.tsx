@@ -161,7 +161,7 @@ function MainAppContent() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#06090e] text-zinc-100 antialiased relative selection:bg-[#00e676]/20 selection:text-[#00e676]">
+    <div className="min-h-screen flex flex-col bg-[#06090e] text-zinc-100 antialiased relative selection:bg-[#00e676]/20 selection:text-[#00e676] overflow-x-hidden w-full">
       {/* Minecraft Sunset Landscape background with atmospheric overlays matching reference */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div
@@ -183,7 +183,7 @@ function MainAppContent() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 relative">
+      <main className="flex-1 relative w-full overflow-x-hidden">
         {currentTab === 'home' && (
           <HomeView
             setCurrentTab={setCurrentTab}

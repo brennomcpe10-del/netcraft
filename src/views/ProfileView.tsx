@@ -64,14 +64,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ setCurrentTab }) => {
   const activeVips = player.activeVips || [];
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-16 space-y-12">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-16 space-y-8 sm:space-y-12">
       {/* Profile Header */}
-      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-4 border-b border-white/[0.06] pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3 sm:gap-4 border-b border-white/[0.06] pb-4 sm:pb-6">
         <div>
           <span className="text-[11px] font-mono uppercase text-emerald-400">
             {activeVips.length > 0 ? `VIP ${activeVips[0].vipName}` : 'Jogador'}
           </span>
-          <h1 className="text-3xl font-bold font-heading text-white mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold font-heading text-white mt-1">
             {player.nickname}
           </h1>
         </div>
@@ -82,52 +82,52 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ setCurrentTab }) => {
       </div>
 
       {/* Menu & Content */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-        {/* Navigation */}
-        <nav className="space-y-1 md:col-span-1">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 md:gap-8">
+        {/* Navigation (Horizontally scrollable on mobile, sidebar on desktop) */}
+        <nav className="flex md:flex-col items-center md:items-stretch gap-1.5 md:gap-1 overflow-x-auto pb-2 md:pb-0 scrollbar-none md:col-span-1 w-full">
           <button
             onClick={() => setActiveMenu('profile')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
-              activeMenu === 'profile' ? 'bg-white/[0.06] text-white font-semibold' : 'text-zinc-400 hover:text-white'
+            className={`px-3 py-1.5 md:py-2 rounded-lg text-xs transition-colors cursor-pointer shrink-0 text-center md:text-left ${
+              activeMenu === 'profile' ? 'bg-white/[0.08] text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
             Meu perfil
           </button>
           <button
             onClick={() => setActiveMenu('orders')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
-              activeMenu === 'orders' ? 'bg-white/[0.06] text-white font-semibold' : 'text-zinc-400 hover:text-white'
+            className={`px-3 py-1.5 md:py-2 rounded-lg text-xs transition-colors cursor-pointer shrink-0 text-center md:text-left ${
+              activeMenu === 'orders' ? 'bg-white/[0.08] text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
             Minhas compras
           </button>
           <button
             onClick={() => setActiveMenu('vips')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
-              activeMenu === 'vips' ? 'bg-white/[0.06] text-white font-semibold' : 'text-zinc-400 hover:text-white'
+            className={`px-3 py-1.5 md:py-2 rounded-lg text-xs transition-colors cursor-pointer shrink-0 text-center md:text-left ${
+              activeMenu === 'vips' ? 'bg-white/[0.08] text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
             Meus VIPs
           </button>
           <button
             onClick={() => setActiveMenu('gifts')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
-              activeMenu === 'gifts' ? 'bg-white/[0.06] text-white font-semibold' : 'text-zinc-400 hover:text-white'
+            className={`px-3 py-1.5 md:py-2 rounded-lg text-xs transition-colors cursor-pointer shrink-0 text-center md:text-left ${
+              activeMenu === 'gifts' ? 'bg-white/[0.08] text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
             Presentes enviados
           </button>
           <button
             onClick={() => setActiveMenu('settings')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
-              activeMenu === 'settings' ? 'bg-white/[0.06] text-white font-semibold' : 'text-zinc-400 hover:text-white'
+            className={`px-3 py-1.5 md:py-2 rounded-lg text-xs transition-colors cursor-pointer shrink-0 text-center md:text-left ${
+              activeMenu === 'settings' ? 'bg-white/[0.08] text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
             Configurações
           </button>
           <button
             onClick={logout}
-            className="w-full text-left px-3 py-2 rounded-lg text-xs text-rose-400 hover:text-rose-300 transition-colors cursor-pointer pt-4"
+            className="px-3 py-1.5 md:py-2 rounded-lg text-xs text-rose-400 hover:text-rose-300 transition-colors cursor-pointer shrink-0 text-center md:text-left md:pt-4"
           >
             Sair da conta
           </button>

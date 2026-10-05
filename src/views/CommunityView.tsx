@@ -28,13 +28,13 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ socialLinks }) => 
   const activeLinks = socialLinks.filter(l => l.active);
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-16 space-y-12">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-16 space-y-8 sm:space-y-12">
       {/* Header */}
       <div className="text-center max-w-xl mx-auto">
-        <h1 className="text-4xl sm:text-5xl font-bold font-heading text-white tracking-tight">
+        <h1 className="text-3xl sm:text-5xl font-bold font-heading text-white tracking-tight">
           Comunidade
         </h1>
-        <p className="text-sm text-zinc-400 mt-3 leading-relaxed">
+        <p className="text-xs sm:text-sm text-zinc-400 mt-2 sm:mt-3 leading-relaxed">
           Nossas redes sociais e canais oficiais de comunicação.
         </p>
       </div>
@@ -49,7 +49,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ socialLinks }) => 
               href={link.url}
               target="_blank"
               rel="noreferrer"
-              className="py-6 flex items-center justify-between gap-4 hover:bg-white/[0.01] transition-colors group"
+              className="py-4 sm:py-6 flex items-center justify-between gap-3 sm:gap-4 hover:bg-white/[0.01] transition-colors group"
             >
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/[0.08] flex items-center justify-center text-zinc-300 group-hover:text-emerald-400 group-hover:border-emerald-500/30 transition-colors">

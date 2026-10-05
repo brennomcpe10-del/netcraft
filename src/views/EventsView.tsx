@@ -12,36 +12,36 @@ export const EventsView: React.FC<EventsViewProps> = ({ events, loading }) => {
   const upcomingEvents = publishedEvents.filter(e => e.id !== nextEvent?.id);
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-16 space-y-16">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-16 space-y-8 sm:space-y-16">
       {/* Header */}
       <div className="text-center max-w-xl mx-auto">
-        <h1 className="text-4xl sm:text-5xl font-bold font-heading text-white tracking-tight">
+        <h1 className="text-3xl sm:text-5xl font-bold font-heading text-white tracking-tight">
           Eventos
         </h1>
-        <p className="text-sm text-zinc-400 mt-3 leading-relaxed">
+        <p className="text-xs sm:text-sm text-zinc-400 mt-2 sm:mt-3 leading-relaxed">
           Calendário de batalhas, desafios e atividades especiais do servidor.
         </p>
       </div>
 
       {loading ? (
-        <div className="text-center py-20 text-sm text-zinc-400">
+        <div className="text-center py-16 sm:py-20 text-sm text-zinc-400">
           Carregando eventos...
         </div>
       ) : publishedEvents.length === 0 ? (
-        <div className="text-center py-16 border border-white/[0.06] rounded-2xl bg-white/[0.01]">
+        <div className="text-center py-12 sm:py-16 border border-white/[0.06] rounded-2xl bg-white/[0.01]">
           <p className="text-sm text-zinc-400">Nenhum evento programado no momento.</p>
         </div>
       ) : (
-        <div className="space-y-12">
+        <div className="space-y-8 sm:space-y-12">
           {/* PRÓXIMO EVENTO */}
           {nextEvent && (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <span className="text-xs uppercase font-mono tracking-wider text-emerald-400 font-semibold">
                 Próximo Evento
               </span>
 
-              <div className="p-8 rounded-2xl border border-white/[0.08] bg-white/[0.01]">
-                <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400 mb-3 font-mono">
+              <div className="p-5 sm:p-8 rounded-2xl border border-white/[0.08] bg-white/[0.01]">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-zinc-400 mb-3 font-mono">
                   <span className="text-emerald-400 font-semibold">
                     {nextEvent.date}
                   </span>

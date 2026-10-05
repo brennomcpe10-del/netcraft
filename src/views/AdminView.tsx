@@ -532,17 +532,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   return (
     <div className="min-h-screen bg-[#07090d] text-zinc-200 text-xs">
       {/* Top Header */}
-      <header className="border-b border-white/[0.06] bg-[#090b10] px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <header className="border-b border-white/[0.06] bg-[#090b10] px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
           <button
             onClick={onExit}
-            className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Voltar ao site</span>
+            <span className="hidden sm:inline">Voltar ao site</span>
+            <span className="sm:hidden">Voltar</span>
           </button>
-          <span className="text-zinc-600">|</span>
-          <span className="font-bold text-white font-heading text-sm">
+          <span className="text-zinc-600 shrink-0">|</span>
+          <span className="font-bold text-white font-heading text-xs sm:text-sm truncate">
             Painel Administrativo NetCraftBR
           </span>
         </div>
@@ -552,14 +553,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
             logoutAdmin();
             onExit();
           }}
-          className="text-zinc-400 hover:text-rose-400 transition-colors cursor-pointer font-medium"
+          className="text-zinc-400 hover:text-rose-400 transition-colors cursor-pointer font-medium shrink-0 ml-2"
         >
           Sair
         </button>
       </header>
 
       {/* Main Container */}
-      <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-8">
         {/* Navigation Tabs */}
         <div className="flex items-center gap-1 border-b border-white/[0.06] pb-3 overflow-x-auto scrollbar-none">
           {navItems.map(item => {

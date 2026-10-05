@@ -83,27 +83,36 @@ export const GrassBlockIcon: React.FC<{ className?: string; size?: number }> = (
 
 export const NetcraftLogo: React.FC<{
   showSubtitle?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  showHalloweenBadge?: boolean;
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   className?: string;
-}> = ({ showSubtitle = false, size = 'md', className = '' }) => {
-  const iconSize = size === 'sm' ? 24 : size === 'lg' ? 40 : 32;
-  const textSize = size === 'sm' ? 'text-lg' : size === 'lg' ? 'text-3xl' : 'text-xl sm:text-2xl';
+}> = ({ showSubtitle = false, showHalloweenBadge = true, size = 'md', className = '' }) => {
+  const iconSize = size === 'xs' ? 20 : size === 'sm' ? 22 : size === 'lg' ? 40 : 30;
+  const textSize = size === 'xs'
+    ? 'text-sm xs:text-base font-black'
+    : size === 'sm'
+    ? 'text-base sm:text-lg'
+    : size === 'lg'
+    ? 'text-2xl sm:text-3xl'
+    : 'text-lg sm:text-2xl';
 
   return (
-    <div className={`flex items-center gap-2.5 ${className}`}>
-      <div className="relative group">
+    <div className={`flex items-center gap-1.5 sm:gap-2.5 ${className}`}>
+      <div className="relative group shrink-0">
         <JackOLanternIcon size={iconSize} className="halloween-flicker" />
       </div>
-      <div className="flex flex-col leading-none">
-        <div className={`font-black font-heading tracking-wider ${textSize} text-white flex items-center gap-1.5`}>
+      <div className="flex flex-col leading-none min-w-0">
+        <div className={`font-black font-heading tracking-wider ${textSize} text-white flex items-center gap-1 sm:gap-1.5`}>
           <span>NETCRAFT</span>
           <span className="text-[#ff7a00] drop-shadow-[0_0_14px_rgba(255,122,0,0.8)]">BR</span>
-          <span className="text-[10px] font-mono tracking-widest uppercase bg-[#ff7a00]/20 text-[#ff9800] border border-[#ff7a00]/40 px-1.5 py-0.5 rounded-sm ml-1 select-none">
-            🎃 HALLOWEEN
-          </span>
+          {showHalloweenBadge && (
+            <span className="hidden md:inline-flex items-center text-[9px] sm:text-[10px] font-mono tracking-widest uppercase bg-[#ff7a00]/20 text-[#ff9800] border border-[#ff7a00]/40 px-1.5 py-0.5 rounded-sm ml-1 select-none">
+              🎃 HALLOWEEN
+            </span>
+          )}
         </div>
         {showSubtitle && (
-          <span className="text-[11px] text-amber-200/60 font-normal tracking-normal mt-1">
+          <span className="text-[10px] sm:text-[11px] text-amber-200/60 font-normal tracking-normal mt-0.5 sm:mt-1 truncate">
             Edição Especial de Halloween 2026 • Bedrock
           </span>
         )}

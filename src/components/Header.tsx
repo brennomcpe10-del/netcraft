@@ -57,21 +57,26 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, setCurrentTab, onOpe
   return (
     <>
       {/* Top Halloween Seasonal Announcement Ribbon */}
-      <div className="w-full bg-gradient-to-r from-[#7c2d12] via-[#ea580c] to-[#581c87] text-white text-[11px] font-bold font-heading py-1.5 px-4 text-center tracking-wider flex items-center justify-center gap-2 border-b border-[#ea580c]/40 shadow-sm relative z-50">
-        <span className="halloween-flicker">🎃</span>
-        <span>TEMPORADA DE HALLOWEEN • ARENAS DO TERROR E EVENTOS NOTURNOS NO BEDROCK!</span>
-        <span className="hidden md:inline text-amber-200/80 font-mono text-[10px]">| IP: netcraftbr.srvmc.com:25673</span>
+      <div className="w-full bg-gradient-to-r from-[#7c2d12] via-[#ea580c] to-[#581c87] text-white text-[10px] sm:text-[11px] font-bold font-heading py-1 sm:py-1.5 px-3 sm:px-4 text-center tracking-wide sm:tracking-wider flex items-center justify-center gap-1.5 sm:gap-2 border-b border-[#ea580c]/40 shadow-sm relative z-50 leading-tight">
+        <span className="halloween-flicker shrink-0">🎃</span>
+        <span className="truncate sm:overflow-visible">TEMPORADA DE HALLOWEEN • ARENAS DO TERROR NO BEDROCK!</span>
+        <span className="hidden md:inline text-amber-200/80 font-mono text-[10px] shrink-0">| IP: netcraftbr.srvmc.com:25673</span>
       </div>
 
       <header className="sticky top-0 z-40 w-full bg-[#08070d]/95 backdrop-blur-md border-b border-[#ea580c]/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-4">
-          {/* Left: 3D Jack-o'-Lantern + NETCRAFTBR */}
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-20 flex items-center justify-between gap-1.5 sm:gap-4">
+          {/* Left: 3D Jack-o'-Lantern + NETCRAFTBR (Adaptive size for mobile) */}
           <button
             type="button"
             onClick={() => handleSelectNav('home')}
-            className="cursor-pointer focus:outline-none transition-transform hover:scale-[1.02]"
+            className="cursor-pointer focus:outline-none transition-transform hover:scale-[1.02] shrink-0"
           >
-            <NetcraftLogo size="md" />
+            <div className="sm:hidden">
+              <NetcraftLogo size="xs" />
+            </div>
+            <div className="hidden sm:block">
+              <NetcraftLogo size="md" />
+            </div>
           </button>
 
           {/* Center Navigation Links */}
@@ -104,29 +109,31 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, setCurrentTab, onOpe
           </nav>
 
           {/* Right: Actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 xs:gap-1.5 sm:gap-3 shrink-0">
             {/* Player profile / login */}
             {player ? (
               <button
                 type="button"
                 onClick={() => handleSelectNav('profile')}
-                className={`text-xs px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-2 ${
+                className={`text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 ${
                   currentTab === 'profile'
                     ? 'border-[#ff7a00]/60 bg-[#ff7a00]/15 text-[#ff9800] font-medium'
                     : 'border-white/[0.08] bg-white/[0.03] text-zinc-300 hover:text-white hover:border-[#ff7a00]/30'
                 }`}
                 title="Meu Perfil"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-[#ff7a00]" />
-                <span className="font-medium max-w-[110px] truncate">{player.nickname}</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#ff7a00] shrink-0" />
+                <span className="font-medium max-w-[50px] xs:max-w-[75px] sm:max-w-[110px] truncate text-[11px] sm:text-xs">
+                  {player.nickname}
+                </span>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={openLoginModal}
-                className="hidden sm:flex text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-zinc-200 hover:text-white border border-white/[0.08] transition-all cursor-pointer items-center gap-1.5"
+                className="hidden xs:flex text-[11px] sm:text-xs font-semibold px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-zinc-200 hover:text-white border border-white/[0.08] transition-all cursor-pointer items-center gap-1 sm:gap-1.5"
               >
-                <User className="w-3.5 h-3.5" />
+                <User className="w-3.5 h-3.5 shrink-0" />
                 <span>Entrar</span>
               </button>
             )}
@@ -136,14 +143,14 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, setCurrentTab, onOpe
               <button
                 type="button"
                 onClick={() => handleSelectNav('admin')}
-                className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 font-bold font-heading ${
+                className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 font-bold font-heading text-xs ${
                   currentTab === 'admin'
                     ? 'border-[#ff7a00] bg-[#ff7a00]/20 text-[#ff9800]'
                     : 'border-[#ff7a00]/40 bg-[#ff7a00]/10 text-[#ff9800] hover:bg-[#ff7a00]/20'
                 }`}
                 title="Painel Administrativo"
               >
-                <ShieldCheck className="w-3.5 h-3.5 text-[#ff7a00]" />
+                <ShieldCheck className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" />
                 <span className="hidden sm:inline">ADMIN</span>
               </button>
             )}
@@ -158,9 +165,9 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, setCurrentTab, onOpe
                   handleSelectNav('server');
                 }
               }}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#ff7a00] to-[#ea580c] hover:from-[#ff9800] hover:to-[#f97316] text-black font-extrabold font-heading text-xs tracking-wider transition-all duration-200 cursor-pointer flex items-center gap-1.5 shadow-[0_0_16px_rgba(255,122,0,0.4)] hover:shadow-[0_0_24px_rgba(255,122,0,0.7)] hover:scale-[1.02]"
+              className="px-2 xs:px-2.5 sm:px-4 py-1 sm:py-2 rounded-lg sm:rounded-xl bg-gradient-to-r from-[#ff7a00] to-[#ea580c] hover:from-[#ff9800] hover:to-[#f97316] text-black font-extrabold font-heading text-[11px] sm:text-xs tracking-wide sm:tracking-wider transition-all duration-200 cursor-pointer flex items-center gap-1 sm:gap-1.5 shadow-[0_0_14px_rgba(255,122,0,0.35)] hover:shadow-[0_0_24px_rgba(255,122,0,0.7)] shrink-0"
             >
-              <Play className="w-3.5 h-3.5 fill-current" />
+              <Play className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 fill-current shrink-0" />
               <span>JOGAR</span>
             </button>
 
@@ -168,11 +175,11 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, setCurrentTab, onOpe
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
-              className="p-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/20 text-zinc-300 hover:text-white transition-all cursor-pointer focus:outline-none"
+              className="p-1.5 sm:p-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/20 text-zinc-300 hover:text-white transition-all cursor-pointer focus:outline-none shrink-0"
               aria-label="Abrir Menu"
               title="Mais opções"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
@@ -188,7 +195,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, setCurrentTab, onOpe
           />
 
           {/* Drawer Panel */}
-          <div className="relative w-full max-w-xs bg-[#080d12] border-l border-white/[0.08] p-6 sm:p-8 flex flex-col justify-between shadow-2xl z-10 overflow-y-auto">
+          <div className="relative w-full max-w-[280px] xs:max-w-xs bg-[#080d12] border-l border-white/[0.08] p-5 sm:p-8 flex flex-col justify-between shadow-2xl z-10 overflow-y-auto">
             <div>
               {/* Header inside drawer */}
               <div className="flex items-center justify-between pb-5 border-b border-white/[0.08] mb-6">

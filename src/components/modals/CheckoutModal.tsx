@@ -197,9 +197,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     : !!(targetLivePixUrl || rawLivePixText);
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div className="fixed inset-0 bg-black/85 backdrop-blur-sm cursor-pointer" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-[#0c1017] border border-white/[0.1] rounded-2xl p-6 sm:p-8 my-8 shadow-2xl z-10">
+      <div className="relative w-full max-w-md bg-[#0c1017] border border-white/[0.1] rounded-2xl p-5 sm:p-8 my-4 sm:my-8 shadow-2xl z-10">
         <button
           type="button"
           onClick={onClose}
