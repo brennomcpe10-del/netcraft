@@ -61,6 +61,9 @@ export interface Order {
   productName: string;
   productType: 'vip' | 'product';
   amount: number;
+  originalAmount?: number;
+  couponCode?: string;
+  discountAmount?: number;
   createdAt: string;
   status: OrderStatus;
   transactionId: string;
@@ -69,6 +72,24 @@ export interface Order {
   deliveredAt?: string;
   pixCode?: string;
   pixQrCodeUrl?: string;
+  orderNumber?: string | number;
+}
+
+export type CouponDiscountType = 'percentage' | 'fixed';
+
+export interface Coupon {
+  id: string;
+  code: string; // Ex: RESET10 (stored uppercase and trimmed)
+  discountType: CouponDiscountType; // 'percentage' | 'fixed'
+  discountValue: number; // e.g., 10 for 10% or 15 for R$ 15,00
+  minOrderValue?: number; // Minimum order value to apply (default 0)
+  maxUses?: number | null; // Max number of usages, null or 0 for unlimited
+  usedCount: number; // How many times it was used
+  expiresAt?: string | null; // ISO string date or null for no expiry
+  active: boolean; // Ativo / Inativo
+  createdAt: string;
+  updatedAt?: string;
+  description?: string; // Optional description or campaign name
 }
 
 export interface ServerEvent {

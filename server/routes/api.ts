@@ -61,11 +61,12 @@ export function isValidAdminToken(token: string): boolean {
 // Middleware to protect admin routes
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  let token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.substring(7) : (req.headers['x-admin-token'] as string);
+
+  if (!token) {
     return res.status(401).json({ error: 'Acesso negado: Credencial de administrador ausente.' });
   }
 
-  const token = authHeader.substring(7);
   if (!isValidAdminToken(token)) {
     return res.status(403).json({ error: 'Sessão administrativa inválida ou expirada.' });
   }
@@ -433,7 +434,7 @@ apiRouter.get('/orders/:id', (req, res) => {
 });
 
 apiRouter.post('/orders', async (req, res) => {
-  const { buyerNickname, recipientNickname, productId, productType, paymentMethod } = req.body;
+  const { buyerNickname, recipientNickname, productId, productType, paymentMethod, couponCode } = req.body;
 
   if (!buyerNickname || !recipientNickname || !productId || !productType) {
     return res.status(400).json({ error: 'Dados do pedido incompletos.' });
@@ -441,7 +442,7 @@ apiRouter.post('/orders', async (req, res) => {
 
   try {
     const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, getDoc, collection, getDocs, setDoc } = await import('firebase/firestore');
+    const { doc, getDoc, collection, getDocs, setDoc, updateDoc } = await import('firebase/firestore');
 
     const cleanProductId = String(productId).trim();
     const cleanLowerId = cleanProductId.toLowerCase();
@@ -545,13 +546,61 @@ apiRouter.post('/orders', async (req, res) => {
     }
 
     // 6. Security: Fetch actual price and name from verified database document safely
-    const amount = Number(itemData.price) || 0;
+    const originalPrice = Number(itemData.price) || 0;
     const rawName = String(itemData.name || itemData.title || (foundType === 'vip' ? 'VIP' : 'Produto')).trim();
     const productName = foundType === 'vip'
       ? (rawName.toLowerCase().startsWith('vip') ? rawName : `VIP ${rawName}`)
       : rawName;
 
-    // 7. Extract payment URLs
+    // 7. Validate and apply coupon if provided
+    let appliedCouponCode: string | undefined = undefined;
+    let discountAmount = 0;
+    let finalAmount = originalPrice;
+
+    if (couponCode && typeof couponCode === 'string' && couponCode.trim().length > 0) {
+      const cleanCode = couponCode.trim().toUpperCase();
+      let coupon = dbStore.getCouponByCode(cleanCode);
+
+      if (!coupon) {
+        try {
+          const snap = await getDocs(collection(db, 'coupons'));
+          for (const d of snap.docs) {
+            const data = d.data();
+            if (data.code && String(data.code).trim().toUpperCase() === cleanCode) {
+              coupon = { ...data, id: d.id } as any;
+              break;
+            }
+          }
+        } catch {}
+      }
+
+      if (coupon && coupon.active !== false) {
+        const isNotExpired = !coupon.expiresAt || new Date(coupon.expiresAt).getTime() > Date.now();
+        const hasUses = !coupon.maxUses || (Number(coupon.usedCount) || 0) < Number(coupon.maxUses);
+        const meetsMin = !coupon.minOrderValue || originalPrice >= Number(coupon.minOrderValue);
+
+        if (isNotExpired && hasUses && meetsMin) {
+          appliedCouponCode = coupon.code;
+          if (coupon.discountType === 'percentage') {
+            discountAmount = Number(((originalPrice * coupon.discountValue) / 100).toFixed(2));
+          } else {
+            discountAmount = Math.min(originalPrice, Number(coupon.discountValue));
+          }
+          finalAmount = Math.max(0, Number((originalPrice - discountAmount).toFixed(2)));
+
+          // Increment coupon usage
+          dbStore.incrementCouponUsage(coupon.code);
+          try {
+            await updateDoc(doc(db, 'coupons', coupon.id), {
+              usedCount: (Number(coupon.usedCount) || 0) + 1,
+              lastUsedAt: new Date().toISOString()
+            }).catch(() => {});
+          } catch {}
+        }
+      }
+    }
+
+    // Extract payment URLs
     const livepixUrl = itemData.livepixUrl ? String(itemData.livepixUrl).trim() : '';
     const pixUrl = itemData.pixUrl ? String(itemData.pixUrl).trim() : '';
 
@@ -559,7 +608,10 @@ apiRouter.post('/orders', async (req, res) => {
       collection: foundType === 'vip' ? 'vips' : 'products',
       id: itemData.id,
       productName,
-      amount,
+      originalPrice,
+      finalAmount,
+      appliedCouponCode,
+      discountAmount,
       buyerNickname,
       recipientNickname
     });
@@ -571,7 +623,10 @@ apiRouter.post('/orders', async (req, res) => {
       productId: String(itemData.id || cleanProductId),
       productName,
       productType: foundType,
-      amount,
+      amount: finalAmount,
+      originalAmount: originalPrice,
+      couponCode: appliedCouponCode,
+      discountAmount: discountAmount > 0 ? discountAmount : undefined,
       paymentMethod: (paymentMethod === 'LIVEPIX' ? 'PIX' : (paymentMethod || 'PIX')) as any
     });
 
@@ -581,7 +636,7 @@ apiRouter.post('/orders', async (req, res) => {
 
     // Save directly to Firestore orders and players collections
     await Promise.all([
-      setDoc(doc(db, 'orders', order.id), order),
+      setDoc(doc(db, 'orders', order.id), order, { merge: true }),
       setDoc(doc(db, 'players', buyerPlayer.id), buyerPlayer, { merge: true }),
       setDoc(doc(db, 'players', recipientPlayer.id), recipientPlayer, { merge: true })
     ]).catch(err => {
@@ -620,8 +675,6 @@ apiRouter.post('/orders', async (req, res) => {
 });
 
 // Webhook / Simulated Payment Confirmation
-// As specified: "O VIP NÃO deve ser entregue apenas porque o usuário chegou à página de sucesso...
-// A entrega deverá ocorrer somente depois que o backend confirmar o pagamento."
 apiRouter.post('/orders/:id/simulate-payment', (req, res) => {
   const { id } = req.params;
   const order = dbStore.getOrderById(id);
@@ -642,17 +695,321 @@ apiRouter.post('/orders/:id/simulate-payment', (req, res) => {
   });
 });
 
-apiRouter.put('/admin/orders/:id/status', requireAdmin, (req, res) => {
-  const { id } = req.params;
+// Handler for Order Status Update with comprehensive Firestore sync and flexible ID parsing
+const handleOrderStatusUpdate = async (req: express.Request, res: express.Response) => {
+  const rawId = String(req.params.id || req.body.id || '').trim();
   const { status } = req.body;
+
   if (!status) {
     return res.status(400).json({ error: 'Status não especificado.' });
   }
-  const order = dbStore.updateOrderStatus(id, status);
-  if (!order) {
-    return res.status(404).json({ error: 'Pedido não encontrado.' });
+  if (!rawId) {
+    return res.status(400).json({ error: 'ID do pedido não informado.' });
   }
-  res.json(order);
+
+  const validStatuses = ['Pendente', 'Pago', 'Entregue', 'Cancelado'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({
+      error: `Status inválido. Escolha um dos seguintes: ${validStatuses.join(', ')}`
+    });
+  }
+
+  try {
+    const cleanNoHash = rawId.replace(/^#/, '');
+    const cleanLower = cleanNoHash.toLowerCase();
+
+    // 1. Update in local dbStore memory cache
+    let order = dbStore.updateOrderStatus(rawId, status);
+
+    // 2. Direct Firestore synchronization for persistent durability
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, getDoc, updateDoc, setDoc, getDocs, collection } = await import('firebase/firestore');
+
+    const now = new Date().toISOString();
+    const updatePayload: Record<string, any> = {
+      status,
+      updatedAt: now
+    };
+    if (status === 'Pago' || status === 'Entregue') {
+      updatePayload.paidAt = now;
+      updatePayload.deliveredAt = now;
+    }
+
+    let firestoreUpdated = false;
+    const testIds = [rawId, cleanNoHash, `#${cleanNoHash}`];
+
+    for (const testId of testIds) {
+      try {
+        const dRef = doc(db, 'orders', testId);
+        const snap = await getDoc(dRef);
+        if (snap.exists()) {
+          const currentData = snap.data();
+          if (currentData.paidAt && (status === 'Pago' || status === 'Entregue')) {
+            updatePayload.paidAt = currentData.paidAt;
+          }
+          await updateDoc(dRef, updatePayload);
+          firestoreUpdated = true;
+          if (order) {
+            order = { ...order, ...currentData, ...updatePayload };
+          }
+          break;
+        }
+      } catch {}
+    }
+
+    if (!firestoreUpdated) {
+      try {
+        const allOrdersSnap = await getDocs(collection(db, 'orders'));
+        for (const d of allOrdersSnap.docs) {
+          const data = d.data();
+          const dClean = d.id.replace(/^#/, '').toLowerCase();
+          const dataClean = String(data.id || '').replace(/^#/, '').toLowerCase();
+          const numClean = String(data.orderNumber || '').replace(/^#/, '').toLowerCase();
+
+          if (d.id === rawId || dClean === cleanLower || dataClean === cleanLower || numClean === cleanLower) {
+            if (data.paidAt && (status === 'Pago' || status === 'Entregue')) {
+              updatePayload.paidAt = data.paidAt;
+            }
+            await updateDoc(doc(db, 'orders', d.id), updatePayload);
+            firestoreUpdated = true;
+            if (order) {
+              order = { ...order, ...data, ...updatePayload };
+            }
+            break;
+          }
+        }
+      } catch (findErr) {
+        console.warn('Erro ao buscar pedidos no Firestore:', findErr);
+      }
+    }
+
+    if (!firestoreUpdated && order) {
+      await setDoc(doc(db, 'orders', order.id), order, { merge: true }).catch(() => {});
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: `Pedido "${rawId}" não encontrado.` });
+    }
+
+    console.log(`[Admin] Status do pedido ${rawId} alterado com sucesso para ${status}`);
+    return res.json(order);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[Admin] Falha ao atualizar status do pedido ${rawId}:`, err);
+    return res.status(500).json({ error: `Erro ao atualizar status do pedido: ${errorMsg}` });
+  }
+};
+
+apiRouter.put('/admin/orders/:id/status', requireAdmin, handleOrderStatusUpdate);
+apiRouter.put('/admin/orders/status', requireAdmin, handleOrderStatusUpdate);
+
+// --- COUPONS MANAGEMENT ROUTES ---
+
+apiRouter.get('/admin/coupons', requireAdmin, async (_req, res) => {
+  try {
+    let coupons = dbStore.getCoupons();
+    try {
+      const { db } = await import('../../src/lib/firebase.ts');
+      const { getDocs, collection } = await import('firebase/firestore');
+      const snap = await getDocs(collection(db, 'coupons'));
+      if (!snap.empty) {
+        const firestoreList: any[] = [];
+        snap.forEach(d => firestoreList.push({ ...d.data(), id: d.id }));
+        coupons = firestoreList;
+      }
+    } catch {}
+    res.json(coupons);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao carregar cupons.' });
+  }
+});
+
+apiRouter.post('/admin/coupons', requireAdmin, async (req, res) => {
+  try {
+    const { code, discountType, discountValue, minOrderValue, maxUses, expiresAt, active, description } = req.body;
+    if (!code || typeof code !== 'string' || !code.trim()) {
+      return res.status(400).json({ error: 'O código do cupom é obrigatório.' });
+    }
+    const cleanCode = code.trim().toUpperCase();
+    if (!discountValue || Number(discountValue) <= 0) {
+      return res.status(400).json({ error: 'O valor do desconto deve ser maior que zero.' });
+    }
+    if (discountType === 'percentage' && Number(discountValue) > 100) {
+      return res.status(400).json({ error: 'O desconto percentual não pode ser maior que 100%.' });
+    }
+
+    // Check duplicate in Firestore
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { collection, getDocs, setDoc, doc } = await import('firebase/firestore');
+
+    const snap = await getDocs(collection(db, 'coupons')).catch(() => null);
+    if (snap && !snap.empty) {
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (data.code && String(data.code).trim().toUpperCase() === cleanCode) {
+          return res.status(400).json({ error: `Já existe um cupom cadastrado com o código "${cleanCode}".` });
+        }
+      }
+    }
+
+    const newCoupon = dbStore.createCoupon({
+      code: cleanCode,
+      discountType: discountType === 'fixed' ? 'fixed' : 'percentage',
+      discountValue: Number(discountValue),
+      minOrderValue: minOrderValue ? Number(minOrderValue) : 0,
+      maxUses: maxUses ? Number(maxUses) : null,
+      expiresAt: expiresAt || null,
+      active: active !== false,
+      description: description ? String(description).trim() : ''
+    });
+
+    await setDoc(doc(db, 'coupons', newCoupon.id), newCoupon).catch(err => {
+      console.warn('Firestore coupon persistence warning:', err);
+    });
+
+    res.status(201).json(newCoupon);
+  } catch (err: unknown) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Erro ao criar cupom.' });
+  }
+});
+
+apiRouter.put('/admin/coupons/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cleanId = id.trim();
+    const { code, discountType, discountValue, minOrderValue, maxUses, expiresAt, active, description } = req.body;
+
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, setDoc, getDocs, collection } = await import('firebase/firestore');
+
+    if (code) {
+      const cleanCode = String(code).trim().toUpperCase();
+      const snap = await getDocs(collection(db, 'coupons')).catch(() => null);
+      if (snap && !snap.empty) {
+        for (const d of snap.docs) {
+          if (d.id !== cleanId && d.data().code && String(d.data().code).trim().toUpperCase() === cleanCode) {
+            return res.status(400).json({ error: `Já existe outro cupom com o código "${cleanCode}".` });
+          }
+        }
+      }
+    }
+
+    const updated = dbStore.updateCoupon(cleanId, req.body);
+    const finalData = updated || {
+      id: cleanId,
+      code: code ? String(code).trim().toUpperCase() : '',
+      discountType: discountType || 'percentage',
+      discountValue: Number(discountValue) || 0,
+      minOrderValue: minOrderValue ? Number(minOrderValue) : 0,
+      maxUses: maxUses ? Number(maxUses) : null,
+      expiresAt: expiresAt || null,
+      active: active !== false,
+      description: description || '',
+      updatedAt: new Date().toISOString()
+    };
+
+    await setDoc(doc(db, 'coupons', cleanId), finalData, { merge: true }).catch(() => {});
+    res.json(finalData);
+  } catch (err: unknown) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Erro ao atualizar cupom.' });
+  }
+});
+
+apiRouter.delete('/admin/coupons/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cleanId = id.trim();
+    dbStore.deleteCoupon(cleanId);
+
+    const { db } = await import('../../src/lib/firebase.ts');
+    const { doc, deleteDoc, getDocs, collection } = await import('firebase/firestore');
+    await deleteDoc(doc(db, 'coupons', cleanId)).catch(() => {});
+    const snap = await getDocs(collection(db, 'coupons')).catch(() => null);
+    if (snap) {
+      for (const d of snap.docs) {
+        if (d.id.toLowerCase() === cleanId.toLowerCase() || String(d.data().code || '').toUpperCase() === cleanId.toUpperCase()) {
+          await deleteDoc(doc(db, 'coupons', d.id)).catch(() => {});
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'Cupom excluído com sucesso.' });
+  } catch (err: unknown) {
+    res.status(500).json({ error: 'Erro ao excluir cupom.' });
+  }
+});
+
+apiRouter.post('/coupons/validate', async (req, res) => {
+  const { code, amount } = req.body;
+  if (!code || typeof code !== 'string' || !code.trim()) {
+    return res.status(400).json({ valid: false, error: 'Código de cupom não informado.' });
+  }
+
+  const cleanCode = code.trim().toUpperCase();
+  const numAmount = Number(amount) || 0;
+
+  let coupon = dbStore.getCouponByCode(cleanCode);
+  if (!coupon) {
+    try {
+      const { db } = await import('../../src/lib/firebase.ts');
+      const { getDocs, collection } = await import('firebase/firestore');
+      const snap = await getDocs(collection(db, 'coupons'));
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (data.code && String(data.code).trim().toUpperCase() === cleanCode) {
+          coupon = { ...data, id: d.id } as any;
+          break;
+        }
+      }
+    } catch {}
+  }
+
+  if (!coupon) {
+    return res.status(404).json({ valid: false, error: `Cupom "${cleanCode}" não encontrado.` });
+  }
+
+  if (!coupon.active) {
+    return res.status(400).json({ valid: false, error: 'Este cupom está desativado no momento.' });
+  }
+
+  if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < Date.now()) {
+    return res.status(400).json({ valid: false, error: 'Este cupom expirou.' });
+  }
+
+  if (coupon.maxUses && Number(coupon.usedCount || 0) >= Number(coupon.maxUses)) {
+    return res.status(400).json({ valid: false, error: 'O limite de utilizações deste cupom foi atingido.' });
+  }
+
+  if (coupon.minOrderValue && numAmount < Number(coupon.minOrderValue)) {
+    return res.status(400).json({
+      valid: false,
+      error: `Valor mínimo do pedido para este cupom é de R$ ${Number(coupon.minOrderValue).toFixed(2).replace('.', ',')}.`
+    });
+  }
+
+  let discountAmount = 0;
+  if (coupon.discountType === 'percentage') {
+    discountAmount = Number(((numAmount * coupon.discountValue) / 100).toFixed(2));
+  } else {
+    discountAmount = Math.min(numAmount, Number(coupon.discountValue));
+  }
+  const finalAmount = Math.max(0, Number((numAmount - discountAmount).toFixed(2)));
+
+  return res.json({
+    valid: true,
+    coupon: {
+      id: coupon.id,
+      code: coupon.code,
+      discountType: coupon.discountType,
+      discountValue: coupon.discountValue,
+      description: coupon.description
+    },
+    discountAmount,
+    finalAmount,
+    message: coupon.discountType === 'percentage'
+      ? `Cupom ${coupon.code} aplicado! Desconto de ${coupon.discountValue}% (-R$ ${discountAmount.toFixed(2).replace('.', ',')})`
+      : `Cupom ${coupon.code} aplicado! Desconto de R$ ${discountAmount.toFixed(2).replace('.', ',')}`
+  });
 });
 
 apiRouter.post('/admin/orders/bulk-delete', requireAdmin, async (req, res) => {

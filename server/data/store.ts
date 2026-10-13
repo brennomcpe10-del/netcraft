@@ -11,7 +11,8 @@ import type {
   SocialLink,
   Player,
   SupportTicket,
-  DashboardStats
+  DashboardStats,
+  Coupon
 } from '../../src/types/index.ts';
 import {
   initialSettings,
@@ -38,6 +39,7 @@ interface DatabaseSchema {
   socialLinks: SocialLink[];
   players: Player[];
   tickets: SupportTicket[];
+  coupons?: Coupon[];
   initialized?: boolean;
 }
 
@@ -65,6 +67,7 @@ class Store {
           socialLinks: Array.isArray(parsed.socialLinks) ? parsed.socialLinks : [],
           players: Array.isArray(parsed.players) ? parsed.players : [],
           tickets: Array.isArray(parsed.tickets) ? parsed.tickets : [],
+          coupons: Array.isArray(parsed.coupons) ? parsed.coupons : [],
           initialized: true
         };
       }
@@ -83,6 +86,7 @@ class Store {
       socialLinks: [],
       players: [],
       tickets: [],
+      coupons: [],
       initialized: true
     };
 
@@ -348,6 +352,9 @@ class Store {
     productType: 'vip' | 'product';
     amount: number;
     paymentMethod: 'PIX' | 'Cartao' | 'Boleto';
+    originalAmount?: number;
+    couponCode?: string;
+    discountAmount?: number;
   }): Order {
     const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
     const txId = `TX-${orderData.paymentMethod}-${Date.now().toString().slice(-6)}`;
@@ -363,6 +370,9 @@ class Store {
       productName: orderData.productName,
       productType: orderData.productType,
       amount: orderData.amount,
+      originalAmount: orderData.originalAmount,
+      couponCode: orderData.couponCode,
+      discountAmount: orderData.discountAmount,
       createdAt: new Date().toISOString(),
       status: 'Pendente',
       transactionId: txId,
@@ -377,10 +387,34 @@ class Store {
   }
 
   updateOrderStatus(orderId: string, status: Order['status']): Order | null {
-    const order = this.data.orders.find(o => o.id === orderId);
-    if (!order) return null;
+    const raw = orderId.trim();
+    const clean = raw.toLowerCase().replace(/^#/, '');
+    let order = this.data.orders.find(o => 
+      o.id === raw ||
+      o.id.toLowerCase() === raw.toLowerCase() ||
+      o.id.trim().toLowerCase().replace(/^#/, '') === clean ||
+      (o.orderNumber && String(o.orderNumber).trim().toLowerCase().replace(/^#/, '') === clean)
+    );
 
-    order.status = status;
+    if (!order) {
+      order = {
+        id: raw,
+        buyerNickname: 'Jogador',
+        recipientNickname: 'Jogador',
+        productId: 'item',
+        productName: 'Item',
+        productType: 'product',
+        amount: 0,
+        createdAt: new Date().toISOString(),
+        status,
+        transactionId: `TX-${Date.now()}`,
+        paymentMethod: 'PIX'
+      };
+      this.data.orders.unshift(order);
+    } else {
+      order.status = status;
+    }
+
     const now = new Date().toISOString();
 
     if (status === 'Pago' && !order.paidAt) {
@@ -790,11 +824,120 @@ class Store {
         this.data.settings = { ...this.data.settings, ...(setSnap.data() as ServerSettings) };
       }
 
+      // 9. Coupons
+      const coupSnap = await getDocs(collection(db, 'coupons'));
+      if (!coupSnap.empty) {
+        const cList: Coupon[] = [];
+        coupSnap.forEach(d => cList.push({ ...d.data(), id: d.id } as Coupon));
+        this.data.coupons = cList;
+      }
+
       this.saveDatabase();
-      console.log(`[Store] Synced with Firestore: ${this.data.vips.length} VIPs, ${this.data.products.length} Products, ${this.data.players.length} Players, ${this.data.orders.length} Orders`);
+      console.log(`[Store] Synced with Firestore: ${this.data.vips.length} VIPs, ${this.data.products.length} Products, ${this.data.players.length} Players, ${this.data.orders.length} Orders, ${this.data.coupons?.length || 0} Coupons`);
     } catch (err) {
       console.warn('[Store] Firestore sync notice:', err);
     }
+  }
+
+  // --- COUPONS ---
+  getCoupons(): Coupon[] {
+    return this.data.coupons || [];
+  }
+
+  getCouponById(id: string): Coupon | undefined {
+    const cleanId = id.trim().toLowerCase();
+    return (this.data.coupons || []).find(
+      c => c.id.toLowerCase() === cleanId || c.code.toLowerCase() === cleanId
+    );
+  }
+
+  getCouponByCode(code: string): Coupon | undefined {
+    const clean = code.trim().toUpperCase();
+    return (this.data.coupons || []).find(
+      c => c.code.trim().toUpperCase() === clean
+    );
+  }
+
+  createCoupon(couponData: Omit<Coupon, 'id' | 'createdAt' | 'usedCount'> & { id?: string; createdAt?: string; usedCount?: number }): Coupon {
+    const cleanCode = couponData.code.trim().toUpperCase();
+    const existing = this.getCouponByCode(cleanCode);
+    if (existing) {
+      throw new Error(`Já existe um cupom cadastrado com o código "${cleanCode}".`);
+    }
+
+    const newCoupon: Coupon = {
+      id: couponData.id || `cupom-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      code: cleanCode,
+      discountType: couponData.discountType || 'percentage',
+      discountValue: Number(couponData.discountValue) || 0,
+      minOrderValue: couponData.minOrderValue ? Number(couponData.minOrderValue) : 0,
+      maxUses: couponData.maxUses ? Number(couponData.maxUses) : null,
+      usedCount: couponData.usedCount || 0,
+      expiresAt: couponData.expiresAt || null,
+      active: couponData.active !== false,
+      description: couponData.description ? String(couponData.description).trim() : '',
+      createdAt: couponData.createdAt || new Date().toISOString()
+    };
+
+    if (!this.data.coupons) this.data.coupons = [];
+    this.data.coupons.unshift(newCoupon);
+    this.saveDatabase();
+    return newCoupon;
+  }
+
+  updateCoupon(id: string, partial: Partial<Coupon>): Coupon | null {
+    if (!this.data.coupons) this.data.coupons = [];
+    const cleanId = id.trim().toLowerCase();
+    const index = this.data.coupons.findIndex(
+      c => c.id.toLowerCase() === cleanId || c.code.toLowerCase() === cleanId
+    );
+    if (index === -1) return null;
+
+    if (partial.code) {
+      const cleanCode = partial.code.trim().toUpperCase();
+      const duplicate = this.data.coupons.find((c, i) => i !== index && c.code.trim().toUpperCase() === cleanCode);
+      if (duplicate) {
+        throw new Error(`Já existe outro cupom com o código "${cleanCode}".`);
+      }
+      partial.code = cleanCode;
+    }
+
+    this.data.coupons[index] = {
+      ...this.data.coupons[index],
+      ...partial,
+      updatedAt: new Date().toISOString()
+    };
+    this.saveDatabase();
+    return this.data.coupons[index];
+  }
+
+  deleteCoupon(id: string): boolean {
+    if (!this.data.coupons) return false;
+    const cleanId = id.trim().toLowerCase();
+    const prevLen = this.data.coupons.length;
+    this.data.coupons = this.data.coupons.filter(
+      c => c.id.toLowerCase() !== cleanId && c.code.toLowerCase() !== cleanId
+    );
+    if (this.data.coupons.length !== prevLen) {
+      this.saveDatabase();
+      return true;
+    }
+    return false;
+  }
+
+  incrementCouponUsage(codeOrId: string): Coupon | null {
+    if (!this.data.coupons) return null;
+    const clean = codeOrId.trim().toUpperCase();
+    const coupon = this.data.coupons.find(
+      c => c.id.toUpperCase() === clean || c.code.trim().toUpperCase() === clean
+    );
+    if (coupon) {
+      coupon.usedCount = (coupon.usedCount || 0) + 1;
+      coupon.updatedAt = new Date().toISOString();
+      this.saveDatabase();
+      return coupon;
+    }
+    return null;
   }
 
   // --- DASHBOARD STATS ---

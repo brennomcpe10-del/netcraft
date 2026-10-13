@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   setDoc,
+  updateDoc,
   deleteDoc,
   onSnapshot,
   getDocs,
@@ -20,6 +21,8 @@ import {
   SocialLink,
   Player,
   Order,
+  OrderStatus,
+  Coupon,
   HomeConfig,
   MenuItem,
   AppearanceConfig,
@@ -374,6 +377,24 @@ export async function getStatsFromFirestore(): Promise<DashboardStats> {
 // -------------------------------------------------------------
 // REAL-TIME LISTENERS
 // -------------------------------------------------------------
+
+function handleSyncError(collectionName: string, err: any) {
+  if (!err) return;
+  const msg = typeof err.message === 'string' ? err.message : String(err);
+  const code = err.code || '';
+  if (
+    code === 'cancelled' ||
+    msg.includes('Disconnecting idle stream') ||
+    msg.includes('Timed out waiting for new targets') ||
+    msg.includes('idle stream') ||
+    msg.includes("RPC 'Listen' stream")
+  ) {
+    // Harmless Firestore stream disconnection when idle or unmounted
+    return;
+  }
+  console.warn(`${collectionName} sync notice:`, err);
+}
+
 export function subscribeToVips(callback: (vips: VIP[]) => void) {
   return onSnapshot(collection(db, 'vips'), snapshot => {
     const list: VIP[] = [];
@@ -382,7 +403,7 @@ export function subscribeToVips(callback: (vips: VIP[]) => void) {
     });
     list.sort((a, b) => (a.order || 0) - (b.order || 0));
     callback(list);
-  }, err => console.error('VIPs sync error:', err));
+  }, err => handleSyncError('VIPs', err));
 }
 
 export function subscribeToProducts(callback: (products: Product[]) => void) {
@@ -393,7 +414,7 @@ export function subscribeToProducts(callback: (products: Product[]) => void) {
     });
     list.sort((a, b) => (a.order || 0) - (b.order || 0));
     callback(list);
-  }, err => console.error('Products sync error:', err));
+  }, err => handleSyncError('Products', err));
 }
 
 export function subscribeToServerSettings(callback: (settings: ServerSettings) => void) {
@@ -409,7 +430,8 @@ export function subscribeToServerSettings(callback: (settings: ServerSettings) =
         }
       }).catch(() => {});
     }
-  }, () => {
+  }, err => {
+    handleSyncError('Server settings', err);
     // If permission or error, attempt legacy
     getDoc(doc(db, 'serverSettings', 'default')).then(legacySnap => {
       if (legacySnap.exists()) {
@@ -439,7 +461,7 @@ export function subscribeToSocialLinks(callback: (links: SocialLink[]) => void) 
         callback(list);
       }).catch(() => {});
     }
-  }, err => console.error('Social links sync error:', err));
+  }, err => handleSyncError('Social links', err));
 }
 
 export function subscribeToEvents(callback: (events: ServerEvent[]) => void) {
@@ -450,7 +472,7 @@ export function subscribeToEvents(callback: (events: ServerEvent[]) => void) {
     });
     list.sort((a, b) => (a.order || 0) - (b.order || 0));
     callback(list);
-  }, err => console.error('Events sync error:', err));
+  }, err => handleSyncError('Events', err));
 }
 
 export function subscribeToNews(callback: (news: NewsArticle[]) => void) {
@@ -461,7 +483,7 @@ export function subscribeToNews(callback: (news: NewsArticle[]) => void) {
     });
     list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     callback(list);
-  }, err => console.error('News sync error:', err));
+  }, err => handleSyncError('News', err));
 }
 
 export function subscribeToOrders(callback: (orders: Order[]) => void) {
@@ -472,7 +494,26 @@ export function subscribeToOrders(callback: (orders: Order[]) => void) {
     });
     list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     callback(list);
-  }, err => console.error('Orders sync error:', err));
+  }, err => handleSyncError('Orders', err));
+}
+
+export function subscribeToCoupons(callback: (coupons: Coupon[]) => void) {
+  return onSnapshot(collection(db, 'coupons'), snapshot => {
+    const list: Coupon[] = [];
+    snapshot.forEach(docSnap => {
+      const data = docSnap.data() as Coupon;
+      list.push({
+        ...data,
+        id: docSnap.id,
+        code: (data.code || '').toUpperCase().trim(),
+        usedCount: Number(data.usedCount || 0),
+        discountValue: Number(data.discountValue || 0),
+        active: data.active !== false
+      });
+    });
+    list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    callback(list);
+  }, err => handleSyncError('Coupons', err));
 }
 
 export function subscribeToPlayers(callback: (players: Player[]) => void) {
@@ -494,7 +535,7 @@ export function subscribeToPlayers(callback: (players: Player[]) => void) {
         callback(list);
       }).catch(() => {});
     }
-  }, err => console.error('Players sync error:', err));
+  }, err => handleSyncError('Players', err));
 }
 
 export const subscribeToUsers = subscribeToPlayers;
@@ -507,7 +548,7 @@ export function subscribeToTickets(callback: (tickets: SupportTicket[]) => void)
     });
     list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     callback(list);
-  }, err => console.error('Tickets sync error:', err));
+  }, err => handleSyncError('Tickets', err));
 }
 
 export function subscribeToHomeConfig(callback: (config: HomeConfig) => void) {
@@ -515,7 +556,7 @@ export function subscribeToHomeConfig(callback: (config: HomeConfig) => void) {
     if (docSnap.exists()) {
       callback(docSnap.data() as HomeConfig);
     }
-  }, err => console.error('Home config sync error:', err));
+  }, err => handleSyncError('Home config', err));
 }
 
 export function subscribeToMenuItems(callback: (items: MenuItem[]) => void) {
@@ -526,7 +567,7 @@ export function subscribeToMenuItems(callback: (items: MenuItem[]) => void) {
     });
     list.sort((a, b) => a.order - b.order);
     callback(list);
-  }, err => console.error('Menu items sync error:', err));
+  }, err => handleSyncError('Menu items', err));
 }
 
 export function subscribeToAppearanceConfig(callback: (config: AppearanceConfig) => void) {
@@ -534,7 +575,7 @@ export function subscribeToAppearanceConfig(callback: (config: AppearanceConfig)
     if (docSnap.exists()) {
       callback(docSnap.data() as AppearanceConfig);
     }
-  }, err => console.error('Appearance sync error:', err));
+  }, err => handleSyncError('Appearance', err));
 }
 
 export function subscribeToFaqItems(callback: (faqs: FaqItem[]) => void) {
@@ -545,7 +586,7 @@ export function subscribeToFaqItems(callback: (faqs: FaqItem[]) => void) {
     });
     list.sort((a, b) => a.order - b.order);
     callback(list);
-  }, err => console.error('FAQs sync error:', err));
+  }, err => handleSyncError('FAQs', err));
 }
 
 // -------------------------------------------------------------
@@ -724,7 +765,153 @@ export async function deleteTicketFromFirestore(id: string) {
 }
 
 export async function saveOrderToFirestore(order: Order) {
-  await setDoc(doc(db, 'orders', order.id), order);
+  await setDoc(doc(db, 'orders', order.id), order, { merge: true });
+}
+
+export async function updateOrderStatusInFirestore(orderId: string, status: OrderStatus): Promise<boolean> {
+  try {
+    const rawId = orderId.trim();
+    const cleanNoHash = rawId.replace(/^#/, '');
+    const cleanLower = cleanNoHash.toLowerCase();
+    const now = new Date().toISOString();
+
+    const updateData: Record<string, any> = {
+      status,
+      updatedAt: now
+    };
+    if (status === 'Pago' || status === 'Entregue') {
+      updateData.paidAt = now;
+      updateData.deliveredAt = now;
+    }
+
+    // Attempt direct doc updates on common permutations
+    const possibleDocIds = [rawId, cleanNoHash, `#${cleanNoHash}`];
+    let updatedDirectly = false;
+
+    for (const testId of possibleDocIds) {
+      try {
+        const dRef = doc(db, 'orders', testId);
+        const dSnap = await getDoc(dRef);
+        if (dSnap.exists()) {
+          const current = dSnap.data();
+          const payload = { ...updateData };
+          if (current.paidAt && (status === 'Pago' || status === 'Entregue')) {
+            payload.paidAt = current.paidAt;
+          }
+          await updateDoc(dRef, payload);
+          updatedDirectly = true;
+          break;
+        }
+      } catch {}
+    }
+
+    if (updatedDirectly) return true;
+
+    // Fallback: search the collection for matching ID or orderNumber
+    const snap = await getDocs(collection(db, 'orders'));
+    for (const d of snap.docs) {
+      const data = d.data();
+      const dClean = d.id.replace(/^#/, '').toLowerCase();
+      const dataClean = String(data.id || '').replace(/^#/, '').toLowerCase();
+      const numClean = String(data.orderNumber || '').replace(/^#/, '').toLowerCase();
+
+      if (d.id === rawId || dClean === cleanLower || dataClean === cleanLower || numClean === cleanLower) {
+        const payload = { ...updateData };
+        if (data.paidAt && (status === 'Pago' || status === 'Entregue')) {
+          payload.paidAt = data.paidAt;
+        }
+        await updateDoc(doc(db, 'orders', d.id), payload);
+        return true;
+      }
+    }
+
+    // If still not found, save a minimal doc so it exists
+    await setDoc(doc(db, 'orders', rawId), { id: rawId, status, updatedAt: now }, { merge: true });
+    return true;
+  } catch (err) {
+    console.warn('Erro ao atualizar status do pedido no Firestore:', err);
+    return false;
+  }
+}
+
+// --- CUPONS DE DESCONTO FIRESTORE ---
+
+export async function getCouponsFromFirestore(): Promise<Coupon[]> {
+  try {
+    const snap = await getDocs(collection(db, 'coupons'));
+    const list: Coupon[] = [];
+    snap.forEach(d => {
+      const data = d.data() as Coupon;
+      list.push({
+        ...data,
+        id: d.id,
+        code: (data.code || '').toUpperCase().trim(),
+        usedCount: Number(data.usedCount || 0),
+        discountValue: Number(data.discountValue || 0),
+        active: data.active !== false
+      });
+    });
+    list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return list;
+  } catch (err) {
+    console.warn('Erro ao buscar cupons no Firestore:', err);
+    return [];
+  }
+}
+
+export async function saveCouponToFirestore(coupon: Coupon): Promise<void> {
+  try {
+    const cleanCode = coupon.code.trim().toUpperCase();
+    const cleanCoupon: Coupon = {
+      ...coupon,
+      code: cleanCode,
+      usedCount: Number(coupon.usedCount || 0),
+      discountValue: Number(coupon.discountValue || 0),
+      minOrderValue: coupon.minOrderValue ? Number(coupon.minOrderValue) : 0,
+      maxUses: coupon.maxUses ? Number(coupon.maxUses) : null,
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(doc(db, 'coupons', coupon.id), cleanCoupon, { merge: true });
+  } catch (err) {
+    console.error('Erro ao salvar cupom no Firestore:', err);
+    throw err;
+  }
+}
+
+export async function deleteCouponFromFirestore(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'coupons', id)).catch(() => {});
+    const cleanId = id.trim().toLowerCase();
+    const snap = await getDocs(collection(db, 'coupons'));
+    for (const d of snap.docs) {
+      const data = d.data();
+      if (d.id.toLowerCase() === cleanId || String(data.id || '').toLowerCase() === cleanId || String(data.code || '').toLowerCase() === cleanId) {
+        await deleteDoc(doc(db, 'coupons', d.id)).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn('Erro ao excluir cupom no Firestore:', err);
+  }
+}
+
+export async function incrementCouponUsageInFirestore(codeOrId: string): Promise<void> {
+  try {
+    const clean = codeOrId.trim().toUpperCase();
+    const snap = await getDocs(collection(db, 'coupons'));
+    for (const d of snap.docs) {
+      const data = d.data() as Coupon;
+      if (d.id === codeOrId || (data.code && data.code.toUpperCase().trim() === clean)) {
+        const nextCount = (Number(data.usedCount) || 0) + 1;
+        await updateDoc(doc(db, 'coupons', d.id), {
+          usedCount: nextCount,
+          lastUsedAt: new Date().toISOString()
+        });
+        break;
+      }
+    }
+  } catch (err) {
+    console.warn('Erro ao incrementar contagem do cupom no Firestore:', err);
+  }
 }
 
 export async function deleteOrderFromFirestore(id: string) {

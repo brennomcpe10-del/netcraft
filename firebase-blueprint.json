@@ -263,6 +263,25 @@
         }
       },
       "required": ["serverName", "ip", "port", "version"]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Cupom de desconto promocional para a loja NetCraftBR",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "discountType": { "type": "string", "enum": ["percentage", "fixed"] },
+        "discountValue": { "type": "number" },
+        "minOrderValue": { "type": "number" },
+        "maxUses": { "type": ["number", "null"] },
+        "usedCount": { "type": "number" },
+        "expiresAt": { "type": ["string", "null"] },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "code", "discountType", "discountValue", "active", "createdAt"]
     }
   },
   "firestore": {
@@ -302,6 +321,10 @@
     },
     "/community/{communityId}": {
       "description": "Links oficiais e redes sociais da comunidade"
+    },
+    "/coupons/{couponId}": {
+      "schema": { "$ref": "Coupon" },
+      "description": "Cupons de desconto promocionais"
     }
   }
 }

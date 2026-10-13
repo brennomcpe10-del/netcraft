@@ -35,7 +35,7 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentTab, settings }) => {
   };
 
   return (
-    <footer className="w-full border-t border-[#00e676]/20 bg-[#05080c] relative overflow-hidden pt-10 sm:pt-14 pb-6 sm:pb-8 text-zinc-400 text-xs">
+    <footer className="w-full border-t border-[#00e676]/20 bg-[#05080c] relative overflow-hidden pt-8 sm:pt-14 pb-5 sm:pb-8 text-zinc-400 text-xs">
       {/* Subtle pixel block green decoration on left and right borders like the reference */}
       <div className="absolute top-0 left-0 w-32 h-32 bg-[#00e676]/[0.03] blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-48 h-48 bg-[#00e676]/[0.04] blur-3xl pointer-events-none" />
@@ -51,9 +51,9 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentTab, settings }) => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-7 sm:gap-10 mb-8 sm:mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-10 mb-6 sm:mb-12">
           {/* Column 1: Brand Logo & Tagline */}
-          <div className="space-y-3">
+          <div className="space-y-2.5 sm:space-y-3">
             <button
               type="button"
               onClick={() => setCurrentTab('home')}
@@ -151,9 +151,9 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentTab, settings }) => {
         </div>
 
         {/* Bottom divider with centered tagline */}
-        <div className="pt-8 border-t border-white/[0.06] flex items-center justify-center gap-4 text-center">
+        <div className="pt-5 sm:pt-8 border-t border-white/[0.06] flex items-center justify-center gap-4 text-center">
           <div className="hidden sm:block h-px flex-1 bg-gradient-to-r from-transparent to-white/[0.08]" />
-          <p className="text-[11px] font-mono tracking-widest text-zinc-400 uppercase">
+          <p className="text-[10px] sm:text-[11px] font-mono tracking-widest text-zinc-400 uppercase">
             NETCRAFTBR • JUNTOS FAZENDO UMA <span className="text-[#00e676] font-bold">COMUNIDADE</span> MELHOR
           </p>
           <div className="hidden sm:block h-px flex-1 bg-gradient-to-l from-transparent to-white/[0.08]" />

@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { VIP, Product, Order } from '../../types/index.ts';
+import { VIP, Product, Order, Coupon } from '../../types/index.ts';
 import { usePlayer } from '../../context/PlayerContext.tsx';
 import { useToast } from '../../context/ToastContext.tsx';
 import { api } from '../../lib/api.ts';
 import {
   saveOrderToFirestore,
   getVipByIdFromFirestore,
-  getProductByIdFromFirestore
+  getProductByIdFromFirestore,
+  getCouponsFromFirestore,
+  incrementCouponUsageInFirestore
 } from '../../lib/firestoreSync.ts';
 import { extractUrlFromText } from '../../lib/urlUtils.ts';
-import { X, ExternalLink, Zap, AlertCircle, CheckCircle2, QrCode, Copy } from 'lucide-react';
+import { X, ExternalLink, Zap, AlertCircle, CheckCircle2, QrCode, Copy, Ticket, Tag, Percent } from 'lucide-react';
 
 interface CheckoutModalProps {
   item: VIP | Product;
@@ -34,6 +36,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [recipientNickname, setRecipientNickname] = useState('');
   const [loading, setLoading] = useState(false);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
+
+  // Coupon state
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [couponDiscount, setCouponDiscount] = useState<number>(0);
+  const [couponFeedback, setCouponFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
 
   // Texto/Link cadastrado do LivePix específico do item ou fallback global
   const rawLivePixText = (item.livepixUrl && item.livepixUrl.trim().length > 0)
@@ -88,6 +97,98 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     );
   }
 
+  const rawPrice = Number(item.price) || 0;
+  const finalPrice = appliedCoupon
+    ? Math.max(0, Number((rawPrice - couponDiscount).toFixed(2)))
+    : rawPrice;
+
+  const handleApplyCoupon = async () => {
+    const cleanCode = couponCodeInput.trim().toUpperCase();
+    if (!cleanCode) {
+      setCouponFeedback({ type: 'error', message: 'Digite o código do cupom.' });
+      return;
+    }
+
+    setIsValidatingCoupon(true);
+    setCouponFeedback(null);
+
+    try {
+      // 1. Try server endpoint
+      const res = await api.validateCoupon(cleanCode, rawPrice);
+      if (res.valid && res.coupon) {
+        setAppliedCoupon(res.coupon as any);
+        setCouponDiscount(res.discountAmount);
+        setCouponFeedback({
+          type: 'success',
+          message: res.message || `Cupom ${res.coupon.code} aplicado com sucesso!`
+        });
+        showSuccess(`Cupom "${res.coupon.code}" aplicado!`);
+        return;
+      }
+
+      // 2. Direct Firestore fallback check
+      const firestoreCoupons = await getCouponsFromFirestore();
+      const found = firestoreCoupons.find(c => c.code.trim().toUpperCase() === cleanCode);
+
+      if (!found) {
+        setCouponFeedback({ type: 'error', message: `Cupom "${cleanCode}" não foi encontrado.` });
+        return;
+      }
+      if (!found.active) {
+        setCouponFeedback({ type: 'error', message: 'Este cupom está desativado no momento.' });
+        return;
+      }
+      if (found.expiresAt && new Date(found.expiresAt).getTime() < Date.now()) {
+        setCouponFeedback({ type: 'error', message: 'Este cupom expirou.' });
+        return;
+      }
+      if (found.maxUses && Number(found.usedCount || 0) >= Number(found.maxUses)) {
+        setCouponFeedback({ type: 'error', message: 'O limite de utilizações deste cupom foi atingido.' });
+        return;
+      }
+      if (found.minOrderValue && rawPrice < Number(found.minOrderValue)) {
+        setCouponFeedback({
+          type: 'error',
+          message: `Valor mínimo para este cupom é R$ ${Number(found.minOrderValue).toFixed(2).replace('.', ',')}.`
+        });
+        return;
+      }
+
+      let discount = 0;
+      if (found.discountType === 'percentage') {
+        discount = Number(((rawPrice * found.discountValue) / 100).toFixed(2));
+      } else {
+        discount = Math.min(rawPrice, Number(found.discountValue));
+      }
+
+      setAppliedCoupon(found);
+      setCouponDiscount(discount);
+      setCouponFeedback({
+        type: 'success',
+        message: `Cupom ${found.code} aplicado! Desconto de ${
+          found.discountType === 'percentage'
+            ? `${found.discountValue}% (-R$ ${discount.toFixed(2).replace('.', ',')})`
+            : `R$ ${discount.toFixed(2).replace('.', ',')}`
+        }`
+      });
+      showSuccess(`Cupom "${found.code}" aplicado!`);
+    } catch (err: unknown) {
+      setCouponFeedback({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Falha ao validar cupom.'
+      });
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponDiscount(0);
+    setCouponCodeInput('');
+    setCouponFeedback(null);
+  };
+
   const handleProceedPayment = async () => {
     const finalRecipient = recipientType === 'self' ? player.nickname : recipientNickname.trim();
     if (!finalRecipient) {
@@ -120,8 +221,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           recipientNickname: finalRecipient,
           productId: item.id,
           productType: itemType,
-          paymentMethod: paymentMethod === 'PIX' ? 'PIX' : 'LIVEPIX'
-        });
+          paymentMethod: paymentMethod === 'PIX' ? 'PIX' : 'LIVEPIX',
+          couponCode: appliedCoupon?.code
+        } as any);
       } catch (apiErr: unknown) {
         console.warn('API createOrder notice, utilizando criação direta no Firestore:', apiErr);
         const activeItem = freshItem || item;
@@ -129,10 +231,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         const productName = itemType === 'vip'
           ? (itemName.toLowerCase().startsWith('vip') ? itemName : `VIP ${itemName}`)
           : itemName;
-        const amount = Number(activeItem.price) || 0;
+        const baseAmount = Number(activeItem.price) || 0;
+        const finalCalculated = appliedCoupon
+          ? Math.max(0, Number((baseAmount - couponDiscount).toFixed(2)))
+          : baseAmount;
         const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
         const txId = `TX-${paymentMethod}-${Date.now().toString().slice(-6)}`;
-        const pixCode = `00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com520400005303986540${amount.toFixed(2)}5802BR5910NETCRAFTBR6009SAO PAULO62070503***6304${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+        const pixCode = `00020126580014BR.GOV.BCB.PIX0136netcraftbr-pagamentos-pix@srvmc.com520400005303986540${finalCalculated.toFixed(2)}5802BR5910NETCRAFTBR6009SAO PAULO62070503***6304${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
         order = {
           id: orderId,
@@ -141,7 +246,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           productId: String(activeItem.id || item.id),
           productName,
           productType: itemType,
-          amount,
+          amount: finalCalculated,
+          originalAmount: baseAmount,
+          couponCode: appliedCoupon ? appliedCoupon.code : undefined,
+          discountAmount: couponDiscount > 0 ? couponDiscount : undefined,
           createdAt: new Date().toISOString(),
           status: 'Pendente',
           transactionId: txId,
@@ -149,6 +257,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           pixCode,
           pixQrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(pixCode)}`
         };
+      }
+
+      if (appliedCoupon) {
+        incrementCouponUsageInFirestore(appliedCoupon.code).catch(() => {});
       }
 
       setActiveOrder(order);
@@ -220,7 +332,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {item.name}
               </h2>
               <div className="text-2xl font-black text-[#00e676] mt-1 flex items-baseline gap-2">
-                <span>R$ {item.price.toFixed(2).replace('.', ',')}</span>
+                <span>R$ {finalPrice.toFixed(2).replace('.', ',')}</span>
+                {appliedCoupon && (
+                  <span className="text-sm text-zinc-500 line-through font-mono font-normal">
+                    R$ {rawPrice.toFixed(2).replace('.', ',')}
+                  </span>
+                )}
                 {'duration' in item && item.duration && (
                   <span className="text-xs text-zinc-400 font-normal font-sans">
                     / {item.duration}
@@ -372,6 +489,116 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </span>
               </div>
             )}
+
+            {/* CUPOM DE DESCONTO */}
+            <div className="space-y-2 pt-1">
+              <label className="text-xs font-bold text-zinc-300 uppercase tracking-wide flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Ticket className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Possui um Cupom de Desconto?</span>
+                </span>
+                {appliedCoupon && (
+                  <span className="text-[10px] text-emerald-400 font-mono font-bold">
+                    Cupom Aplicado
+                  </span>
+                )}
+              </label>
+
+              {!appliedCoupon ? (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={couponCodeInput}
+                    onChange={e => setCouponCodeInput(e.target.value.toUpperCase().replace(/\s+/g, ''))}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleApplyCoupon();
+                      }
+                    }}
+                    placeholder="Ex: RESET10"
+                    disabled={isValidatingCoupon}
+                    className="flex-1 px-3.5 py-2.5 bg-white/[0.03] border border-white/[0.12] focus:border-emerald-500 rounded-xl text-xs font-mono font-bold text-white uppercase tracking-wider outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    disabled={isValidatingCoupon || !couponCodeInput.trim()}
+                    className="px-4 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {isValidatingCoupon ? 'Validando...' : 'Aplicar'}
+                  </button>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-mono font-bold text-xs text-white flex items-center gap-1.5">
+                        <span>{appliedCoupon.code}</span>
+                        <span className="text-emerald-400 font-sans text-[11px] font-semibold">
+                          ({appliedCoupon.discountType === 'percentage'
+                            ? `${appliedCoupon.discountValue}% OFF`
+                            : `R$ ${appliedCoupon.discountValue.toFixed(2).replace('.', ',')} OFF`})
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-zinc-400 font-mono">
+                        Desconto de R$ {couponDiscount.toFixed(2).replace('.', ',')}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoupon}
+                    className="text-zinc-400 hover:text-rose-400 text-xs font-semibold px-2 py-1 rounded transition-colors cursor-pointer"
+                    title="Remover Cupom"
+                  >
+                    Remover
+                  </button>
+                </div>
+              )}
+
+              {/* Feedback Message */}
+              {couponFeedback && (
+                <div
+                  className={`text-[11px] flex items-center gap-1.5 pt-0.5 ${
+                    couponFeedback.type === 'success' ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  {couponFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  )}
+                  <span>{couponFeedback.message}</span>
+                </div>
+              )}
+            </div>
+
+            {/* RESUMO DO PEDIDO COM VALOR FINAL */}
+            <div className="p-3.5 rounded-xl border border-white/[0.08] bg-white/[0.02] space-y-2 text-xs">
+              <div className="flex items-center justify-between text-zinc-400">
+                <span>Subtotal</span>
+                <span className="font-mono">R$ {rawPrice.toFixed(2).replace('.', ',')}</span>
+              </div>
+              {appliedCoupon && couponDiscount > 0 && (
+                <div className="flex items-center justify-between text-emerald-400 font-semibold">
+                  <span className="flex items-center gap-1">
+                    <Ticket className="w-3 h-3" />
+                    <span>Desconto ({appliedCoupon.code})</span>
+                  </span>
+                  <span className="font-mono">- R$ {couponDiscount.toFixed(2).replace('.', ',')}</span>
+                </div>
+              )}
+              <div className="border-t border-white/[0.08] pt-2 flex items-center justify-between">
+                <span className="font-bold text-white text-xs uppercase tracking-wide">Total a Pagar</span>
+                <span className="text-xl font-black font-mono text-[#00e676]">
+                  R$ {finalPrice.toFixed(2).replace('.', ',')}
+                </span>
+              </div>
+            </div>
 
             {/* BOTÃO DE CONFIRMAR E PAGAR */}
             <button

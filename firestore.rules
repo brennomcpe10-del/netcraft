@@ -101,6 +101,11 @@ service cloud.firestore {
       allow write: if isValidId(docId);
     }
 
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow write: if isValidId(couponId);
+    }
+
     match /test/{testId} {
       allow read, write: if isValidId(testId);
     }

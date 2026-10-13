@@ -9,7 +9,8 @@ import {
   Player,
   SupportTicket,
   DashboardStats,
-  PaymentMethod
+  PaymentMethod,
+  Coupon
 } from '../types/index.ts';
 
 const API_BASE = '/api';
@@ -255,12 +256,17 @@ export const api = {
   },
 
   async updateOrderStatus(id: string, status: Order['status'], adminToken: string): Promise<Order> {
-    const res = await fetch(`${API_BASE}/admin/orders/${id}/status`, {
+    const rawId = id.trim();
+    const encodedId = encodeURIComponent(rawId);
+    const res = await fetch(`${API_BASE}/admin/orders/${encodedId}/status`, {
       method: 'PUT',
       headers: getHeaders(adminToken),
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ id: rawId, status })
     });
-    if (!res.ok) throw new Error('Erro ao atualizar status do pedido.');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Erro ao atualizar status do pedido.');
+    }
     return res.json();
   },
 
@@ -270,6 +276,69 @@ export const api = {
       headers: getHeaders(adminToken)
     });
     if (!res.ok) throw new Error('Erro ao excluir pedido.');
+  },
+
+  // --- CUPONS DE DESCONTO ---
+  async getCoupons(adminToken?: string): Promise<Coupon[]> {
+    const res = await fetch(`${API_BASE}/admin/coupons`, {
+      headers: getHeaders(adminToken)
+    });
+    if (!res.ok) throw new Error('Erro ao carregar cupons.');
+    return res.json();
+  },
+
+  async createCoupon(couponData: Partial<Coupon>, adminToken: string): Promise<Coupon> {
+    const res = await fetch(`${API_BASE}/admin/coupons`, {
+      method: 'POST',
+      headers: getHeaders(adminToken),
+      body: JSON.stringify(couponData)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Erro ao criar cupom de desconto.');
+    }
+    return res.json();
+  },
+
+  async updateCoupon(id: string, couponData: Partial<Coupon>, adminToken: string): Promise<Coupon> {
+    const res = await fetch(`${API_BASE}/admin/coupons/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: getHeaders(adminToken),
+      body: JSON.stringify(couponData)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Erro ao atualizar cupom de desconto.');
+    }
+    return res.json();
+  },
+
+  async deleteCoupon(id: string, adminToken: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/admin/coupons/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: getHeaders(adminToken)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Erro ao excluir cupom.');
+    }
+  },
+
+  async validateCoupon(code: string, amount: number): Promise<{
+    valid: boolean;
+    coupon?: Coupon;
+    discountAmount: number;
+    finalAmount: number;
+    message?: string;
+    error?: string;
+  }> {
+    const res = await fetch(`${API_BASE}/coupons/validate`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ code, amount })
+    });
+    const data = await res.json().catch(() => ({ valid: false, discountAmount: 0, finalAmount: amount, error: 'Falha na validação' }));
+    return data;
   },
 
   async deleteOrdersBulk(

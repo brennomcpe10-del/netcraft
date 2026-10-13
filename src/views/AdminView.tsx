@@ -14,9 +14,10 @@ import {
   NewsArticle,
   NewsCategory,
   ServerSettings,
-  SocialLink
+  SocialLink,
+  Coupon
 } from '../types/index.ts';
-import { Plus, Edit2, Trash2, ArrowLeft, Search, ExternalLink, Check, Upload, Image as ImageIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, ArrowLeft, Search, ExternalLink, Check, Upload, Image as ImageIcon, Ticket, Tag, Percent, Copy, ToggleLeft, ToggleRight } from 'lucide-react';
 import { compressImageFile } from '../lib/imageUtils.ts';
 import {
   saveVipToFirestore,
@@ -39,9 +40,13 @@ import {
   deleteSocialLinkFromFirestore,
   getCommunityFromFirestore,
   saveOrderToFirestore,
+  updateOrderStatusInFirestore,
   deleteOrderFromFirestore,
   deleteOrdersBulkFromFirestore,
   getOrdersFromFirestore,
+  getCouponsFromFirestore,
+  saveCouponToFirestore,
+  deleteCouponFromFirestore,
   deletePlayerFromFirestore,
   deleteUserFromFirestore,
   getPlayersFromFirestore,
@@ -59,32 +64,36 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const { showSuccess, showError } = useToast();
 
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'vips' | 'orders' | 'players' | 'store' | 'events' | 'news' | 'community' | 'server' | 'settings'
+    'dashboard' | 'vips' | 'orders' | 'coupons' | 'players' | 'store' | 'events' | 'news' | 'community' | 'server' | 'settings'
   >('dashboard');
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [vips, setVips] = useState<VIP[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [events, setEvents] = useState<ServerEvent[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
   const [serverSettings, setServerSettings] = useState<ServerSettings | null>(null);
 
-  // Search filter
+  // Search & filter
   const [searchQuery, setSearchQuery] = useState('');
+  const [couponFilter, setCouponFilter] = useState<'all' | 'active' | 'inactive' | 'expired'>('all');
+  const [copiedCouponCode, setCopiedCouponCode] = useState<string | null>(null);
 
   // Modals for editing / creating
   const [editingVip, setEditingVip] = useState<Partial<VIP> | null>(null);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
+  const [editingCoupon, setEditingCoupon] = useState<Partial<Coupon> | null>(null);
   const [editingEvent, setEditingEvent] = useState<Partial<ServerEvent> | null>(null);
   const [editingNews, setEditingNews] = useState<Partial<NewsArticle> | null>(null);
   const [editingSocial, setEditingSocial] = useState<Partial<SocialLink> | null>(null);
 
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<{
-    type: 'vip' | 'product' | 'order' | 'player' | 'event' | 'news' | 'community';
+    type: 'vip' | 'product' | 'order' | 'player' | 'event' | 'news' | 'community' | 'coupon';
     id: string;
     name: string;
     extraNickname?: string;
@@ -116,6 +125,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         vipsResult,
         prodsResult,
         ordersResult,
+        couponsResult,
         playersResult,
         eventsResult,
         newsResult,
@@ -126,6 +136,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         getVipsFromFirestore(),
         getProductsFromFirestore(),
         getOrdersFromFirestore(),
+        getCouponsFromFirestore(),
         getPlayersFromFirestore(),
         getEventsFromFirestore(),
         getNewsFromFirestore(),
@@ -135,10 +146,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
 
       const loadedOrders = ordersResult.status === 'fulfilled' ? ordersResult.value : [];
       const loadedPlayers = playersResult.status === 'fulfilled' ? playersResult.value : [];
+      let loadedCoupons = couponsResult.status === 'fulfilled' ? couponsResult.value : [];
+
+      // Also try API for freshest coupons
+      try {
+        const apiCoupons = await api.getCoupons(adminToken);
+        if (apiCoupons && apiCoupons.length > 0) {
+          loadedCoupons = apiCoupons;
+        }
+      } catch {}
 
       if (vipsResult.status === 'fulfilled') setVips(vipsResult.value);
       if (prodsResult.status === 'fulfilled') setProducts(prodsResult.value);
       if (ordersResult.status === 'fulfilled') setOrders(loadedOrders);
+      setCoupons(loadedCoupons);
       if (playersResult.status === 'fulfilled') setPlayers(loadedPlayers);
       if (eventsResult.status === 'fulfilled') setEvents(eventsResult.value);
       if (newsResult.status === 'fulfilled') setNews(newsResult.value);
@@ -330,13 +351,118 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const handleUpdateOrderStatus = async (id: string, status: Order['status']) => {
     if (!adminToken) return;
     try {
-      const updated = await api.updateOrderStatus(id, status, adminToken);
-      await saveOrderToFirestore(updated).catch(() => {});
-      showSuccess(`Status alterado para ${status}`);
+      const rawId = String(id).trim();
+      // 1. Optimistic UI update so user doesn't wait
+      setOrders(prev =>
+        prev.map(o => (o.id === rawId || o.id.replace(/^#/, '') === rawId.replace(/^#/, '')) ? { ...o, status } : o)
+      );
+
+      // 2. Direct Firestore update for guaranteed persistence
+      await updateOrderStatusInFirestore(rawId, status).catch(fsErr => {
+        console.warn('Firestore direct order status update warning:', fsErr);
+      });
+
+      // 3. Backend API update
+      const updated = await api.updateOrderStatus(rawId, status, adminToken);
+      if (updated) {
+        await saveOrderToFirestore(updated).catch(() => {});
+      }
+
+      showSuccess(`Status do pedido alterado para "${status}" com sucesso!`);
       await loadData();
       await onRefreshGlobalData();
     } catch (err: unknown) {
-      showError(err instanceof Error ? err.message : 'Erro ao atualizar pedido');
+      console.error('Erro ao atualizar status do pedido:', err);
+      await loadData();
+      showError(err instanceof Error ? err.message : 'Erro ao atualizar status do pedido.');
+    }
+  };
+
+  const handleSaveCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCoupon || !adminToken) return;
+
+    const rawCode = (editingCoupon.code || '').trim().toUpperCase();
+    if (!rawCode) {
+      showError('O código do cupom é obrigatório.');
+      return;
+    }
+    const discountVal = Number(editingCoupon.discountValue) || 0;
+    if (discountVal <= 0) {
+      showError('Informe um valor de desconto maior que zero.');
+      return;
+    }
+    if (editingCoupon.discountType === 'percentage' && discountVal > 100) {
+      showError('O desconto percentual não pode ser maior que 100%.');
+      return;
+    }
+
+    const isEditing = !!editingCoupon.id;
+    const duplicate = coupons.find(c =>
+      (!isEditing || c.id !== editingCoupon.id) &&
+      c.code.trim().toUpperCase() === rawCode
+    );
+    if (duplicate) {
+      showError(`Já existe um cupom cadastrado com o código "${rawCode}".`);
+      return;
+    }
+
+    try {
+      const couponId = editingCoupon.id || `cupom-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const payload: Coupon = {
+        id: couponId,
+        code: rawCode,
+        discountType: editingCoupon.discountType || 'percentage',
+        discountValue: discountVal,
+        minOrderValue: editingCoupon.minOrderValue ? Number(editingCoupon.minOrderValue) : 0,
+        maxUses: editingCoupon.maxUses ? Number(editingCoupon.maxUses) : null,
+        usedCount: editingCoupon.usedCount || 0,
+        expiresAt: editingCoupon.expiresAt || null,
+        active: editingCoupon.active !== false,
+        description: editingCoupon.description ? String(editingCoupon.description).trim() : '',
+        createdAt: editingCoupon.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // 1. Direct Firestore write
+      await saveCouponToFirestore(payload);
+
+      // 2. Server API update
+      if (isEditing) {
+        await api.updateCoupon(couponId, payload, adminToken).catch(() => {});
+      } else {
+        await api.createCoupon(payload, adminToken).catch(() => {});
+      }
+
+      showSuccess(isEditing ? `Cupom "${rawCode}" atualizado com sucesso!` : `Cupom "${rawCode}" criado com sucesso!`);
+      setEditingCoupon(null);
+      await loadData();
+      await onRefreshGlobalData();
+    } catch (err: unknown) {
+      showError(err instanceof Error ? err.message : 'Erro ao salvar cupom de desconto');
+    }
+  };
+
+  const handleToggleCouponActive = async (coupon: Coupon) => {
+    if (!adminToken) return;
+    try {
+      const nextActive = !coupon.active;
+      const updated: Coupon = {
+        ...coupon,
+        active: nextActive,
+        updatedAt: new Date().toISOString()
+      };
+      setCoupons(prev => prev.map(c => c.id === coupon.id ? updated : c));
+
+      await saveCouponToFirestore(updated);
+      await api.updateCoupon(coupon.id, { active: nextActive }, adminToken).catch(() => {});
+
+      showSuccess(`Cupom "${coupon.code}" ${nextActive ? 'ativado' : 'desativado'} com sucesso!`);
+      await loadData();
+      await onRefreshGlobalData();
+    } catch (err: unknown) {
+      showError(err instanceof Error ? err.message : 'Erro ao alterar status do cupom');
+      await loadData();
     }
   };
 
@@ -448,6 +574,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       case 'community':
         setSocialLinks(prev => prev.filter(s => s.id !== id && s.id.toLowerCase() !== lowerId && s.name.trim().toLowerCase() !== cleanName));
         break;
+      case 'coupon':
+        setCoupons(prev => prev.filter(c => c.id !== id && c.id.toLowerCase() !== lowerId && c.code.toLowerCase() !== cleanName));
+        break;
     }
 
     try {
@@ -502,6 +631,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           ]);
           showSuccess(`Comunidade ${name} excluída com sucesso`);
           break;
+        case 'coupon':
+          await Promise.allSettled([
+            api.deleteCoupon(id, adminToken),
+            deleteCouponFromFirestore(id)
+          ]);
+          showSuccess(`Cupom "${name}" excluído com sucesso`);
+          break;
       }
       setDeleteConfirm(null);
       // Synchronize global application state so the public site immediately reflects the deletion
@@ -520,6 +656,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'vips', label: 'VIPs' },
     { id: 'orders', label: 'Pedidos' },
+    { id: 'coupons', label: 'Cupons' },
     { id: 'players', label: 'Jogadores' },
     { id: 'store', label: 'Loja' },
     { id: 'events', label: 'Eventos' },
@@ -805,8 +942,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                 .map(order => (
                   <div key={order.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                     <div>
-                      <div className="font-semibold text-white">
-                        {order.recipientNickname} • {order.productName}
+                      <div className="font-semibold text-white flex items-center gap-2 flex-wrap">
+                        <span>{order.recipientNickname} • {order.productName}</span>
+                        {order.couponCode && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-mono text-[10px] flex items-center gap-1">
+                            <Ticket className="w-2.5 h-2.5" />
+                            <span>{order.couponCode}</span>
+                            {order.discountAmount ? (
+                              <span>(-R$ {order.discountAmount.toFixed(2).replace('.', ',')})</span>
+                            ) : null}
+                          </span>
+                        )}
                       </div>
                       <div className="text-zinc-500 font-mono text-[11px] mt-0.5">
                         #{order.id} • Comprador: {order.buyerNickname} • {new Date(order.createdAt).toLocaleDateString('pt-BR')} • {order.paymentMethod}
@@ -815,9 +961,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
 
                     <div className="flex items-center gap-3 self-end sm:self-center">
                       <div className="text-right">
-                        <div className="font-bold text-white">
+                        <div className="font-bold text-white font-mono">
                           R$ {order.amount.toFixed(2).replace('.', ',')}
                         </div>
+                        {order.originalAmount && order.originalAmount > order.amount && (
+                          <div className="text-[10px] text-zinc-500 line-through font-mono">
+                            R$ {order.originalAmount.toFixed(2).replace('.', ',')}
+                          </div>
+                        )}
                       </div>
 
                       <select
@@ -857,6 +1008,281 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
               {orders.length === 0 && (
                 <div className="py-8 text-center text-zinc-500">
                   Nenhum pedido registrado até o momento.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* 3.1 CUPONS DE DESCONTO */}
+        {/* ============================================================== */}
+        {activeTab === 'coupons' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <Ticket className="w-5 h-5 text-emerald-400" />
+                  <span>Cupons de Desconto</span>
+                </h2>
+                <p className="text-zinc-500 text-[11px]">
+                  Crie, gerencie, ative ou desative cupons promocionais para seus jogadores
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setEditingCoupon({
+                    code: '',
+                    discountType: 'percentage',
+                    discountValue: 10,
+                    minOrderValue: 0,
+                    maxUses: null,
+                    expiresAt: null,
+                    active: true,
+                    description: ''
+                  })
+                }
+                className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950/40"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Novo Cupom</span>
+              </button>
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">Total de Cupons</span>
+                <div className="text-xl font-bold text-white font-mono">{coupons.length}</div>
+              </div>
+              <div className="p-3.5 rounded-xl bg-emerald-500/[0.03] border border-emerald-500/20 space-y-1">
+                <span className="text-[10px] text-emerald-400 uppercase tracking-wider font-mono">Cupons Ativos</span>
+                <div className="text-xl font-bold text-emerald-400 font-mono">
+                  {coupons.filter(c => c.active).length}
+                </div>
+              </div>
+              <div className="p-3.5 rounded-xl bg-cyan-500/[0.03] border border-cyan-500/20 space-y-1">
+                <span className="text-[10px] text-cyan-400 uppercase tracking-wider font-mono">Total de Usos</span>
+                <div className="text-xl font-bold text-cyan-400 font-mono">
+                  {coupons.reduce((sum, c) => sum + (c.usedCount || 0), 0)}
+                </div>
+              </div>
+              <div className="p-3.5 rounded-xl bg-rose-500/[0.03] border border-rose-500/20 space-y-1">
+                <span className="text-[10px] text-rose-400 uppercase tracking-wider font-mono">Expirados</span>
+                <div className="text-xl font-bold text-rose-400 font-mono">
+                  {coupons.filter(c => c.expiresAt && new Date(c.expiresAt).getTime() < Date.now()).length}
+                </div>
+              </div>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                {(['all', 'active', 'inactive', 'expired'] as const).map(f => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setCouponFilter(f)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors shrink-0 ${
+                      couponFilter === f
+                        ? 'bg-white text-zinc-950 font-bold'
+                        : 'text-zinc-400 hover:text-white bg-white/[0.03] border border-white/[0.06]'
+                    }`}
+                  >
+                    {f === 'all' && 'Todos'}
+                    {f === 'active' && 'Ativos'}
+                    {f === 'inactive' && 'Inativos'}
+                    {f === 'expired' && 'Expirados'}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Buscar código ou descrição..."
+                  className="w-full sm:w-64 px-3 py-1.5 pl-8 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none focus:border-emerald-500/50"
+                />
+                <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
+              </div>
+            </div>
+
+            {/* Coupons List */}
+            <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+              {coupons
+                .filter(c => {
+                  if (couponFilter === 'active' && !c.active) return false;
+                  if (couponFilter === 'inactive' && c.active) return false;
+                  if (couponFilter === 'expired') {
+                    if (!c.expiresAt || new Date(c.expiresAt).getTime() >= Date.now()) return false;
+                  }
+                  if (!searchQuery) return true;
+                  const s = searchQuery.toLowerCase();
+                  return (
+                    c.code.toLowerCase().includes(s) ||
+                    (c.description && c.description.toLowerCase().includes(s))
+                  );
+                })
+                .map(coupon => {
+                  const isExpired = coupon.expiresAt && new Date(coupon.expiresAt).getTime() < Date.now();
+                  const isLimitReached = coupon.maxUses && Number(coupon.usedCount || 0) >= Number(coupon.maxUses);
+
+                  return (
+                    <div
+                      key={coupon.id}
+                      className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-sm font-black text-white tracking-wider px-2 py-0.5 rounded bg-white/[0.06] border border-white/[0.1]">
+                            {coupon.code}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(coupon.code);
+                              setCopiedCouponCode(coupon.code);
+                              setTimeout(() => setCopiedCouponCode(null), 2000);
+                            }}
+                            className="text-zinc-500 hover:text-zinc-300 transition-colors p-1"
+                            title="Copiar código"
+                          >
+                            {copiedCouponCode === coupon.code ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+
+                          <span className="px-2 py-0.5 rounded-full font-mono text-[11px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                            {coupon.discountType === 'percentage'
+                              ? `${coupon.discountValue}% OFF`
+                              : `R$ ${coupon.discountValue.toFixed(2).replace('.', ',')} OFF`}
+                          </span>
+
+                          {coupon.active ? (
+                            <span className="px-2 py-0.5 rounded-full font-mono text-[10px] bg-emerald-950/60 border border-emerald-500/40 text-emerald-400">
+                              Ativo
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full font-mono text-[10px] bg-zinc-800 border border-white/[0.08] text-zinc-400">
+                              Inativo
+                            </span>
+                          )}
+
+                          {isExpired && (
+                            <span className="px-2 py-0.5 rounded-full font-mono text-[10px] bg-rose-950/60 border border-rose-500/40 text-rose-400">
+                              Expirado
+                            </span>
+                          )}
+
+                          {isLimitReached && (
+                            <span className="px-2 py-0.5 rounded-full font-mono text-[10px] bg-amber-950/60 border border-amber-500/40 text-amber-400">
+                              Esgotado
+                            </span>
+                          )}
+                        </div>
+
+                        {coupon.description && (
+                          <p className="text-zinc-400 text-[11px]">{coupon.description}</p>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-zinc-500 font-mono text-[11px] pt-0.5">
+                          <span>
+                            Usos:{' '}
+                            <strong className="text-zinc-300">
+                              {coupon.usedCount || 0}
+                              {coupon.maxUses ? ` / ${coupon.maxUses}` : ' (ilimitado)'}
+                            </strong>
+                          </span>
+                          {coupon.minOrderValue && coupon.minOrderValue > 0 ? (
+                            <span>
+                              Mínimo:{' '}
+                              <strong className="text-zinc-300">
+                                R$ {coupon.minOrderValue.toFixed(2).replace('.', ',')}
+                              </strong>
+                            </span>
+                          ) : (
+                            <span>Sem valor mínimo</span>
+                          )}
+                          <span>
+                            Validade:{' '}
+                            <strong className="text-zinc-300">
+                              {coupon.expiresAt
+                                ? new Date(coupon.expiresAt).toLocaleDateString('pt-BR')
+                                : 'Indeterminada'}
+                            </strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        {/* Toggle Ativo/Inativo Rápido */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCouponActive(coupon)}
+                          title={coupon.active ? 'Desativar cupom' : 'Ativar cupom'}
+                          className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                            coupon.active
+                              ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400 border-white/[0.08]'
+                          }`}
+                        >
+                          {coupon.active ? (
+                            <>
+                              <ToggleRight className="w-4 h-4 text-emerald-400" />
+                              <span>Ativo</span>
+                            </>
+                          ) : (
+                            <>
+                              <ToggleLeft className="w-4 h-4 text-zinc-500" />
+                              <span>Inativo</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* Editar */}
+                        <button
+                          type="button"
+                          onClick={() => setEditingCoupon({ ...coupon })}
+                          title="Editar Cupom"
+                          className="text-zinc-400 hover:text-white p-1.5 rounded hover:bg-white/[0.05] transition-colors cursor-pointer"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+
+                        {/* Excluir */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDeleteConfirm({
+                              type: 'coupon',
+                              id: coupon.id,
+                              name: `Cupom ${coupon.code}`
+                            })
+                          }
+                          title="Excluir Cupom"
+                          className="text-zinc-500 hover:text-rose-400 p-1.5 rounded hover:bg-rose-500/10 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {coupons.length === 0 && (
+                <div className="py-12 text-center space-y-2">
+                  <Ticket className="w-8 h-8 text-zinc-600 mx-auto" />
+                  <div className="text-zinc-400 font-semibold">Nenhum cupom cadastrado</div>
+                  <p className="text-zinc-600 text-[11px]">
+                    Clique em "Novo Cupom" acima para criar códigos promocionais de desconto para a loja.
+                  </p>
                 </div>
               )}
             </div>
@@ -1892,6 +2318,237 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                   className="px-4 py-1.5 rounded-lg bg-white text-zinc-950 text-xs font-semibold hover:bg-zinc-200 cursor-pointer"
                 >
                   Salvar Item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL: EDIT / CREATE COUPON */}
+      {/* ============================================================== */}
+      {editingCoupon && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-[#0d1017] border border-white/[0.08] rounded-2xl p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                <Ticket className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white font-heading">
+                  {editingCoupon.id ? `Editar Cupom: ${editingCoupon.code}` : 'Criar Novo Cupom'}
+                </h3>
+                <p className="text-xs text-zinc-400">Configure as regras e descontos do cupom</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveCoupon} className="space-y-3.5 pt-1">
+              {/* Código */}
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                  Código do Cupom <span className="text-rose-400">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={editingCoupon.code || ''}
+                    onChange={e =>
+                      setEditingCoupon({
+                        ...editingCoupon,
+                        code: e.target.value.toUpperCase().replace(/\s+/g, '')
+                      })
+                    }
+                    className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs font-mono font-bold text-white outline-none focus:border-emerald-500/50 uppercase tracking-wider"
+                    placeholder="Ex: RESET10, NETCRAFT20, CARNAVAL"
+                  />
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  O código é padronizado em maiúsculas sem espaços.
+                </p>
+              </div>
+
+              {/* Tipo de Desconto */}
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                  Tipo de Desconto
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingCoupon({ ...editingCoupon, discountType: 'percentage' })}
+                    className={`py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-colors ${
+                      editingCoupon.discountType !== 'fixed'
+                        ? 'border-emerald-500/80 bg-emerald-500/15 text-emerald-300'
+                        : 'border-white/[0.08] bg-white/[0.02] text-zinc-400 hover:border-white/20'
+                    }`}
+                  >
+                    <Percent className="w-3.5 h-3.5" />
+                    <span>Porcentagem (%)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingCoupon({ ...editingCoupon, discountType: 'fixed' })}
+                    className={`py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-colors ${
+                      editingCoupon.discountType === 'fixed'
+                        ? 'border-emerald-500/80 bg-emerald-500/15 text-emerald-300'
+                        : 'border-white/[0.08] bg-white/[0.02] text-zinc-400 hover:border-white/20'
+                    }`}
+                  >
+                    <Tag className="w-3.5 h-3.5" />
+                    <span>Valor Fixo (R$)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Valor do Desconto */}
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                  Valor do Desconto{' '}
+                  <span className="text-zinc-500 font-normal">
+                    {editingCoupon.discountType === 'fixed' ? '(em Reais R$)' : '(em %)'}
+                  </span>
+                  <span className="text-rose-400"> *</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step={editingCoupon.discountType === 'fixed' ? '0.01' : '1'}
+                    min="0.01"
+                    max={editingCoupon.discountType === 'fixed' ? undefined : 100}
+                    required
+                    value={editingCoupon.discountValue ?? 10}
+                    onChange={e =>
+                      setEditingCoupon({
+                        ...editingCoupon,
+                        discountValue: parseFloat(e.target.value) || 0
+                      })
+                    }
+                    className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs font-mono text-white outline-none focus:border-emerald-500/50"
+                    placeholder={editingCoupon.discountType === 'fixed' ? '15.00' : '10'}
+                  />
+                  <span className="absolute right-3 top-2 text-xs font-mono text-zinc-500">
+                    {editingCoupon.discountType === 'fixed' ? 'R$' : '%'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Valor Mínimo e Limite de Usos */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                    Valor Mínimo (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editingCoupon.minOrderValue ?? 0}
+                    onChange={e =>
+                      setEditingCoupon({
+                        ...editingCoupon,
+                        minOrderValue: parseFloat(e.target.value) || 0
+                      })
+                    }
+                    className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs font-mono text-white outline-none focus:border-emerald-500/50"
+                    placeholder="0.00 (sem mínimo)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                    Limite de Usos
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editingCoupon.maxUses ?? ''}
+                    onChange={e =>
+                      setEditingCoupon({
+                        ...editingCoupon,
+                        maxUses: e.target.value ? parseInt(e.target.value) : null
+                      })
+                    }
+                    className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs font-mono text-white outline-none focus:border-emerald-500/50"
+                    placeholder="Vazio = ilimitado"
+                  />
+                </div>
+              </div>
+
+              {/* Data de Expiração */}
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                  Data de Expiração (Opcional)
+                </label>
+                <input
+                  type="date"
+                  value={
+                    editingCoupon.expiresAt
+                      ? editingCoupon.expiresAt.split('T')[0]
+                      : ''
+                  }
+                  onChange={e =>
+                    setEditingCoupon({
+                      ...editingCoupon,
+                      expiresAt: e.target.value ? new Date(`${e.target.value}T23:59:59`).toISOString() : null
+                    })
+                  }
+                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none focus:border-emerald-500/50"
+                />
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  Deixe em branco para o cupom não ter prazo de validade.
+                </p>
+              </div>
+
+              {/* Descrição / Campanha */}
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                  Descrição ou Campanha (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={editingCoupon.description || ''}
+                  onChange={e =>
+                    setEditingCoupon({ ...editingCoupon, description: e.target.value })
+                  }
+                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none focus:border-emerald-500/50"
+                  placeholder="Ex: Cupom de boas-vindas da nova temporada"
+                />
+              </div>
+
+              {/* Status Ativo */}
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="coupon-active-checkbox"
+                  checked={editingCoupon.active !== false}
+                  onChange={e =>
+                    setEditingCoupon({ ...editingCoupon, active: e.target.checked })
+                  }
+                  className="rounded accent-emerald-500 cursor-pointer w-4 h-4"
+                />
+                <label
+                  htmlFor="coupon-active-checkbox"
+                  className="text-xs font-medium text-zinc-300 cursor-pointer"
+                >
+                  Cupom Ativo para uso imediato pelos jogadores
+                </label>
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-end gap-2 pt-3 border-t border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => setEditingCoupon(null)}
+                  className="px-3.5 py-1.5 rounded-lg border border-white/[0.08] text-xs text-zinc-300 hover:bg-white/[0.03] cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold cursor-pointer transition-colors shadow-lg shadow-emerald-950/40"
+                >
+                  Salvar Cupom
                 </button>
               </div>
             </form>
