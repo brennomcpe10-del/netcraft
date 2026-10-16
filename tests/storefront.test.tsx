@@ -30,29 +30,36 @@ const product: Product = {
   order: 1,
 };
 test("catalog preserves configured names and prices and excludes inactive records", () => {
-  const html = renderToStaticMarkup(
-    <StoreView
-      vips={[
-        vip,
-        { ...vip, id: "inactive-vip", name: "VIP oculto", active: false },
-      ]}
-      products={[
-        product,
-        {
-          ...product,
-          id: "inactive-product",
-          name: "Produto oculto",
-          active: false,
-        },
-      ]}
-      loading={false}
-      onBuyItem={() => {}}
-    />,
-  );
-  for (const text of ["Explorer", "Produto original", "4,90", "9,90"])
-    assert.ok(html.includes(text));
-  assert.ok(!html.includes("VIP oculto"));
-  assert.ok(!html.includes("Produto oculto"));
+  const vips = [
+    vip,
+    { ...vip, id: "inactive-vip", name: "VIP oculto", active: false },
+  ];
+  const products = [
+    product,
+    {
+      ...product,
+      id: "inactive-product",
+      name: "Produto oculto",
+      active: false,
+    },
+  ];
+  for (const category of ["vips", "outros"]) {
+    const html = renderToStaticMarkup(
+      <StoreView
+        vips={vips}
+        products={products}
+        initialCategory={category}
+        loading={false}
+        onBuyItem={() => {}}
+      />,
+    );
+    for (const text of category === "vips"
+      ? ["Explorer", "4,90"]
+      : ["Produto original", "9,90"])
+      assert.ok(html.includes(text));
+    assert.ok(!html.includes("VIP oculto"));
+    assert.ok(!html.includes("Produto oculto"));
+  }
 });
 test("product detail retains full benefits and duration without broken symbolic image URL", () => {
   const html = renderToStaticMarkup(
@@ -78,6 +85,7 @@ test("catalog loading and empty states do not render purchasable cards", () => {
   for (const loading of [true, false]) {
     const html = renderToStaticMarkup(
       <StoreView
+        initialCategory="vips"
         vips={[]}
         products={[]}
         loading={loading}
@@ -86,7 +94,9 @@ test("catalog loading and empty states do not render purchasable cards", () => {
     );
     assert.ok(!html.includes("product-card"));
     assert.ok(
-      html.includes(loading ? "Carregando catálogo" : "Nenhum item encontrado"),
+      html.includes(
+        loading ? "Carregando catálogo" : "ainda não tem produtos disponíveis",
+      ),
     );
   }
 });
@@ -168,7 +178,7 @@ import {
   cartKey,
 } from "../src/lib/cart.ts";
 import { quoteCart, validateCartRequest } from "../src/lib/cartQuote.ts";
-test("store homepage categories hide empty and inactive groups and preserve category ordering", () => {
+test("store categories respect optional empty visibility, active state and ordering", () => {
   const categories = [
     { ...defaultStoreCategories[0], order: 2 },
     { ...defaultStoreCategories[1], order: 1 },
@@ -181,7 +191,10 @@ test("store homepage categories hide empty and inactive groups and preserve cate
   );
   const html = renderToStaticMarkup(
     <CategoryGrid
-      categories={defaultStoreCategories}
+      categories={defaultStoreCategories.map((c) => ({
+        ...c,
+        showWhenEmpty: false,
+      }))}
       products={[]}
       vips={[vip]}
       onSelect={() => {}}
@@ -189,7 +202,7 @@ test("store homepage categories hide empty and inactive groups and preserve cate
   );
   assert.ok(html.includes("PLANOS VIPS"));
   assert.ok(html.includes("/categories/vips.webp"));
-  assert.ok(!html.includes("KIT PVP"));
+  assert.ok(!html.includes("KITS PVP"));
   assert.ok(!html.includes("0 disponíveis"));
   assert.ok(!html.includes("Explorer"));
 });
@@ -300,4 +313,49 @@ test("home leads with categories, omits individual unfeatured VIPs, and places c
   assert.ok(!html.includes("Seu próximo nível"));
   assert.ok(html.includes("netcraftbr.srvmc.com"));
   assert.ok(!html.includes("Produtos em destaque"));
+});
+
+test("store entry renders categories only; selected category scopes products and provides a return path", () => {
+  const kit = {
+    ...product,
+    id: "farm-z",
+    name: "Farm cadastrada",
+    category: "farms",
+  };
+  const entry = renderToStaticMarkup(
+    <StoreView
+      vips={[vip]}
+      products={[kit]}
+      loading={false}
+      onBuyItem={() => {}}
+    />,
+  );
+  assert.ok(entry.includes("CATEGORIAS DA LOJA"));
+  assert.ok(entry.includes("KITS TEMPORÁRIOS"));
+  assert.ok(entry.includes("KITS FARM"));
+  assert.ok(!entry.includes("Explorer"));
+  assert.ok(!entry.includes("Farm cadastrada"));
+  assert.ok(!entry.includes("OUTROS PRODUTOS"));
+  const category = renderToStaticMarkup(
+    <StoreView
+      initialCategory="farms"
+      vips={[vip]}
+      products={[kit]}
+      loading={false}
+      onBuyItem={() => {}}
+    />,
+  );
+  assert.ok(category.includes("Farm cadastrada"));
+  assert.ok(!category.includes("Explorer"));
+  assert.ok(category.includes("Voltar às categorias"));
+});
+test("VIP identity and price stay outside image area; duration appears only in details", () => {
+  const html = renderToStaticMarkup(
+    <ProductCard item={vip} onBuy={() => {}} />,
+  );
+  const imageEnd = html.indexOf('class="product-body"');
+  assert.ok(!html.slice(0, imageEnd).includes("30 dias"));
+  assert.ok(html.slice(imageEnd).includes("<h3>Explorer</h3>"));
+  assert.ok(html.slice(imageEnd).includes("4,90"));
+  assert.ok(html.slice(imageEnd).includes("Duração: 30 dias"));
 });

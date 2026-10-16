@@ -6,6 +6,7 @@ export interface StoreCategory {
   image: string;
   order: number;
   active: boolean;
+  showWhenEmpty?: boolean;
 }
 export const defaultStoreCategories: StoreCategory[] = [
   {
@@ -18,15 +19,23 @@ export const defaultStoreCategories: StoreCategory[] = [
   },
   {
     id: "kits",
-    title: "KIT PVP",
+    title: "KITS PVP",
     description: "Prepare seu equipamento para a batalha.",
     image: "/categories/items.webp",
     order: 2,
     active: true,
   },
   {
+    id: "temporarios",
+    title: "KITS TEMPORÁRIOS",
+    description: "Confira os kits disponíveis por tempo limitado.",
+    image: "/categories/items.webp",
+    order: 2.5,
+    active: true,
+  },
+  {
     id: "farms",
-    title: "KITS FARMS",
+    title: "KITS FARM",
     description: "Recursos para fazer sua base crescer.",
     image: "/harbor_explore.jpg",
     order: 3,
@@ -66,11 +75,12 @@ export const defaultStoreCategories: StoreCategory[] = [
   },
   {
     id: "outros",
-    title: "OUTROS PRODUTOS",
-    description: "Conheça outras opções da loja.",
+    title: "ITENS AVULSOS",
+    description: "Produtos individuais cadastrados na loja.",
     image: "/hero_landscape.webp",
     order: 8,
     active: true,
+    showWhenEmpty: false,
   },
 ];
 export const itemCategory = (item: VIP | Product, type: "vip" | "product") =>
@@ -87,7 +97,9 @@ export function visibleCategories(
     ...vips.filter((v) => v.active).map((v) => v.categoryId || "vips"),
   ]);
   return categories
-    .filter((c) => c.active && populated.has(c.id))
+    .filter(
+      (c) => c.active && (c.showWhenEmpty !== false || populated.has(c.id)),
+    )
     .sort((a, b) => a.order - b.order);
 }
 export function validateCategories(
@@ -117,7 +129,16 @@ export function validateCategories(
       typeof c.active !== "boolean"
     )
       throw new Error("Dados da categoria inválidos.");
+    if (c.showWhenEmpty !== undefined && typeof c.showWhenEmpty !== "boolean")
+      throw new Error("Visibilidade da categoria inválida.");
     if (!/^(https:\/\/|\/(?!\/))/.test(c.image))
       throw new Error("Use imagem HTTPS ou caminho local.");
   }
+}
+
+export function storeCategoryTitle(category: StoreCategory) {
+  return category.id === "outros" &&
+    /^outros( produtos)?$/i.test(category.title.trim())
+    ? "ITENS AVULSOS"
+    : category.title;
 }

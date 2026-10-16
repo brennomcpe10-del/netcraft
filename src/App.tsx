@@ -208,7 +208,10 @@ function MainAppContent() {
           window.scrollTo(0, 0);
         }}
         currentTab={currentTab}
-        setCurrentTab={setCurrentTab}
+        setCurrentTab={(tab) => {
+          if (tab === "store") setStoreCategory("all");
+          setCurrentTab(tab);
+        }}
         onOpenPlayModal={() => {
           setCurrentTab("server");
         }}
@@ -248,10 +251,17 @@ function MainAppContent() {
         {currentTab === "server" && <ServerView settings={settings} />}
 
         {currentTab === "vip" && (
-          <VipView
+          <StoreView
+            categories={categories}
+            initialCategory="vips"
+            products={products}
             vips={vips}
             loading={loading}
-            onBuyVip={(vip) => handleBuyItem(vip, "vip")}
+            onCategoryChange={(id) => {
+              setStoreCategory(id);
+              setCurrentTab("store");
+            }}
+            onBuyItem={handleBuyItem}
           />
         )}
 
@@ -259,6 +269,7 @@ function MainAppContent() {
           <StoreView
             categories={categories}
             initialCategory={storeCategory}
+            onCategoryChange={setStoreCategory}
             products={products}
             vips={vips}
             loading={loading}
@@ -282,7 +293,13 @@ function MainAppContent() {
       </main>
 
       {/* Footer */}
-      <Footer setCurrentTab={setCurrentTab} settings={settings} />
+      <Footer
+        setCurrentTab={(tab) => {
+          if (tab === "store") setStoreCategory("all");
+          setCurrentTab(tab);
+        }}
+        settings={settings}
+      />
 
       {/* MODALS */}
       <NicknameModal />

@@ -11,6 +11,7 @@ export function ProductCard({
   const vip = "duration" in item;
   return (
     <article
+      aria-label={item.name}
       className={`product-card ${vip && item.isPopular ? "featured" : ""}`}
     >
       <div className="product-art">
@@ -25,9 +26,6 @@ export function ProductCard({
             loading="lazy"
           />
         )}
-        <span className="product-tag">
-          {vip ? item.duration : item.category}
-        </span>
         {vip && item.isPopular && <span className="popular-tag">DESTAQUE</span>}
       </div>
       <div className="product-body">
@@ -40,6 +38,7 @@ export function ProductCard({
         </p>
         <details>
           <summary>Benefícios e detalhes</summary>
+          {vip && <p className="plan-duration">Duração: {item.duration}</p>}
           <p>{item.description}</p>
           <ul>
             {(vip ? item.benefits : item.highlights).map((t, i) => (

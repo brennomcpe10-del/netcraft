@@ -2,9 +2,9 @@
 
 ## Interface implementada
 
-A página inicial segue: cabeçalho com entrar/carrinho → banner curto → categorias com imagens → produtos marcados em destaque (quando houver) → conexão copiável → suporte → FAQ → rodapé. Não há vitrine de todos os VIPs antes das categorias, categorias vazias nem contadores de zero produtos. O cadastro anterior permanece intacto.
+A página inicial e a entrada Loja mostram categorias; os produtos só aparecem após escolher uma delas. Há botão de voltar e busca limitada à categoria. A página inicial segue: cabeçalho com entrar/carrinho → banner curto → categorias com imagens → produtos marcados em destaque (quando houver) → conexão copiável → suporte → FAQ → rodapé. Não há vitrine de todos os VIPs antes das categorias, contadores de zero produtos. O cadastro anterior permanece intacto.
 
-Categorias são configuradas na aba Categorias do painel e persistidas em `settings/storeCategories` pela API administrativa autenticada. Podem ser criadas, editadas, ordenadas, ocultadas e removidas; remover não apaga produtos. Itens sem categoria continuam em Todos até reclassificação. Produtos usam `category`; VIPs podem escolher `categoryId` e mantêm `vips` quando esse campo não existe. Sem documento configurado são usados cartões padrão, apenas para categorias com produtos ativos.
+Categorias são configuradas na aba Categorias do painel e persistidas em `settings/storeCategories` pela API administrativa autenticada. Podem ser criadas, editadas, ordenadas, ocultadas e removidas; remover não apaga produtos. Produtos de categorias removidas continuam preservados e devem ser reclassificados pelo painel. Produtos usam `category`; VIPs podem escolher `categoryId` e mantêm `vips` quando esse campo não existe. Sem documento configurado são usados cartões padrão, com todas as categorias ativas visíveis por padrão. O administrador pode optar por ocultar uma categoria sem produtos.
 
 Carrinho preserva referências e quantidades em localStorage, sem preço ou recompensa como autoridade. Mantém a seleção entre páginas e recargas, agrupa linhas, limita VIP a uma unidade e respeita `allowQuantity`/`maxQuantity` de produtos. O contador soma unidades. Adicionar não interrompe a navegação. Remoção e quantidades atualizam totais.
 
@@ -27,3 +27,11 @@ Prompts: (1) Minecraft voxel-style scene with emerald-accented diamond-armored a
 ## Testes e limites
 
 Testes cobrem categorias vazias/inativas, ordenação, categorias próprias, integridade comercial, armazenamento do carrinho, limites, indisponibilidade, total em centavos e rejeição de preços/comandos do cliente. Build e TypeScript são verificados separadamente. Não substituem QA visual em dispositivos, persistência autenticada em Firebase isolado ou testes de pagamento/Bedrock.
+
+## Correção após gravação de 11:29
+
+A imagem de produto tinha tamanho intrínseco que podia extrapolar a área de mídia e cobrir nome/preço. A mídia agora tem altura fixa, recorte e imagem posicionada dentro de limites explícitos; identidade e preço ficam em bloco próprio abaixo. A etiqueta de duração saiu da imagem e permanece apenas nos detalhes do VIP.
+
+A loja abre categorias por padrão e não há aba de produtos misturados. Todas as categorias ativas podem aparecer mesmo vazias, conforme a nova direção; ao abrir uma vazia há uma mensagem honesta, sem produtos de exemplo. A categoria legada `outros` mantém os dados e é apresentada como ITENS AVULSOS quando ainda tem o título padrão, sem uma divisão separada de kits. Produtos podem ser reclassificados pelo administrador.
+
+O teste de interação usa DOM simulado para clicar em KITS FARM, adicionar unidades, voltar, abrir PLANOS VIPS e manter/restaurar o carrinho. Ele verifica nomes, preços e ausência de duração na área da imagem. Não equivale a teste visual em navegador real nem comprova layout nos celulares.

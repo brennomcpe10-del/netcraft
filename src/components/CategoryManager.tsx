@@ -37,8 +37,8 @@ export function CategoryManager() {
         <div>
           <h2>Categorias da loja</h2>
           <p>
-            Organize os cartões da página inicial. Categorias sem produtos
-            ativos ficam ocultas.
+            Organize os cartões da página inicial e a visibilidade de cada
+            categoria.
           </p>
         </div>
         <button
@@ -51,6 +51,7 @@ export function CategoryManager() {
               image: "/hero_landscape.webp",
               order: categories.length + 1,
               active: true,
+              showWhenEmpty: true,
             })
           }
         >
@@ -66,8 +67,12 @@ export function CategoryManager() {
               <div>
                 <h3>{c.title}</h3>
                 <p>
-                  {c.active ? "Visível quando houver produtos" : "Oculta"} ·
-                  Ordem {c.order}
+                  {c.active
+                    ? c.showWhenEmpty === false
+                      ? "Visível quando houver produtos"
+                      : "Visível"
+                    : "Oculta"}{" "}
+                  · Ordem {c.order}
                 </p>
                 <button
                   className="text-link"
@@ -153,6 +158,16 @@ export function CategoryManager() {
               }
             />{" "}
             Categoria ativa
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={editing.showWhenEmpty !== false}
+              onChange={(e) =>
+                setEditing({ ...editing, showWhenEmpty: e.target.checked })
+              }
+            />{" "}
+            Mostrar também quando ainda não houver produtos
           </label>
           <div>
             <button className="nc-button" disabled={busy}>
