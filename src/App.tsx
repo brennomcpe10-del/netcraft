@@ -1,26 +1,37 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ToastProvider } from './context/ToastContext.tsx';
-import { PlayerProvider } from './context/PlayerContext.tsx';
-import { AdminProvider, useAdmin } from './context/AdminContext.tsx';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { ToastProvider } from "./context/ToastContext.tsx";
+import { PlayerProvider } from "./context/PlayerContext.tsx";
+import { AdminProvider, useAdmin } from "./context/AdminContext.tsx";
 
-import { Header } from './components/Header.tsx';
-import { Footer } from './components/Footer.tsx';
-import { NicknameModal } from './components/modals/NicknameModal.tsx';
-import { AdminLoginModal } from './components/modals/AdminLoginModal.tsx';
-import { CheckoutModal } from './components/modals/CheckoutModal.tsx';
+import { Header } from "./components/Header.tsx";
+import { Footer } from "./components/Footer.tsx";
+import { NicknameModal } from "./components/modals/NicknameModal.tsx";
+import { AdminLoginModal } from "./components/modals/AdminLoginModal.tsx";
+import { CheckoutModal } from "./components/modals/CheckoutModal.tsx";
 
-import { HomeView } from './views/HomeView.tsx';
-import { ServerView } from './views/ServerView.tsx';
-import { VipView } from './views/VipView.tsx';
-import { StoreView } from './views/StoreView.tsx';
-import { EventsView } from './views/EventsView.tsx';
-import { NewsView } from './views/NewsView.tsx';
-import { CommunityView } from './views/CommunityView.tsx';
-import { SupportView } from './views/SupportView.tsx';
-import { ProfileView } from './views/ProfileView.tsx';
-import { AdminView } from './views/AdminView.tsx';
+import { HomeView } from "./views/HomeView.tsx";
+import { ServerView } from "./views/ServerView.tsx";
+import { VipView } from "./views/VipView.tsx";
+import { StoreView } from "./views/StoreView.tsx";
+import { EventsView } from "./views/EventsView.tsx";
+import { NewsView } from "./views/NewsView.tsx";
+import { CommunityView } from "./views/CommunityView.tsx";
+import { SupportView } from "./views/SupportView.tsx";
+import { ProfileView } from "./views/ProfileView.tsx";
+const AdminView = lazy(() =>
+  import("./views/AdminView.tsx").then((module) => ({
+    default: module.AdminView,
+  })),
+);
 
-import { VIP, Product, ServerEvent, NewsArticle, ServerSettings, SocialLink } from './types/index.ts';
+import {
+  VIP,
+  Product,
+  ServerEvent,
+  NewsArticle,
+  ServerSettings,
+  SocialLink,
+} from "./types/index.ts";
 import {
   seedFirestoreIfEmpty,
   subscribeToVips,
@@ -34,11 +45,11 @@ import {
   getEventsFromFirestore,
   getNewsFromFirestore,
   getSettingsFromFirestore,
-  getCommunityFromFirestore
-} from './lib/firestoreSync.ts';
+  getCommunityFromFirestore,
+} from "./lib/firestoreSync.ts";
 
 function MainAppContent() {
-  const [currentTab, setCurrentTab] = useState<string>('home');
+  const [currentTab, setCurrentTab] = useState<string>("home");
   const [settings, setSettings] = useState<ServerSettings | null>(null);
   const [vips, setVips] = useState<VIP[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -50,7 +61,7 @@ function MainAppContent() {
   // Active checkout item modal state
   const [checkoutItem, setCheckoutItem] = useState<{
     item: VIP | Product;
-    type: 'vip' | 'product';
+    type: "vip" | "product";
   } | null>(null);
 
   const { isAdminLoggedIn, openAdminModal } = useAdmin();
@@ -64,7 +75,7 @@ function MainAppContent() {
         getProductsFromFirestore(),
         getEventsFromFirestore(),
         getNewsFromFirestore(),
-        getCommunityFromFirestore()
+        getCommunityFromFirestore(),
       ]);
       if (st) setSettings(st);
       if (v) setVips(v);
@@ -73,7 +84,7 @@ function MainAppContent() {
       if (nw) setNews(nw);
       if (soc) setSocialLinks(soc);
     } catch (err) {
-      console.warn('Firestore initial fetch notice:', err);
+      console.warn("Firestore initial fetch notice:", err);
     } finally {
       setLoading(false);
     }
@@ -88,27 +99,27 @@ function MainAppContent() {
     fetchGlobalData();
 
     // Attach real-time listeners for live updates across all devices
-    const unsubVips = subscribeToVips(liveVips => {
+    const unsubVips = subscribeToVips((liveVips) => {
       setVips(liveVips);
     });
 
-    const unsubProds = subscribeToProducts(liveProds => {
+    const unsubProds = subscribeToProducts((liveProds) => {
       setProducts(liveProds);
     });
 
-    const unsubSettings = subscribeToServerSettings(liveSettings => {
+    const unsubSettings = subscribeToServerSettings((liveSettings) => {
       if (liveSettings) setSettings(liveSettings);
     });
 
-    const unsubEvents = subscribeToEvents(liveEvents => {
+    const unsubEvents = subscribeToEvents((liveEvents) => {
       setEvents(liveEvents);
     });
 
-    const unsubNews = subscribeToNews(liveNews => {
+    const unsubNews = subscribeToNews((liveNews) => {
       setNews(liveNews);
     });
 
-    const unsubSocial = subscribeToSocialLinks(liveSocial => {
+    const unsubSocial = subscribeToSocialLinks((liveSocial) => {
       setSocialLinks(liveSocial);
     });
 
@@ -126,9 +137,9 @@ function MainAppContent() {
   useEffect(() => {
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
-    if (path.includes('/admin') || hash === '#admin') {
+    if (path.includes("/admin") || hash === "#admin") {
       if (isAdminLoggedIn) {
-        setCurrentTab('admin');
+        setCurrentTab("admin");
       } else {
         openAdminModal();
       }
@@ -136,27 +147,35 @@ function MainAppContent() {
   }, [isAdminLoggedIn, openAdminModal]);
 
   // Handle buy item trigger
-  const handleBuyItem = (item: VIP | Product, type: 'vip' | 'product') => {
+  const handleBuyItem = (item: VIP | Product, type: "vip" | "product") => {
     setCheckoutItem({ item, type });
   };
 
   // If viewing admin panel, show AdminView full screen
-  if (currentTab === 'admin') {
+  if (currentTab === "admin") {
     if (!isAdminLoggedIn) {
       openAdminModal();
-      setCurrentTab('home');
+      setCurrentTab("home");
       return null;
     }
     return (
-      <AdminView
-        onExit={() => {
-          setCurrentTab('home');
-          if (window.location.pathname.includes('/admin')) {
-            window.history.pushState(null, '', '/');
-          }
-        }}
-        onRefreshGlobalData={fetchGlobalData}
-      />
+      <Suspense
+        fallback={
+          <p role="status" className="p-8">
+            Carregando administração…
+          </p>
+        }
+      >
+        <AdminView
+          onExit={() => {
+            setCurrentTab("home");
+            if (window.location.pathname.includes("/admin")) {
+              window.history.pushState(null, "", "/");
+            }
+          }}
+          onRefreshGlobalData={fetchGlobalData}
+        />
+      </Suspense>
     );
   }
 
@@ -178,13 +197,16 @@ function MainAppContent() {
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         onOpenPlayModal={() => {
-          setCurrentTab('server');
+          setCurrentTab("server");
         }}
       />
 
       {/* Main Content */}
-      <main className="flex-1 relative w-full overflow-x-hidden">
-        {currentTab === 'home' && (
+      <main
+        id="main-content"
+        className="flex-1 relative w-full overflow-x-hidden"
+      >
+        {currentTab === "home" && (
           <HomeView
             setCurrentTab={setCurrentTab}
             settings={settings}
@@ -197,19 +219,17 @@ function MainAppContent() {
           />
         )}
 
-        {currentTab === 'server' && (
-          <ServerView settings={settings} />
-        )}
+        {currentTab === "server" && <ServerView settings={settings} />}
 
-        {currentTab === 'vip' && (
+        {currentTab === "vip" && (
           <VipView
             vips={vips}
             loading={loading}
-            onBuyVip={vip => handleBuyItem(vip, 'vip')}
+            onBuyVip={(vip) => handleBuyItem(vip, "vip")}
           />
         )}
 
-        {currentTab === 'store' && (
+        {currentTab === "store" && (
           <StoreView
             products={products}
             vips={vips}
@@ -218,37 +238,29 @@ function MainAppContent() {
           />
         )}
 
-        {currentTab === 'events' && (
-          <EventsView
-            events={events}
-            loading={loading}
-          />
+        {currentTab === "events" && (
+          <EventsView events={events} loading={loading} />
         )}
 
-        {currentTab === 'community' && (
+        {currentTab === "community" && (
           <CommunityView socialLinks={socialLinks} />
         )}
 
-        {currentTab === 'support' && (
-          <SupportView />
-        )}
+        {currentTab === "support" && <SupportView />}
 
-        {currentTab === 'profile' && (
+        {currentTab === "profile" && (
           <ProfileView setCurrentTab={setCurrentTab} />
         )}
       </main>
 
       {/* Footer */}
-      <Footer
-        setCurrentTab={setCurrentTab}
-        settings={settings}
-      />
+      <Footer setCurrentTab={setCurrentTab} settings={settings} />
 
       {/* MODALS */}
       <NicknameModal />
       <AdminLoginModal
         onSuccessRedirect={() => {
-          setCurrentTab('admin');
+          setCurrentTab("admin");
         }}
       />
 
