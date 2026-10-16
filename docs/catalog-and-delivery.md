@@ -6,7 +6,7 @@ A interface permite editar os dados comerciais, imagem, categoria, disponibilida
 
 ## Antes de pagamentos e entrega
 
-As regras atuais de Firestore permitem escrita ampla em produtos/pedidos, e o painel usa gravação direta seguida de sincronização da API. Não é seguro usar esses documentos públicos como fonte autorizada de recompensas ou status pagos. A integração futura deverá proteger essas gravações, usar autenticação administrativa verificável e manter versões aprovadas das recompensas somente no backend. Esta etapa não muda regras de produção nem introduz executor.
+O painel de produtos agora usa a API administrativa e só confirma sucesso após persistência. Entretanto, as regras atuais de Firestore ainda permitem escrita ampla em produtos/pedidos, e outros fluxos administrativos legados mantêm gravações diretas. Não é seguro usar esses documentos públicos como fonte autorizada de recompensas ou status pagos. A integração futura deverá proteger essas gravações, usar autenticação administrativa verificável e manter versões aprovadas das recompensas somente no backend. Esta etapa não muda regras de produção nem introduz executor.
 
 O backend deverá calcular valores e selecionar a recompensa por produto autorizado. Checkout nunca enviará comandos, itens ou quantidades como autoridade de entrega. Cada pagamento verificado gerará uma chave única de entrega e um snapshot aprovado. Tentativas, falhas, confirmações e reprocessamento deverão preservar essa chave. Jogadores offline ou sem espaço permanecerão pendentes; não tratar envio ou timeout como confirmação. Testes Bedrock deverão demonstrar recuperação após falha entre inserir item e confirmar recebimento antes de prometer ausência de duplicações.
 
