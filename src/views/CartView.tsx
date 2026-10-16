@@ -1,0 +1,192 @@
+import React, { useEffect, useState } from "react";
+import { Trash2, Minus, Plus, ArrowRight } from "lucide-react";
+import { useCart } from "../context/CartContext.tsx";
+import { cartKey, resolveCart, maxQuantity } from "../lib/cart.ts";
+import { CartQuote } from "../lib/cartQuote.ts";
+import { Product, VIP } from "../types/index.ts";
+const money = (cents: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+    cents / 100,
+  );
+export function CartView({
+  products,
+  vips,
+  onCheckout,
+  onShop,
+}: {
+  products: Product[];
+  vips: VIP[];
+  onCheckout: (item: VIP | Product, type: "vip" | "product") => void;
+  onShop: () => void;
+}) {
+  const { lines, remove, quantity } = useCart();
+  const [quote, setQuote] = useState<CartQuote | null>(null),
+    [error, setError] = useState(""),
+    [checking, setChecking] = useState(false);
+  const signature = JSON.stringify(lines);
+  useEffect(() => {
+    const abort = new AbortController();
+    setQuote(null);
+    setError("");
+    if (!lines.length) return;
+    setChecking(true);
+    fetch("/api/cart/quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lines }),
+      signal: abort.signal,
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok)
+          throw new Error(
+            data.error || "Não foi possível conferir o carrinho.",
+          );
+        if (!abort.signal.aborted) setQuote(data);
+      })
+      .catch((err) => {
+        if (!abort.signal.aborted) setError(err.message);
+      })
+      .finally(() => {
+        if (!abort.signal.aborted) setChecking(false);
+      });
+    return () => abort.abort();
+  }, [signature, products, vips]);
+  const resolved = resolveCart(lines, products, vips);
+  const subtotal = resolved.reduce(
+    (sum, line) =>
+      sum + (line.item ? Math.round(line.item.price * 100) * line.quantity : 0),
+    0,
+  );
+  const single =
+    resolved.length === 1 && resolved[0].quantity === 1 && resolved[0].available
+      ? resolved[0]
+      : null;
+  return (
+    <section className="nc-container nc-section">
+      <span className="eyebrow">SUA SELEÇÃO</span>
+      <h1 className="catalog-title">Carrinho de compras</h1>
+      {!lines.length ? (
+        <div className="empty-state">
+          <p>Seu carrinho está esperando sua próxima aventura.</p>
+          <button className="nc-button" onClick={onShop}>
+            Explorar loja
+            <ArrowRight size={17} />
+          </button>
+        </div>
+      ) : (
+        <div className="cart-layout">
+          <div className="cart-lines">
+            {resolved.map((line) => (
+              <article className="cart-line" key={cartKey(line)}>
+                <div>
+                  <span className="eyebrow">
+                    {line.productType === "vip" ? "PLANO VIP" : "PRODUTO"}
+                  </span>
+                  <h2>{line.item?.name || "Produto não encontrado"}</h2>
+                  {line.item && "duration" in line.item && (
+                    <p>{line.item.duration}</p>
+                  )}
+                  <p>
+                    {line.item
+                      ? money(
+                          quote?.lines.find(
+                            (quoted) =>
+                              quoted.productId === line.productId &&
+                              quoted.productType === line.productType,
+                          )?.unitCents ?? Math.round(line.item.price * 100),
+                        )
+                      : "—"}
+                  </p>
+                  {!line.available && (
+                    <p className="cart-error">
+                      Indisponível ou quantidade acima do limite.
+                    </p>
+                  )}
+                </div>
+                <div className="cart-line-actions">
+                  <div className="quantity-controls">
+                    <button
+                      aria-label={`Diminuir ${line.item?.name || "produto"}`}
+                      disabled={line.quantity <= 1}
+                      onClick={() => quantity(cartKey(line), line.quantity - 1)}
+                    >
+                      <Minus size={15} />
+                    </button>
+                    <output aria-label="Quantidade">{line.quantity}</output>
+                    <button
+                      aria-label={`Aumentar ${line.item?.name || "produto"}`}
+                      disabled={
+                        !line.item ||
+                        line.quantity >=
+                          maxQuantity(line.item, line.productType)
+                      }
+                      onClick={() => quantity(cartKey(line), line.quantity + 1)}
+                    >
+                      <Plus size={15} />
+                    </button>
+                  </div>
+                  <button
+                    className="icon-button"
+                    aria-label={`Remover ${line.item?.name || "produto"}`}
+                    onClick={() => remove(cartKey(line))}
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <aside className="cart-summary">
+            <h2>Resumo do carrinho</h2>
+            <div>
+              <span>Subtotal{!quote ? " estimado" : ""}</span>
+              <strong>{money(quote?.subtotalCents ?? subtotal)}</strong>
+            </div>
+            <div>
+              <span>Descontos</span>
+              <strong>{money(0)}</strong>
+            </div>
+            <div className="cart-total">
+              <span>Total{!quote ? " estimado" : ""}</span>
+              <strong>{money(quote?.totalCents ?? subtotal)}</strong>
+            </div>
+            <p>
+              Cupons ficam indisponíveis enquanto a cobrança utiliza links com
+              valores fixos.
+            </p>
+            {checking && (
+              <p role="status">Conferindo preços e disponibilidade…</p>
+            )}
+            {error && (
+              <p role="alert" className="cart-error">
+                {error}
+              </p>
+            )}
+            <button
+              className="nc-button"
+              disabled={!single || !quote || checking}
+              onClick={() => {
+                if (single?.item) onCheckout(single.item, single.productType);
+              }}
+            >
+              Continuar para pagamento
+              <ArrowRight size={16} />
+            </button>
+            {!single && (
+              <p>
+                O pagamento conjunto de vários produtos ainda está em
+                preparação. Seu carrinho permanece salvo; as cobranças atuais
+                aceitam uma unidade por checkout.
+              </p>
+            )}
+            <button className="text-link" onClick={onShop}>
+              Continuar comprando
+              <ArrowRight size={16} />
+            </button>
+          </aside>
+        </div>
+      )}
+    </section>
+  );
+}

@@ -1,5 +1,8 @@
+import { CartProvider, useCart } from "./context/CartContext.tsx";
+import { CartView } from "./views/CartView.tsx";
+import { useStoreCategories } from "./hooks/useStoreCategories.ts";
 import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
-import { ToastProvider } from "./context/ToastContext.tsx";
+import { ToastProvider, useToast } from "./context/ToastContext.tsx";
 import { PlayerProvider } from "./context/PlayerContext.tsx";
 import { AdminProvider, useAdmin } from "./context/AdminContext.tsx";
 
@@ -49,6 +52,9 @@ import {
 } from "./lib/firestoreSync.ts";
 
 function MainAppContent() {
+  const categories = useStoreCategories();
+  const cart = useCart();
+  const { showSuccess } = useToast();
   const [currentTab, setCurrentTab] = useState<string>("home");
   const [storeCategory, setStoreCategory] = useState("all");
   const [settings, setSettings] = useState<ServerSettings | null>(null);
@@ -149,7 +155,8 @@ function MainAppContent() {
 
   // Handle buy item trigger
   const handleBuyItem = (item: VIP | Product, type: "vip" | "product") => {
-    setCheckoutItem({ item, type });
+    cart.add(item, type);
+    showSuccess(`${item.name}: carrinho atualizado.`);
   };
 
   // If viewing admin panel, show AdminView full screen
@@ -195,6 +202,11 @@ function MainAppContent() {
 
       {/* Header with [NETCRAFTBR] and [Nick] [Menu] */}
       <Header
+        cartCount={cart.count}
+        onOpenCart={() => {
+          setCurrentTab("cart");
+          window.scrollTo(0, 0);
+        }}
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         onOpenPlayModal={() => {
@@ -211,6 +223,7 @@ function MainAppContent() {
           <HomeView
             setCurrentTab={setCurrentTab}
             settings={settings}
+            categories={categories}
             onExploreCategory={setStoreCategory}
             vips={vips}
             products={products}
@@ -221,6 +234,17 @@ function MainAppContent() {
           />
         )}
 
+        {currentTab === "cart" && (
+          <CartView
+            products={products}
+            vips={vips}
+            onShop={() => {
+              setStoreCategory("all");
+              setCurrentTab("store");
+            }}
+            onCheckout={(item, type) => setCheckoutItem({ item, type })}
+          />
+        )}
         {currentTab === "server" && <ServerView settings={settings} />}
 
         {currentTab === "vip" && (
@@ -233,6 +257,7 @@ function MainAppContent() {
 
         {currentTab === "store" && (
           <StoreView
+            categories={categories}
             initialCategory={storeCategory}
             products={products}
             vips={vips}
@@ -288,7 +313,9 @@ export default function App() {
     <ToastProvider>
       <PlayerProvider>
         <AdminProvider>
-          <MainAppContent />
+          <CartProvider>
+            <MainAppContent />
+          </CartProvider>
         </AdminProvider>
       </PlayerProvider>
     </ToastProvider>

@@ -2,7 +2,7 @@ export type OrderStatus = 'Pendente' | 'Pago' | 'Cancelado' | 'Entregue';
 export type PaymentMethod = 'LIVEPIX' | 'PIX' | 'Cartao' | 'Boleto';
 export type EventStatus = 'Próximo' | 'Em andamento' | 'Encerrado';
 export type NewsCategory = 'Atualização' | 'Evento' | 'Manutenção' | 'Novidade';
-export type ProductCategory = 'vips' | 'kits' | 'itens' | 'cosmeticos' | 'pacotes' | 'outros';
+export type ProductCategory = 'vips' | 'kits' | 'itens' | 'cosmeticos' | 'pacotes' | 'outros' | (string & {});
 
 export interface ActiveVip {
   vipId: string;
@@ -24,6 +24,7 @@ export interface Player {
 }
 
 export interface VIP {
+  categoryId?: string;
   id: string;
   name: string;
   price: number;
@@ -47,6 +48,9 @@ export interface Product {
   name: string;
   category: ProductCategory;
   rewardDraft?: RewardDraft;
+  featured?: boolean;
+  allowQuantity?: boolean;
+  maxQuantity?: number;
   price: number;
   description: string;
   image: string;

@@ -1,5 +1,5 @@
 import React from "react";
-import { Crown, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { VIP, Product } from "../types/index.ts";
 export function ProductCard({
   item,
@@ -19,7 +19,11 @@ export function ProductCard({
         ) ? (
           <img src={item.image} alt={item.name} loading="lazy" />
         ) : (
-          <Crown size={64} />
+          <img
+            src={vip ? "/categories/vips.webp" : "/categories/items.webp"}
+            alt={item.name}
+            loading="lazy"
+          />
         )}
         <span className="product-tag">
           {vip ? item.duration : item.category}
@@ -43,8 +47,8 @@ export function ProductCard({
             ))}
           </ul>
         </details>
-        <button className="nc-button" onClick={onBuy}>
-          Escolher {vip ? "VIP" : "produto"}
+        <button className="nc-button" disabled={!item.active} onClick={onBuy}>
+          Adicionar ao carrinho
           <ArrowUpRight size={17} />
         </button>
       </div>

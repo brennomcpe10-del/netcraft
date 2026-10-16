@@ -1,3 +1,5 @@
+import {quoteCart,validateCartRequest} from '../../src/lib/cartQuote.ts';
+import {validateCategories} from '../../src/lib/storeCategories.ts';
 import {validateRewardDraft} from '../../src/lib/rewardDraft.ts';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import crypto from 'crypto';
@@ -261,6 +263,7 @@ apiRouter.post('/admin/vips', requireAdmin, async (req, res) => {
     image: image || 'crown',
     order: Number(order) || 1,
     active: active !== false,
+    categoryId: typeof req.body.categoryId === "string" ? req.body.categoryId : "vips",
     isPopular: !!req.body.isPopular,
     livepixUrl: livepixUrl ? String(livepixUrl).trim() : '',
     pixUrl: pixUrl ? String(pixUrl).trim() : ''
@@ -325,6 +328,21 @@ apiRouter.delete('/admin/vips/:id', requireAdmin, async (req, res) => {
 // -------------------------------------------------------------
 // STORE PRODUCTS
 // -------------------------------------------------------------
+// Read-only cart quote. Payment and fulfillment remain disabled for grouped carts.
+apiRouter.post('/cart/quote', async (req,res)=>{
+ try {
+  validateCartRequest(req.body.lines);
+  if(req.body.couponCode) return res.status(409).json({error:'Cupons indisponíveis para cobranças fixas.'});
+  const {db}=await import('../../src/lib/firebase.ts');
+  const {doc,getDoc}=await import('firebase/firestore');
+  const items=await Promise.all(req.body.lines.map(async(line:any)=>{const snap=await getDoc(doc(db,line.productType==='vip'?'vips':'products',line.productId));return snap.exists()?{...snap.data(),id:snap.id}:null;}));
+  return res.json(quoteCart(req.body.lines,items as any));
+ }catch(error){return res.status(400).json({error:error instanceof Error?error.message:'Não foi possível conferir o carrinho.'});}
+});
+apiRouter.put('/admin/store-categories',requireAdmin,async(req,res)=>{
+ try {validateCategories(req.body.categories);const {db}=await import('../../src/lib/firebase.ts');const {doc,setDoc}=await import('firebase/firestore');await setDoc(doc(db,'settings','storeCategories'),{categories:req.body.categories});return res.json({success:true});}catch(error){return res.status(400).json({error:error instanceof Error?error.message:'Falha ao salvar categorias.'});}
+});
+
 apiRouter.get('/products', async (req, res) => {
   const includeInactive = req.query.all === 'true';
   const category = typeof req.query.category === 'string' ? req.query.category : undefined;
@@ -334,7 +352,7 @@ apiRouter.get('/products', async (req, res) => {
 
 apiRouter.post('/admin/products', requireAdmin, async (req, res) => {
   try { validateRewardDraft(req.body.rewardDraft); } catch(error) { return res.status(400).json({error: error instanceof Error ? error.message : 'Recompensa inválida.'}); }
-  const { id, name, category, price, description, image, active, highlights, order, livepixUrl, pixUrl, rewardDraft } = req.body;
+  const { id, name, category, price, description, image, active, highlights, order, livepixUrl, pixUrl, rewardDraft, allowQuantity, maxQuantity, featured } = req.body;
   if (!name || !category || price == null) {
     return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
   }
@@ -342,6 +360,9 @@ apiRouter.post('/admin/products', requireAdmin, async (req, res) => {
   const newProd = dbStore.createProduct({
     ...(id ? { id: String(id).trim() } : {}),
     ...(rewardDraft ? {rewardDraft} : {}),
+    allowQuantity: allowQuantity !== false,
+    maxQuantity: Math.max(1,Math.min(64,Math.floor(Number(maxQuantity)||64))),
+    featured: featured === true,
     name,
     category,
     price: Number(price),

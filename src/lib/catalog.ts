@@ -23,7 +23,7 @@ export function selectCatalog(
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
   return [
-    ...vips.map((item) => ({ item, type: "vip" as const, category: "vips" })),
+    ...vips.map((item) => ({ item, type: "vip" as const, category: item.categoryId || "vips" })),
     ...products.map((item) => ({
       item,
       type: "product" as const,

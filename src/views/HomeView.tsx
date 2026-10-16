@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowRight, Copy, Play, Shield, Users, Swords } from "lucide-react";
+import { ArrowRight, Copy } from "lucide-react";
 import {
   ServerSettings,
   VIP,
@@ -8,6 +8,11 @@ import {
   NewsArticle,
   SocialLink,
 } from "../types/index.ts";
+import {
+  StoreCategory,
+  defaultStoreCategories,
+} from "../lib/storeCategories.ts";
+import { CategoryGrid } from "../components/CategoryGrid.tsx";
 import { ProductCard } from "../components/ProductCard.tsx";
 import { useToast } from "../context/ToastContext.tsx";
 interface Props {
@@ -18,68 +23,103 @@ interface Props {
   events: ServerEvent[];
   news: NewsArticle[];
   socialLinks: SocialLink[];
-  onExploreCategory?: (category: string) => void;
-  onBuyItem: (i: VIP | Product, t: "vip" | "product") => void;
+  categories?: StoreCategory[];
+  onExploreCategory?: (id: string) => void;
+  onBuyItem: (item: VIP | Product, type: "vip" | "product") => void;
 }
 export function HomeView({
   setCurrentTab,
   settings,
   vips,
   products,
+  categories = defaultStoreCategories,
   onExploreCategory,
-  events,
-  news,
-  socialLinks,
   onBuyItem,
 }: Props) {
   const { showSuccess, showError } = useToast();
   const ip = settings?.ip || "netcraftbr.srvmc.com",
     port = settings?.port || 25673;
-  const copy = async (t: string) => {
+  const select = (id: string) => {
+    onExploreCategory?.(id);
+    setCurrentTab("store");
+    window.scrollTo(0, 0);
+  };
+  const copy = async (value: string) => {
     try {
-      await navigator.clipboard.writeText(t);
+      await navigator.clipboard.writeText(value);
       showSuccess("Copiado!");
     } catch {
-      showError("Não foi possível copiar. Selecione o endereço.");
+      showError("Não foi possível copiar. Selecione o endereço abaixo.");
     }
   };
-  const discord = socialLinks.find((s) => s.active && s.platform === "discord");
+  const featured = [
+    ...vips
+      .filter((v) => v.active && v.isPopular)
+      .map((item) => ({ item, type: "vip" as const })),
+    ...products
+      .filter((p) => p.active && p.featured)
+      .map((item) => ({ item, type: "product" as const })),
+  ]
+    .sort((a, b) => a.item.order - b.item.order)
+    .slice(0, 4);
   return (
-    <div>
-      <section className="nc-hero">
-        <img
-          className="hero-image"
-          src="/hero_landscape.webp"
-          alt="Paisagem de Minecraft com montanhas e construções"
-          fetchPriority="high"
-        />
-        <div className="hero-shade" />
-        <div className="hero-content nc-container">
-          <span className="eyebrow">SEU PRÓXIMO MUNDO • BEDROCK</span>
+    <div className="shop-home">
+      <section className="shop-banner">
+        <img src="/hero_landscape.webp" alt="" fetchPriority="high" />
+        <div className="nc-container">
+          <span className="eyebrow">LOJA OFICIAL • MINECRAFT BEDROCK</span>
           <h1>
-            Uma nova aventura.
-            <br />
-            <em>A sua história.</em>
+            NETCRAFT<span>BR</span> <em>Loja</em>
           </h1>
-          <p>Construa seu lugar, encontre seu clã e viva o NetCraftBR.</p>
-          <div className="hero-buttons">
-            <button
-              className="nc-button"
-              onClick={() => setCurrentTab("server")}
-            >
-              <Play size={17} />
-              JOGAR AGORA
-            </button>
-            <button
-              className="nc-button secondary"
-              onClick={() => {
-                onExploreCategory?.("all");
-                setCurrentTab("store");
-              }}
-            >
-              EXPLORAR LOJA
+          <p>
+            Seu próximo equipamento. Sua próxima aventura.
+            <br />
+            Explore VIPs, kits e itens para jogar do seu jeito.
+          </p>
+          <a href="#store-categories" className="nc-button">
+            Explorar categorias
+            <ArrowRight size={17} />
+          </a>
+        </div>
+      </section>
+      <section className="nc-container shop-section" id="store-categories">
+        <div className="shop-section-heading">
+          <span className="eyebrow">ESCOLHA SUA PRÓXIMA AVENTURA</span>
+          <h2>CATEGORIAS DA LOJA</h2>
+        </div>
+        <CategoryGrid
+          categories={categories}
+          products={products}
+          vips={vips}
+          onSelect={select}
+        />
+      </section>
+      {featured.length > 0 && (
+        <section className="nc-container shop-section">
+          <div className="section-heading">
+            <h2>Produtos em destaque</h2>
+            <button className="text-link" onClick={() => select("all")}>
+              Ver loja completa
               <ArrowRight size={17} />
             </button>
+          </div>
+          <div className="catalog-grid">
+            {featured.map(({ item, type }) => (
+              <ProductCard
+                key={`${type}-${item.id}`}
+                item={item}
+                onBuy={() => onBuyItem(item, type)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+      <section className="nc-container shop-section">
+        <div className="shop-connect">
+          <div>
+            <span className="eyebrow">NOS ENCONTRAMOS NO JOGO</span>
+            <h2>Conecte-se ao NetCraftBR</h2>
+            <p>Adicione o servidor no Minecraft Bedrock.</p>
           </div>
           <div className="connection-bar">
             <button onClick={() => copy(ip)} aria-label="Copiar IP">
@@ -87,7 +127,7 @@ export function HomeView({
                 <small>ENDEREÇO IP</small>
                 <strong>{ip}</strong>
               </span>
-              <Copy size={15} />
+              <Copy size={16} />
             </button>
             <button
               onClick={() => copy(String(port))}
@@ -97,254 +137,59 @@ export function HomeView({
                 <small>PORTA</small>
                 <strong>{port}</strong>
               </span>
-              <Copy size={15} />
+              <Copy size={16} />
             </button>
           </div>
         </div>
       </section>
-      <section className="nc-container nc-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">DÊ UM UPGRADE NA SUA JORNADA</span>
-            <h2>Seu próximo nível.</h2>
-          </div>
-          <button className="text-link" onClick={() => setCurrentTab("vip")}>
-            Todos os VIPs
-            <ArrowRight size={17} />
-          </button>
+      <section className="nc-container shop-section shop-help">
+        <div>
+          <span className="eyebrow">PRECISA DE AJUDA?</span>
+          <h2>Fale com a equipe.</h2>
+          <p>
+            Tire dúvidas sobre os produtos e acompanhe sua compra pelo perfil.
+          </p>
         </div>
-        <div className="catalog-grid">
-          {vips
-            .filter((v) => v.active)
-            .sort((a, b) => a.order - b.order)
-            .slice(0, 3)
-            .map((v) => (
-              <ProductCard
-                key={v.id}
-                item={v}
-                onBuy={() => onBuyItem(v, "vip")}
-              />
-            ))}
-        </div>
-        {!vips.some((v) => v.active) && (
-          <p className="empty-state">Consulte os planos disponíveis na loja.</p>
-        )}
-      </section>
-      <section className="nc-container nc-section">
-        <span className="eyebrow">EXPLORE A LOJA</span>
-        <h2>Equipe sua próxima aventura.</h2>
-        <div className="category-grid">
-          {[
-            {
-              id: "vips",
-              title: "VIPs",
-              text: "Benefícios para a sua jornada.",
-            },
-            {
-              id: "kits",
-              title: "Kits",
-              text: "Tudo junto para o próximo desafio.",
-            },
-            {
-              id: "itens",
-              title: "Itens especiais",
-              text: "Encontre seu próximo equipamento.",
-            },
-            {
-              id: "cosmeticos",
-              title: "Cosméticos",
-              text: "Mais personalidade no seu mundo.",
-            },
-            {
-              id: "pacotes",
-              title: "Pacotes",
-              text: "Explore combinações na loja.",
-            },
-          ].map((c) => (
-            <button
-              key={c.id}
-              className="category-card"
-              onClick={() => {
-                onExploreCategory?.(c.id);
-                setCurrentTab("store");
-              }}
-            >
-              <span className="eyebrow">
-                {c.id === "vips"
-                  ? vips.filter((v) => v.active).length
-                  : products.filter((p) => p.active && p.category === c.id)
-                      .length}{" "}
-                disponíveis
-              </span>
-              <h3>{c.title}</h3>
-              <p>{c.text}</p>
-              <span className="text-link">
-                Explorar <ArrowRight size={16} />
-              </span>
-            </button>
-          ))}
-        </div>
-        {products.some(
-          (p) => p.active && (p.category === "kits" || p.category === "itens"),
-        ) && (
-          <div className="catalog-grid home-products">
-            {products
-              .filter(
-                (p) =>
-                  p.active && (p.category === "kits" || p.category === "itens"),
-              )
-              .sort((a, b) => a.order - b.order)
-              .slice(0, 3)
-              .map((p) => (
-                <ProductCard
-                  key={p.id}
-                  item={p}
-                  onBuy={() => onBuyItem(p, "product")}
-                />
-              ))}
-          </div>
-        )}
-      </section>
-      <section className="nc-container nc-section">
-        <span className="eyebrow">MUITO ALÉM DE SOBREVIVER</span>
-        <h2>Um mundo de possibilidades.</h2>
-        <div className="feature-grid">
-          {[
-            {
-              Icon: Shield,
-              title: "Seu espaço, sua construção",
-              text: "Proteja seu terreno e construa a sua história.",
-            },
-            {
-              Icon: Users,
-              title: "Jogue junto",
-              text: "Reúna seu clã, crie alianças e encontre novos amigos.",
-            },
-            {
-              Icon: Swords,
-              title: "Viva o desafio",
-              text: "Economia, batalhas e eventos para movimentar sua jornada.",
-            },
-          ].map(({ Icon, title, text }) => (
-            <article className="feature-card" key={title}>
-              <Icon size={25} />
-              <h3>{title}</h3>
-              <p>{text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="nc-container nc-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">ACONTECE NO NETCRAFT</span>
-            <h2>Fique por dentro.</h2>
-          </div>
-          <button className="text-link" onClick={() => setCurrentTab("events")}>
-            Eventos
-            <ArrowRight size={17} />
-          </button>
-        </div>
-        <div className="updates-grid">
-          {events
-            .filter((e) => e.published && e.status !== "Encerrado")
-            .slice(0, 2)
-            .map((e) => (
-              <button
-                className="update-card"
-                key={e.id}
-                onClick={() => setCurrentTab("events")}
-              >
-                {e.image && <img src={e.image} alt="" loading="lazy" />}
-                <span className="eyebrow">
-                  {e.status} • {e.date}
-                </span>
-                <h3>{e.name}</h3>
-                <p>{e.description}</p>
-              </button>
-            ))}
-          {news
-            .filter((n) => n.published)
-            .slice(0, 2)
-            .map((n) => (
-              <article className="update-card" key={n.id}>
-                {n.image && <img src={n.image} alt="" loading="lazy" />}
-                <span className="eyebrow">{n.category}</span>
-                <h3>{n.title}</h3>
-                <details>
-                  <summary>{n.summary || "Ler novidade"}</summary>
-                  <p>{n.content}</p>
-                </details>
-              </article>
-            ))}
-        </div>
-        {!events.some((e) => e.published && e.status !== "Encerrado") &&
-          !news.some((n) => n.published) && (
-            <p className="empty-state">
-              Novos eventos e novidades serão anunciados aqui.
-            </p>
-          )}
-      </section>
-      <section className="nc-container">
-        <div className="community-banner">
-          <div>
-            <span className="eyebrow">A AVENTURA CONTINUA FORA DO JOGO</span>
-            <h2>Encontre sua comunidade.</h2>
-            <p>Converse com a galera e acompanhe as novidades.</p>
-          </div>
-          {discord ? (
-            <a
-              className="nc-button"
-              href={discord.url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Entrar no Discord
-              <ArrowRight size={17} />
-            </a>
-          ) : (
-            <button
-              className="nc-button"
-              onClick={() => setCurrentTab("community")}
-            >
-              Conhecer comunidade
-              <ArrowRight size={17} />
-            </button>
-          )}
-        </div>
+        <button
+          className="nc-button secondary"
+          onClick={() => setCurrentTab("support")}
+        >
+          Acessar suporte
+          <ArrowRight size={17} />
+        </button>
       </section>
       <section className="nc-container nc-section faq-section">
         <div>
-          <span className="eyebrow">ANTES DE COMEÇAR</span>
-          <h2>Alguma dúvida?</h2>
-          <button
-            className="text-link"
-            onClick={() => setCurrentTab("support")}
-          >
-            Falar com o suporte
-            <ArrowRight size={17} />
-          </button>
+          <span className="eyebrow">DÚVIDAS SOBRE A LOJA</span>
+          <h2>Perguntas frequentes</h2>
         </div>
         <div>
           <details>
-            <summary>Como entrar no NetCraftBR?</summary>
+            <summary>Como escolher um produto?</summary>
             <p>
-              No Minecraft Bedrock, acesse Jogar → Servidores → Adicionar
-              servidor. Informe {ip} e a porta {port}.
+              Abra uma categoria, confira os benefícios e adicione o produto ao
+              carrinho. Você pode revisar sua seleção antes de continuar.
+            </p>
+          </details>
+          <details>
+            <summary>Como acompanho um pedido?</summary>
+            <p>
+              Acesse Meu perfil com sua gamertag. O pagamento será conferido
+              antes da entrega pela equipe.
+            </p>
+          </details>
+          <details>
+            <summary>Posso pagar vários produtos juntos?</summary>
+            <p>
+              O carrinho mantém sua seleção. A cobrança conjunta ainda está em
+              preparação; os links atuais aceitam uma unidade por checkout.
             </p>
           </details>
           <details>
             <summary>Preciso de VIP para jogar?</summary>
             <p>
-              Você pode conhecer o servidor sem comprar um plano. Veja os
-              benefícios de cada VIP na loja.
-            </p>
-          </details>
-          <details>
-            <summary>Como acompanho minha compra?</summary>
-            <p>
-              Acesse Meu perfil com sua gamertag para consultar pedidos. A
-              confirmação e a entrega seguem o processo atual da equipe.
+              Você pode entrar no servidor sem comprar um plano. Confira os
+              benefícios de cada produto na loja.
             </p>
           </details>
         </div>

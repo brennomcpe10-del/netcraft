@@ -1,7 +1,11 @@
+import {
+  StoreCategory,
+  defaultStoreCategories,
+} from "../lib/storeCategories.ts";
 import React, { useState } from "react";
 import { Product, VIP } from "../types/index.ts";
 import { ProductCard } from "../components/ProductCard.tsx";
-import { catalogCategories, selectCatalog } from "../lib/catalog.ts";
+import { selectCatalog } from "../lib/catalog.ts";
 import { Search } from "lucide-react";
 
 interface StoreViewProps {
@@ -9,6 +13,7 @@ interface StoreViewProps {
   vips: VIP[];
   loading: boolean;
   initialCategory?: string;
+  categories?: StoreCategory[];
   onBuyItem: (item: Product | VIP, type: "product" | "vip") => void;
 }
 
@@ -18,12 +23,19 @@ export const StoreView: React.FC<StoreViewProps> = ({
   loading,
   onBuyItem,
   initialCategory = "all",
+  categories: managedCategories = defaultStoreCategories,
 }) => {
   const [selectedCategory, setSelectedCategory] =
     useState<string>(initialCategory);
   const [search, setSearch] = useState("");
 
-  const categories = catalogCategories;
+  const categories = [
+    { id: "all", label: "Todos" },
+    ...managedCategories
+      .filter((c) => c.active)
+      .sort((a, b) => a.order - b.order)
+      .map((c) => ({ id: c.id, label: c.title })),
+  ];
   const filteredItems = selectCatalog(products, vips, selectedCategory, search);
 
   return (

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Menu, X, User, Play, ArrowUpRight } from "lucide-react";
+import { Menu, X, User, ShoppingCart, ArrowUpRight } from "lucide-react";
 import { usePlayer } from "../context/PlayerContext.tsx";
 import { useAdmin } from "../context/AdminContext.tsx";
 export const Brand = () => (
@@ -15,10 +15,14 @@ export function Header({
   currentTab,
   setCurrentTab,
   onOpenPlayModal,
+  cartCount = 0,
+  onOpenCart,
 }: {
   currentTab: string;
   setCurrentTab: (t: string) => void;
   onOpenPlayModal?: () => void;
+  cartCount?: number;
+  onOpenCart?: () => void;
 }) {
   const { player, openLoginModal } = usePlayer();
   const { isAdminLoggedIn, openAdminModal } = useAdmin();
@@ -80,32 +84,38 @@ export function Header({
             <Brand />
           </button>
           <nav className="desktop-nav" aria-label="Principal">
-            {nav.slice(0, 4).map(([id, label]) => (
-              <button
-                key={id}
-                aria-current={currentTab === id ? "page" : undefined}
-                onClick={() => select(id)}
-              >
-                {label}
-              </button>
-            ))}
+            {nav
+              .filter(([id]) => id !== "vip")
+              .slice(0, 4)
+              .map(([id, label]) => (
+                <button
+                  key={id}
+                  aria-current={currentTab === id ? "page" : undefined}
+                  onClick={() => select(id)}
+                >
+                  {label}
+                </button>
+              ))}
           </nav>
           <div className="header-actions">
             <button
-              className="nc-button header-play"
-              onClick={() =>
-                onOpenPlayModal ? onOpenPlayModal() : select("server")
-              }
-            >
-              <Play size={14} />
-              Jogar
-            </button>
-            <button
-              className="icon-button"
+              className="icon-button header-login"
               aria-label={player ? "Meu perfil" : "Entrar"}
               onClick={() => (player ? select("profile") : openLoginModal())}
             >
-              <User size={19} />
+              <User size={17} />
+              <span className="header-login-label">
+                {player ? "Perfil" : "Entrar"}
+              </span>
+            </button>
+            <button
+              className="nc-button header-cart"
+              aria-label={`Carrinho: ${cartCount} produtos`}
+              onClick={onOpenCart}
+            >
+              <ShoppingCart size={17} />
+              <span>Carrinho</span>
+              <b>{cartCount}</b>
             </button>
             <button
               ref={trigger}

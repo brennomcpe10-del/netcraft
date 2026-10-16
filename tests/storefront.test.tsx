@@ -154,3 +154,150 @@ test("editor displays real Core identifiers as suggestions and clearly marks del
   assert.ok(html.includes("entrega automática ainda não está ativa"));
   assert.ok(html.includes('value="32"'));
 });
+
+import { CategoryGrid } from "../src/components/CategoryGrid.tsx";
+import {
+  defaultStoreCategories,
+  validateCategories,
+  visibleCategories,
+} from "../src/lib/storeCategories.ts";
+import {
+  addCartLine,
+  sanitizeCart,
+  resolveCart,
+  cartKey,
+} from "../src/lib/cart.ts";
+import { quoteCart, validateCartRequest } from "../src/lib/cartQuote.ts";
+test("store homepage categories hide empty and inactive groups and preserve category ordering", () => {
+  const categories = [
+    { ...defaultStoreCategories[0], order: 2 },
+    { ...defaultStoreCategories[1], order: 1 },
+    { ...defaultStoreCategories[2], active: false },
+  ];
+  const kit = { ...product, category: "kits" };
+  assert.deepEqual(
+    visibleCategories(categories, [kit], [vip]).map((c) => c.id),
+    ["kits", "vips"],
+  );
+  const html = renderToStaticMarkup(
+    <CategoryGrid
+      categories={defaultStoreCategories}
+      products={[]}
+      vips={[vip]}
+      onSelect={() => {}}
+    />,
+  );
+  assert.ok(html.includes("PLANOS VIPS"));
+  assert.ok(html.includes("/categories/vips.webp"));
+  assert.ok(!html.includes("KIT PVP"));
+  assert.ok(!html.includes("0 disponíveis"));
+  assert.ok(!html.includes("Explorer"));
+});
+test("custom categories group products and VIPs without rewriting commercial data", () => {
+  const custom = {
+    id: "pvp-pro",
+    title: "KIT PVP PRO",
+    description: "Equipe-se",
+    image: "/categories/items.webp",
+    order: 1,
+    active: true,
+  };
+  validateCategories([custom]);
+  assert.equal(
+    selectCatalog(
+      [{ ...product, category: custom.id }],
+      [{ ...vip, categoryId: custom.id }],
+      custom.id,
+    ).length,
+    2,
+  );
+  assert.throws(() => validateCategories([custom, custom]));
+  assert.throws(() =>
+    validateCategories([{ ...custom, image: "javascript:alert(1)" }]),
+  );
+});
+test("cart mixes VIPs and items, increments permitted quantities and ignores inactive products", () => {
+  let cart = addCartLine([], vip, "vip");
+  cart = addCartLine(cart, vip, "vip");
+  assert.equal(cart[0].quantity, 1);
+  cart = addCartLine(cart, { ...product, maxQuantity: 2 }, "product");
+  cart = addCartLine(cart, { ...product, maxQuantity: 2 }, "product");
+  cart = addCartLine(cart, { ...product, maxQuantity: 2 }, "product");
+  assert.equal(cart.length, 2);
+  assert.equal(cart[1].quantity, 2);
+  assert.equal(
+    addCartLine(cart, { ...product, id: "off", active: false }, "product")
+      .length,
+    2,
+  );
+  assert.equal(
+    addCartLine([], { ...product, allowQuantity: false }, "product")[0]
+      .quantity,
+    1,
+  );
+  assert.notEqual(cartKey(cart[0]), cartKey(cart[1]));
+});
+test("stored cart roundtrip discards client prices and rejects malformed or duplicate lines", () => {
+  const cart = [
+    { productId: vip.id, productType: "vip", quantity: 1, price: 0 },
+    { productId: product.id, productType: "product", quantity: 2 },
+  ];
+  const clean = sanitizeCart(JSON.parse(JSON.stringify(cart)));
+  assert.equal(clean.length, 2);
+  assert.ok(!("price" in clean[0]));
+  assert.equal(
+    sanitizeCart([cart[0], cart[0], { ...cart[1], quantity: -1 }]).length,
+    1,
+  );
+  assert.equal(
+    resolveCart(clean, [{ ...product, active: false }], [vip])[1].available,
+    false,
+  );
+});
+test("server quote uses catalog prices in cents and rejects unavailable products, quantity and command injection", () => {
+  const lines = [
+    { productId: vip.id, productType: "vip" as const, quantity: 1 },
+    { productId: product.id, productType: "product" as const, quantity: 3 },
+  ];
+  const quote = quoteCart(lines, [vip, product]);
+  assert.equal(quote.totalCents, 3460);
+  assert.equal(quote.discountCents, 0);
+  assert.equal(quote.combinedPaymentAvailable, false);
+  assert.throws(() => quoteCart(lines, [vip, { ...product, active: false }]));
+  assert.throws(() => quoteCart([{ ...lines[0], quantity: 2 }], [vip]));
+  assert.throws(() =>
+    quoteCart([lines[1]], [{ ...product, allowQuantity: false }]),
+  );
+  assert.throws(() => validateCartRequest([{ ...lines[0], amount: 0 }]));
+  assert.throws(() =>
+    validateCartRequest([{ ...lines[0], command: "give @a diamond 64" }]),
+  );
+  assert.throws(() => validateCartRequest([lines[0], lines[0]]));
+});
+
+import { HomeView } from "../src/views/HomeView.tsx";
+import { ToastProvider } from "../src/context/ToastContext.tsx";
+test("home leads with categories, omits individual unfeatured VIPs, and places connection below catalog", () => {
+  const html = renderToStaticMarkup(
+    <ToastProvider>
+      <HomeView
+        setCurrentTab={() => {}}
+        settings={null}
+        vips={[vip]}
+        products={[product]}
+        events={[]}
+        news={[]}
+        socialLinks={[]}
+        onBuyItem={() => {}}
+      />
+    </ToastProvider>,
+  );
+  assert.ok(
+    html.indexOf("CATEGORIAS DA LOJA") <
+      html.indexOf("Conecte-se ao NetCraftBR"),
+  );
+  assert.ok(!html.includes("Explorer"));
+  assert.ok(!html.includes("Seu próximo nível"));
+  assert.ok(html.includes("netcraftbr.srvmc.com"));
+  assert.ok(!html.includes("Produtos em destaque"));
+});

@@ -1,3 +1,5 @@
+import {CategoryManager} from "../components/CategoryManager.tsx";
+import {useStoreCategories} from "../hooks/useStoreCategories.ts";
 import {RewardEditor,validateRewardDraft} from "../components/RewardEditor.tsx";
 import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../context/AdminContext.tsx';
@@ -61,11 +63,12 @@ interface AdminViewProps {
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalData }) => {
+  const managedCategories=useStoreCategories();
   const { adminToken, logoutAdmin } = useAdmin();
   const { showSuccess, showError } = useToast();
 
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'vips' | 'orders' | 'coupons' | 'players' | 'store' | 'events' | 'news' | 'community' | 'server' | 'settings'
+    'categories' | 'dashboard' | 'vips' | 'orders' | 'coupons' | 'players' | 'store' | 'events' | 'news' | 'community' | 'server' | 'settings'
   >('dashboard');
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -662,6 +665,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     { id: 'coupons', label: 'Cupons' },
     { id: 'players', label: 'Jogadores' },
     { id: 'store', label: 'Loja' },
+    { id: 'categories', label: 'Categorias' },
     { id: 'events', label: 'Eventos' },
     { id: 'news', label: 'Notícias' },
     { id: 'community', label: 'Comunidade' },
@@ -724,6 +728,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           })}
         </div>
 
+        {activeTab === 'categories' && <CategoryManager/>}
         {/* ============================================================== */}
         {/* 1. DASHBOARD */}
         {/* ============================================================== */}
@@ -2044,6 +2049,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
             </h3>
 
             <form onSubmit={handleSaveVip} className="space-y-3">
+              <label className="block">Categoria na loja<select value={editingVip.categoryId||'vips'} onChange={e=>setEditingVip({...editingVip,categoryId:e.target.value})} className="w-full px-3 py-2 bg-[#090b10] border border-white/10 rounded-lg">{managedCategories.map(c=><option key={c.id} value={c.id}>{c.title}</option>)}</select></label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] text-zinc-400 mb-1">Nome do VIP</label>
@@ -2212,12 +2218,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                     onChange={e => setEditingProduct({ ...editingProduct, category: e.target.value as ProductCategory })}
                     className="w-full px-3 py-2 bg-[#090b10] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
                   >
-                    <option value="kits">Kits</option>
-                    <option value="itens">Itens</option>
-                    <option value="cosmeticos">Cosméticos</option>
-                    <option value="vips">VIPs</option>
-                    <option value="pacotes">Pacotes</option>
-                    <option value="outros">Outros</option>
+                    {managedCategories.map(c=><option key={c.id} value={c.id}>{c.title}</option>)}
+                    {!managedCategories.some(c=>c.id===editingProduct.category)&&editingProduct.category&&<option value={editingProduct.category}>{editingProduct.category} (sem categoria)</option>}
                   </select>
                 </div>
                 <div>
@@ -2232,6 +2234,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
               </div>
 
               <div><label className="block text-[11px] text-zinc-400 mb-1">Imagem do produto (URL)</label><input type="text" value={editingProduct.image || ''} onChange={e=>setEditingProduct({...editingProduct,image:e.target.value})} placeholder="https://... ou /imagem.webp" className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white"/></div>
+              <div className="space-y-2"><label className="flex items-center gap-2"><input type="checkbox" checked={editingProduct.featured===true} onChange={e=>setEditingProduct({...editingProduct,featured:e.target.checked})}/>Produto em destaque na página inicial</label><label className="flex items-center gap-2"><input type="checkbox" checked={editingProduct.allowQuantity!==false} onChange={e=>setEditingProduct({...editingProduct,allowQuantity:e.target.checked})}/>Permitir várias unidades no carrinho</label><label>Limite de unidades<input type="number" min={1} max={64} value={editingProduct.maxQuantity||64} onChange={e=>setEditingProduct({...editingProduct,maxQuantity:Number(e.target.value)})} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg"/></label></div>
               <RewardEditor value={editingProduct.rewardDraft} onChange={rewardDraft=>setEditingProduct({...editingProduct,rewardDraft})}/>
               <div>
                 <label className="block text-[11px] text-zinc-400 mb-1">Descrição</label>
