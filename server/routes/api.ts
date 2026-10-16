@@ -1,3 +1,4 @@
+import {validateRewardDraft} from '../../src/lib/rewardDraft.ts';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import crypto from 'crypto';
 import { dbStore } from '../data/store.ts';
@@ -6,14 +7,14 @@ import type { Player } from '../../src/types/index.ts';
 export const apiRouter = express.Router();
 
 // The secret keyword is strictly handled on the server side
-// Default: 'brennomcpe' as instructed by the server owner
-const ADMIN_SECRET = process.env.ADMIN_KEYWORD || 'brennomcpe';
+const ADMIN_SECRET = process.env.ADMIN_KEYWORD || '';
 
 // In-memory set of explicitly revoked admin tokens
 const revokedAdminTokens = new Set<string>();
 
 // Generate cryptographic HMAC-signed token
 export function generateAdminToken(): string {
+  if (!ADMIN_SECRET) throw new Error('Segredo administrativo não configurado.');
   const timestamp = Date.now().toString();
   const nonce = crypto.randomBytes(16).toString('hex');
   const payload = `${timestamp}.${nonce}`;
@@ -23,11 +24,9 @@ export function generateAdminToken(): string {
 
 // Validate admin token (cryptographically verified, immune to server restarts and multi-instance statelessness)
 export function isValidAdminToken(token: string): boolean {
-  if (!token || typeof token !== 'string') return false;
+  if (!ADMIN_SECRET || !token || typeof token !== 'string') return false;
   if (revokedAdminTokens.has(token)) return false;
 
-  // Master recovery fallback: allow direct keyword
-  if (token === ADMIN_SECRET) return true;
 
   // Validate HMAC token format: adm_<timestamp>.<nonce>.<signature>
   if (token.startsWith('adm_')) {
@@ -78,6 +77,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
 // ADMIN AUTHENTICATION
 // -------------------------------------------------------------
 apiRouter.post('/admin/login', (req, res) => {
+  if (!ADMIN_SECRET) return res.status(503).json({error:'Acesso administrativo indisponível: configure o segredo no backend.'});
   const { password } = req.body;
   if (!password || typeof password !== 'string') {
     return res.status(400).json({ error: 'Credencial não informada.' });
@@ -333,13 +333,15 @@ apiRouter.get('/products', async (req, res) => {
 });
 
 apiRouter.post('/admin/products', requireAdmin, async (req, res) => {
-  const { id, name, category, price, description, image, active, highlights, order, livepixUrl, pixUrl } = req.body;
+  try { validateRewardDraft(req.body.rewardDraft); } catch(error) { return res.status(400).json({error: error instanceof Error ? error.message : 'Recompensa inválida.'}); }
+  const { id, name, category, price, description, image, active, highlights, order, livepixUrl, pixUrl, rewardDraft } = req.body;
   if (!name || !category || price == null) {
     return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
   }
 
   const newProd = dbStore.createProduct({
     ...(id ? { id: String(id).trim() } : {}),
+    ...(rewardDraft ? {rewardDraft} : {}),
     name,
     category,
     price: Number(price),
@@ -364,6 +366,7 @@ apiRouter.post('/admin/products', requireAdmin, async (req, res) => {
 });
 
 apiRouter.put('/admin/products/:id', requireAdmin, async (req, res) => {
+  try { validateRewardDraft(req.body.rewardDraft); } catch(error) { return res.status(400).json({error: error instanceof Error ? error.message : 'Recompensa inválida.'}); }
   const { id } = req.params;
   const updated = dbStore.updateProduct(id, req.body);
   if (!updated) {

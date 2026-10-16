@@ -2,7 +2,7 @@ export type OrderStatus = 'Pendente' | 'Pago' | 'Cancelado' | 'Entregue';
 export type PaymentMethod = 'LIVEPIX' | 'PIX' | 'Cartao' | 'Boleto';
 export type EventStatus = 'Próximo' | 'Em andamento' | 'Encerrado';
 export type NewsCategory = 'Atualização' | 'Evento' | 'Manutenção' | 'Novidade';
-export type ProductCategory = 'vips' | 'kits' | 'itens' | 'cosmeticos' | 'outros';
+export type ProductCategory = 'vips' | 'kits' | 'itens' | 'cosmeticos' | 'pacotes' | 'outros';
 
 export interface ActiveVip {
   vipId: string;
@@ -39,10 +39,14 @@ export interface VIP {
   pixUrl?: string;
 }
 
+/** Editorial configuration only. Never an authorized or executable delivery payload. */
+export interface RewardDraft { version: 1; items: { itemId: string; quantity: number }[]; }
+
 export interface Product {
   id: string;
   name: string;
   category: ProductCategory;
+  rewardDraft?: RewardDraft;
   price: number;
   description: string;
   image: string;

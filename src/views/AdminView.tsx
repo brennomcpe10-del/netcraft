@@ -1,3 +1,4 @@
+import {RewardEditor,validateRewardDraft} from "../components/RewardEditor.tsx";
 import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../context/AdminContext.tsx';
 import { useToast } from '../context/ToastContext.tsx';
@@ -240,6 +241,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     e.preventDefault();
     if (!editingProduct || !adminToken) return;
     try {
+      validateRewardDraft(editingProduct.rewardDraft);
+      if (!Number.isFinite(editingProduct.price) || Number(editingProduct.price) < 0) throw new Error('Informe um preço válido.');
       const isEditing = !!editingProduct.id;
       const prodId = editingProduct.id ? String(editingProduct.id).trim() : `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
       const savedProd: Product = {
@@ -2170,7 +2173,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       {/* ============================================================== */}
       {editingProduct && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#0d1017] border border-white/[0.08] rounded-2xl p-6 space-y-4">
+          <div className="w-full max-w-md bg-[#0d1017] border border-white/[0.08] rounded-2xl p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
             <h3 className="text-base font-bold text-white font-heading">
               {editingProduct.id ? `Editar Item: ${editingProduct.name}` : 'Criar Novo Item da Loja'}
             </h3>
@@ -2213,6 +2216,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                     <option value="itens">Itens</option>
                     <option value="cosmeticos">Cosméticos</option>
                     <option value="vips">VIPs</option>
+                    <option value="pacotes">Pacotes</option>
                     <option value="outros">Outros</option>
                   </select>
                 </div>
@@ -2227,6 +2231,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                 </div>
               </div>
 
+              <div><label className="block text-[11px] text-zinc-400 mb-1">Imagem do produto (URL)</label><input type="text" value={editingProduct.image || ''} onChange={e=>setEditingProduct({...editingProduct,image:e.target.value})} placeholder="https://... ou /imagem.webp" className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white"/></div>
+              <RewardEditor value={editingProduct.rewardDraft} onChange={rewardDraft=>setEditingProduct({...editingProduct,rewardDraft})}/>
               <div>
                 <label className="block text-[11px] text-zinc-400 mb-1">Descrição</label>
                 <textarea
@@ -2829,6 +2835,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                     <option value="whatsapp">WhatsApp</option>
                     <option value="twitter">Twitter / X</option>
                     <option value="site">Site</option>
+                    <option value="pacotes">Pacotes</option>
                     <option value="outros">Outros</option>
                   </select>
                 </div>

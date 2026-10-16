@@ -90,3 +90,67 @@ test("catalog loading and empty states do not render purchasable cards", () => {
     );
   }
 });
+
+import { selectCatalog, catalogCategories } from "../src/lib/catalog.ts";
+import { validateRewardDraft } from "../src/lib/rewardDraft.ts";
+import { RewardEditor } from "../src/components/RewardEditor.tsx";
+test("catalog supports packages and VIP-category legacy products", () => {
+  const legacy = { ...product, category: "vips" as const };
+  assert.equal(selectCatalog([legacy], [vip], "vips").length, 2);
+  const pack = { ...product, category: "pacotes" as const };
+  assert.equal(selectCatalog([pack], [vip], "pacotes")[0].item.id, product.id);
+  assert.ok(catalogCategories.some((c) => c.id === "pacotes"));
+});
+test("search handles accents, whitespace and description", () => {
+  const cosmetic = { ...product, name: "Cosmético especial" };
+  assert.equal(selectCatalog([cosmetic], [], "all", "  cosmetico  ").length, 1);
+  assert.equal(selectCatalog([cosmetic], [], "all", "descricao").length, 1);
+  assert.equal(selectCatalog([cosmetic], [], "kits", "cosmetico").length, 0);
+});
+test("reward draft validates multiple quantities and rejects command injection or invalid counts", () => {
+  assert.doesNotThrow(() =>
+    validateRewardDraft({
+      version: 1,
+      items: [
+        { itemId: "minecraft:diamond", quantity: 64 },
+        { itemId: "ncbrboss:espada_glacial", quantity: 1 },
+      ],
+    }),
+  );
+  for (const quantity of [0, -1, 1.5, 2305, NaN])
+    assert.throws(() =>
+      validateRewardDraft({
+        version: 1,
+        items: [{ itemId: "minecraft:diamond", quantity }],
+      }),
+    );
+  assert.throws(() =>
+    validateRewardDraft({
+      version: 1,
+      items: [{ itemId: "minecraft:diamond;op @a", quantity: 1 }],
+    }),
+  );
+  assert.throws(() =>
+    validateRewardDraft({ version: 1, items: [], command: "op @a" } as any),
+  );
+  assert.throws(() =>
+    validateRewardDraft({
+      version: 1,
+      items: [{ itemId: "minecraft:diamond", quantity: 1, command: "op @a" }],
+    } as any),
+  );
+});
+test("editor displays real Core identifiers as suggestions and clearly marks delivery inactive", () => {
+  const html = renderToStaticMarkup(
+    <RewardEditor
+      value={{
+        version: 1,
+        items: [{ itemId: "minecraft:diamond", quantity: 32 }],
+      }}
+      onChange={() => {}}
+    />,
+  );
+  assert.ok(html.includes("ncbrboss:espada_glacial"));
+  assert.ok(html.includes("entrega automática ainda não está ativa"));
+  assert.ok(html.includes('value="32"'));
+});

@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import { Product, VIP } from "../types/index.ts";
 import { ProductCard } from "../components/ProductCard.tsx";
+import { catalogCategories, selectCatalog } from "../lib/catalog.ts";
 import { Search } from "lucide-react";
 
 interface StoreViewProps {
   products: Product[];
   vips: VIP[];
   loading: boolean;
+  initialCategory?: string;
   onBuyItem: (item: Product | VIP, type: "product" | "vip") => void;
 }
 
@@ -15,47 +17,14 @@ export const StoreView: React.FC<StoreViewProps> = ({
   vips,
   loading,
   onBuyItem,
+  initialCategory = "all",
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] =
+    useState<string>(initialCategory);
   const [search, setSearch] = useState("");
 
-  const categories = [
-    { id: "all", label: "Todos" },
-    { id: "vips", label: "VIPs" },
-    { id: "kits", label: "Kits" },
-    { id: "itens", label: "Itens" },
-    { id: "cosmeticos", label: "Cosméticos" },
-    { id: "outros", label: "Outros" },
-  ];
-
-  const displayItems: Array<{ item: Product | VIP; type: "product" | "vip" }> =
-    [];
-
-  if (selectedCategory === "all" || selectedCategory === "vips") {
-    vips
-      .filter((v) => v.active)
-      .sort((a, b) => a.order - b.order)
-      .forEach((v) => displayItems.push({ item: v, type: "vip" }));
-  }
-
-  if (selectedCategory === "all" || selectedCategory !== "vips") {
-    products
-      .filter((p) => p.active)
-      .sort((a, b) => a.order - b.order)
-      .filter(
-        (p) => selectedCategory === "all" || p.category === selectedCategory,
-      )
-      .forEach((p) => displayItems.push({ item: p, type: "product" }));
-  }
-
-  const filteredItems = displayItems.filter(({ item }) => {
-    if (!search) return true;
-    const term = search.toLowerCase();
-    return (
-      item.name.toLowerCase().includes(term) ||
-      item.description.toLowerCase().includes(term)
-    );
-  });
+  const categories = catalogCategories;
+  const filteredItems = selectCatalog(products, vips, selectedCategory, search);
 
   return (
     <div className="nc-store max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-16 space-y-8 sm:space-y-12">
@@ -72,12 +41,13 @@ export const StoreView: React.FC<StoreViewProps> = ({
       {/* Filter and Search */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 border-b border-white/[0.06] pb-4">
         {/* Categories */}
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none flex-nowrap">
+        <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 max-w-full w-full sm:w-auto sm:flex-1 pb-1 sm:pb-0 scrollbar-none flex-nowrap">
           {categories.map((cat) => {
             const isSelected = selectedCategory === cat.id;
             return (
               <button
                 key={cat.id}
+                aria-pressed={isSelected}
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`text-xs px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
                   isSelected
@@ -92,7 +62,7 @@ export const StoreView: React.FC<StoreViewProps> = ({
         </div>
 
         {/* Search */}
-        <div className="relative w-full sm:w-60">
+        <div className="relative w-full sm:w-60 shrink-0">
           <input
             type="text"
             value={search}

@@ -18,12 +18,15 @@ interface Props {
   events: ServerEvent[];
   news: NewsArticle[];
   socialLinks: SocialLink[];
+  onExploreCategory?: (category: string) => void;
   onBuyItem: (i: VIP | Product, t: "vip" | "product") => void;
 }
 export function HomeView({
   setCurrentTab,
   settings,
   vips,
+  products,
+  onExploreCategory,
   events,
   news,
   socialLinks,
@@ -69,9 +72,12 @@ export function HomeView({
             </button>
             <button
               className="nc-button secondary"
-              onClick={() => setCurrentTab("vip")}
+              onClick={() => {
+                onExploreCategory?.("all");
+                setCurrentTab("store");
+              }}
             >
-              LOJA VIP
+              EXPLORAR LOJA
               <ArrowRight size={17} />
             </button>
           </div>
@@ -122,6 +128,81 @@ export function HomeView({
         </div>
         {!vips.some((v) => v.active) && (
           <p className="empty-state">Consulte os planos disponíveis na loja.</p>
+        )}
+      </section>
+      <section className="nc-container nc-section">
+        <span className="eyebrow">EXPLORE A LOJA</span>
+        <h2>Equipe sua próxima aventura.</h2>
+        <div className="category-grid">
+          {[
+            {
+              id: "vips",
+              title: "VIPs",
+              text: "Benefícios para a sua jornada.",
+            },
+            {
+              id: "kits",
+              title: "Kits",
+              text: "Tudo junto para o próximo desafio.",
+            },
+            {
+              id: "itens",
+              title: "Itens especiais",
+              text: "Encontre seu próximo equipamento.",
+            },
+            {
+              id: "cosmeticos",
+              title: "Cosméticos",
+              text: "Mais personalidade no seu mundo.",
+            },
+            {
+              id: "pacotes",
+              title: "Pacotes",
+              text: "Explore combinações na loja.",
+            },
+          ].map((c) => (
+            <button
+              key={c.id}
+              className="category-card"
+              onClick={() => {
+                onExploreCategory?.(c.id);
+                setCurrentTab("store");
+              }}
+            >
+              <span className="eyebrow">
+                {c.id === "vips"
+                  ? vips.filter((v) => v.active).length
+                  : products.filter((p) => p.active && p.category === c.id)
+                      .length}{" "}
+                disponíveis
+              </span>
+              <h3>{c.title}</h3>
+              <p>{c.text}</p>
+              <span className="text-link">
+                Explorar <ArrowRight size={16} />
+              </span>
+            </button>
+          ))}
+        </div>
+        {products.some(
+          (p) => p.active && (p.category === "kits" || p.category === "itens"),
+        ) && (
+          <div className="catalog-grid home-products">
+            {products
+              .filter(
+                (p) =>
+                  p.active && (p.category === "kits" || p.category === "itens"),
+              )
+              .sort((a, b) => a.order - b.order)
+              .slice(0, 3)
+              .map((p) => (
+                <ProductCard
+                  key={p.id}
+                  item={p}
+                  onBuy={() => onBuyItem(p, "product")}
+                />
+              ))}
+          </div>
         )}
       </section>
       <section className="nc-container nc-section">

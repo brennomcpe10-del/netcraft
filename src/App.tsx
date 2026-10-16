@@ -50,6 +50,7 @@ import {
 
 function MainAppContent() {
   const [currentTab, setCurrentTab] = useState<string>("home");
+  const [storeCategory, setStoreCategory] = useState("all");
   const [settings, setSettings] = useState<ServerSettings | null>(null);
   const [vips, setVips] = useState<VIP[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -210,6 +211,7 @@ function MainAppContent() {
           <HomeView
             setCurrentTab={setCurrentTab}
             settings={settings}
+            onExploreCategory={setStoreCategory}
             vips={vips}
             products={products}
             events={events}
@@ -231,6 +233,7 @@ function MainAppContent() {
 
         {currentTab === "store" && (
           <StoreView
+            initialCategory={storeCategory}
             products={products}
             vips={vips}
             loading={loading}
