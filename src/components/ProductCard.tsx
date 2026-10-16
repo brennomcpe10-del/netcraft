@@ -37,7 +37,7 @@ export function ProductCard({
           }).format(item.price)}
         </p>
         <details>
-          <summary>Benefícios e detalhes</summary>
+          <summary>Clique aqui para ver os benefícios e detalhes</summary>
           {vip && <p className="plan-duration">Duração: {item.duration}</p>}
           <p>{item.description}</p>
           <ul>
