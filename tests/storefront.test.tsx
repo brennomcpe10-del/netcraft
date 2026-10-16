@@ -73,6 +73,7 @@ test("product detail retains full benefits and duration without broken symbolic 
   ])
     assert.ok(html.includes(text));
   assert.ok(!html.includes('src="crown"'));
+  assert.ok(html.includes("Clique aqui para ver os benefícios e detalhes"));
 });
 test("VIP page does not promise automatic delivery before integration", () => {
   const html = renderToStaticMarkup(

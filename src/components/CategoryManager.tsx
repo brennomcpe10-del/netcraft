@@ -3,7 +3,11 @@ import { useStoreCategories } from "../hooks/useStoreCategories.ts";
 import { StoreCategory, validateCategories } from "../lib/storeCategories.ts";
 import { useAdmin } from "../context/AdminContext.tsx";
 import { useToast } from "../context/ToastContext.tsx";
-export function CategoryManager() {
+export function CategoryManager({
+  onManageProducts,
+}: {
+  onManageProducts?: (category: string) => void;
+}) {
   const categories = useStoreCategories();
   const { adminToken } = useAdmin();
   const { showSuccess, showError } = useToast();
@@ -74,6 +78,14 @@ export function CategoryManager() {
                     : "Oculta"}{" "}
                   · Ordem {c.order}
                 </p>
+                {onManageProducts && (
+                  <button
+                    className="text-link"
+                    onClick={() => onManageProducts(c.id)}
+                  >
+                    Gerenciar produtos
+                  </button>
+                )}
                 <button
                   className="text-link"
                   onClick={() => setEditing({ ...c })}
@@ -86,7 +98,7 @@ export function CategoryManager() {
                   onClick={() => {
                     if (
                       window.confirm(
-                        "Remover esta categoria? Os produtos serão preservados em Todos e poderão ser reclassificados.",
+                        "Remover esta categoria? Os produtos serão preservados e poderão ser reclassificados no painel.",
                       )
                     )
                       save(categories.filter((x) => x.id !== c.id));

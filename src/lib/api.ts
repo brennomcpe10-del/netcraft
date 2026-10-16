@@ -198,8 +198,7 @@ export const api = {
       headers: getHeaders(adminToken),
       body: JSON.stringify(productData)
     });
-    if (!res.ok) throw new Error('Erro ao criar produto.');
-    return res.json();
+    return handleAdminFetch<Product>(res,'Erro ao criar produto.');
   },
 
   async updateProduct(id: string, productData: Partial<Product>, adminToken: string): Promise<Product> {
@@ -208,8 +207,7 @@ export const api = {
       headers: getHeaders(adminToken),
       body: JSON.stringify(productData)
     });
-    if (!res.ok) throw new Error('Erro ao atualizar produto.');
-    return res.json();
+    return handleAdminFetch<Product>(res,'Erro ao atualizar produto.');
   },
 
   async deleteProduct(id: string, adminToken: string, name?: string): Promise<void> {
@@ -218,7 +216,7 @@ export const api = {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
-    if (!res.ok) throw new Error('Erro ao excluir produto.');
+    await handleAdminFetch<{success:boolean}>(res,'Erro ao excluir produto.');
   },
 
   // --- ORDERS ---

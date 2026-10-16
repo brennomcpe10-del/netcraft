@@ -1,6 +1,6 @@
+import {ProductManager} from "../components/ProductManager.tsx";
 import {CategoryManager} from "../components/CategoryManager.tsx";
 import {useStoreCategories} from "../hooks/useStoreCategories.ts";
-import {RewardEditor,validateRewardDraft} from "../components/RewardEditor.tsx";
 import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../context/AdminContext.tsx';
 import { useToast } from '../context/ToastContext.tsx';
@@ -9,7 +9,6 @@ import {
   DashboardStats,
   VIP,
   Product,
-  ProductCategory,
   Order,
   Player,
   ServerEvent,
@@ -26,8 +25,6 @@ import {
   saveVipToFirestore,
   deleteVipFromFirestore,
   getVipsFromFirestore,
-  saveProductToFirestore,
-  deleteProductFromFirestore,
   getProductsFromFirestore,
   saveSettingsToFirestore,
   getSettingsFromFirestore,
@@ -64,6 +61,7 @@ interface AdminViewProps {
 
 export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalData }) => {
   const managedCategories=useStoreCategories();
+  const [adminProductCategory,setAdminProductCategory]=useState("all");
   const { adminToken, logoutAdmin } = useAdmin();
   const { showSuccess, showError } = useToast();
 
@@ -89,7 +87,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
 
   // Modals for editing / creating
   const [editingVip, setEditingVip] = useState<Partial<VIP> | null>(null);
-  const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [editingCoupon, setEditingCoupon] = useState<Partial<Coupon> | null>(null);
   const [editingEvent, setEditingEvent] = useState<Partial<ServerEvent> | null>(null);
   const [editingNews, setEditingNews] = useState<Partial<NewsArticle> | null>(null);
@@ -97,7 +94,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
 
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<{
-    type: 'vip' | 'product' | 'order' | 'player' | 'event' | 'news' | 'community' | 'coupon';
+    type: 'vip' | 'order' | 'player' | 'event' | 'news' | 'community' | 'coupon';
     id: string;
     name: string;
     extraNickname?: string;
@@ -237,51 +234,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       await onRefreshGlobalData();
     } catch (err: unknown) {
       showError(err instanceof Error ? err.message : 'Erro ao salvar VIP');
-    }
-  };
-
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingProduct || !adminToken) return;
-    try {
-      validateRewardDraft(editingProduct.rewardDraft);
-      if (!Number.isFinite(editingProduct.price) || Number(editingProduct.price) < 0) throw new Error('Informe um preço válido.');
-      const isEditing = !!editingProduct.id;
-      const prodId = editingProduct.id ? String(editingProduct.id).trim() : `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      const savedProd: Product = {
-        ...editingProduct,
-        id: prodId,
-        name: editingProduct.name || 'Novo Item',
-        category: editingProduct.category || 'outros',
-        price: Number(editingProduct.price) || 0,
-        description: editingProduct.description || '',
-        image: editingProduct.image || 'cube',
-        active: editingProduct.active !== false,
-        highlights: Array.isArray(editingProduct.highlights) ? editingProduct.highlights : [],
-        order: Number(editingProduct.order) || 1,
-        livepixUrl: editingProduct.livepixUrl ? String(editingProduct.livepixUrl).trim() : '',
-        pixUrl: editingProduct.pixUrl ? String(editingProduct.pixUrl).trim() : ''
-      };
-
-      // 1. Direct write to Firestore FIRST (Official Source of Truth)
-      await saveProductToFirestore(savedProd);
-
-      // 2. Sync with backend API
-      if (isEditing) {
-        await api.updateProduct(prodId, savedProd, adminToken).catch(() => {});
-        showSuccess('Item da loja atualizado');
-        setProducts(prev => prev.map(p => p.id === prodId ? savedProd : p));
-      } else {
-        await api.createProduct(savedProd, adminToken).catch(() => {});
-        showSuccess('Item criado na loja');
-        setProducts(prev => [...prev.filter(p => p.id !== prodId), savedProd]);
-      }
-
-      setEditingProduct(null);
-      await loadData();
-      await onRefreshGlobalData();
-    } catch (err: unknown) {
-      showError(err instanceof Error ? err.message : 'Erro ao salvar item');
     }
   };
 
@@ -562,9 +514,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       case 'vip':
         setVips(prev => prev.filter(v => v.id !== id && v.id.toLowerCase() !== lowerId && v.name.trim().toLowerCase() !== cleanName));
         break;
-      case 'product':
-        setProducts(prev => prev.filter(p => p.id !== id && p.id.toLowerCase() !== lowerId && p.name.trim().toLowerCase() !== cleanName));
-        break;
       case 'order':
         setOrders(prev => prev.filter(o => o.id !== id && o.id.toLowerCase() !== lowerId && o.id.toLowerCase().replace(/^#/, '') !== lowerId.replace(/^#/, '')));
         break;
@@ -594,13 +543,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
             deleteVipFromFirestore(id, name)
           ]);
           showSuccess(`VIP ${name} excluído com sucesso`);
-          break;
-        case 'product':
-          await Promise.allSettled([
-            api.deleteProduct(id, adminToken, name),
-            deleteProductFromFirestore(id, name)
-          ]);
-          showSuccess(`Item ${name} excluído com sucesso`);
           break;
         case 'order':
           await Promise.allSettled([
@@ -728,7 +670,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           })}
         </div>
 
-        {activeTab === 'categories' && <CategoryManager/>}
+        {activeTab === 'categories' && <CategoryManager onManageProducts={id=>{setAdminProductCategory(id);setActiveTab('store');}}/>}
         {/* ============================================================== */}
         {/* 1. DASHBOARD */}
         {/* ============================================================== */}
@@ -1396,110 +1338,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         {/* ============================================================== */}
         {/* 5. LOJA (ITENS DA LOJA: EDITAR, APAGAR, CRIAR) */}
         {/* ============================================================== */}
-        {activeTab === 'store' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-white">Itens da Loja</h2>
-                <p className="text-zinc-500 text-[11px]">Gerencie kits, itens, chaves, moedas, spawners e cosméticos</p>
-              </div>
-              <button
-                onClick={() =>
-                  setEditingProduct({
-                    name: '',
-                    category: 'kits',
-                    price: 9.90,
-                    description: '',
-                    image: 'cube',
-                    active: true,
-                    highlights: ['Item exclusivo para sua aventura'],
-                    order: products.length + 1
-                  })
-                }
-                className="px-3 py-1.5 bg-white text-zinc-950 rounded-lg text-xs font-semibold hover:bg-zinc-200 cursor-pointer flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Novo Item</span>
-              </button>
-            </div>
-
-            <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
-              {products.map(prod => (
-                <div key={prod.id} className="py-4 flex items-center justify-between text-xs">
-                  <div>
-                    <div className="font-bold text-white flex items-center gap-2">
-                      <span>{prod.name}</span>
-                      <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-zinc-300 font-mono text-[10px] uppercase">
-                        {prod.category}
-                      </span>
-                      {!prod.active && (
-                        <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono text-[10px] uppercase">
-                          Inativo
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-emerald-400 font-mono">
-                        R$ {prod.price.toFixed(2).replace('.', ',')}
-                      </span>
-                      {prod.pixUrl && prod.pixUrl.trim().length > 0 ? (
-                        <span className="px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-mono text-[10px] flex items-center gap-1">
-                          💠 PIX: {prod.pixUrl}
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded bg-zinc-800/80 border border-white/[0.06] text-zinc-500 font-mono text-[10px]">
-                          Sem PIX
-                        </span>
-                      )}
-                      {prod.livepixUrl && prod.livepixUrl.trim().length > 0 ? (
-                        <span className="px-2 py-0.5 rounded bg-[#00e676]/10 border border-[#00e676]/30 text-[#00e676] font-mono text-[10px] flex items-center gap-1">
-                          ⚡ LivePix: {prod.livepixUrl}
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded bg-zinc-800/80 border border-white/[0.06] text-zinc-500 font-mono text-[10px]">
-                          Sem LivePix
-                        </span>
-                      )}
-                    </div>
-                    {prod.description && (
-                      <div className="text-zinc-500 text-[11px] mt-1 line-clamp-1">
-                        {prod.description}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setEditingProduct({ ...prod })}
-                      title="Editar Item da Loja"
-                      className="text-zinc-400 hover:text-white p-1.5 rounded hover:bg-white/[0.05] transition-colors cursor-pointer"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() =>
-                        setDeleteConfirm({
-                          type: 'product',
-                          id: prod.id,
-                          name: prod.name
-                        })
-                      }
-                      title="Apagar Item da Loja"
-                      className="text-zinc-500 hover:text-rose-400 p-1.5 rounded hover:bg-rose-500/10 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {products.length === 0 && (
-                <div className="py-8 text-center text-zinc-500">
-                  Nenhum produto cadastrado na loja.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {activeTab === 'store' && <ProductManager products={products} categories={managedCategories} initialCategory={adminProductCategory} onSave={async product=>{if(!adminToken)throw new Error('Entre no painel novamente.');const saved=products.some(p=>p.id===product.id)?await api.updateProduct(product.id,product,adminToken):await api.createProduct(product,adminToken);setProducts(previous=>[...previous.filter(p=>p.id!==saved.id),saved]);onRefreshGlobalData().catch(()=>{});return saved;}} onDelete={async id=>{if(!adminToken)throw new Error('Entre no painel novamente.');await api.deleteProduct(id,adminToken);setProducts(previous=>previous.filter(p=>p.id!==id));onRefreshGlobalData().catch(()=>{});}}/>}
 
         {/* ============================================================== */}
         {/* 6. EVENTOS (EDITAR, APAGAR, CRIAR) */}
@@ -2176,166 +2015,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
 
       {/* ============================================================== */}
       {/* MODAL: EDIT PRODUCT (ITEM DA LOJA) */}
-      {/* ============================================================== */}
-      {editingProduct && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#0d1017] border border-white/[0.08] rounded-2xl p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
-            <h3 className="text-base font-bold text-white font-heading">
-              {editingProduct.id ? `Editar Item: ${editingProduct.name}` : 'Criar Novo Item da Loja'}
-            </h3>
-
-            <form onSubmit={handleSaveProduct} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] text-zinc-400 mb-1">Nome do Item</label>
-                  <input
-                    type="text"
-                    required
-                    value={editingProduct.name || ''}
-                    onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                    className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
-                    placeholder="Ex: Kit Gladiador"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-zinc-400 mb-1">Preço (R$)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={editingProduct.price ?? 0}
-                    onChange={e => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] text-zinc-400 mb-1">Categoria</label>
-                  <select
-                    value={editingProduct.category || 'kits'}
-                    onChange={e => setEditingProduct({ ...editingProduct, category: e.target.value as ProductCategory })}
-                    className="w-full px-3 py-2 bg-[#090b10] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
-                  >
-                    {managedCategories.map(c=><option key={c.id} value={c.id}>{c.title}</option>)}
-                    {!managedCategories.some(c=>c.id===editingProduct.category)&&editingProduct.category&&<option value={editingProduct.category}>{editingProduct.category} (sem categoria)</option>}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] text-zinc-400 mb-1">Ordem de exibição</label>
-                  <input
-                    type="number"
-                    value={editingProduct.order || 1}
-                    onChange={e => setEditingProduct({ ...editingProduct, order: parseInt(e.target.value) || 1 })}
-                    className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
-                  />
-                </div>
-              </div>
-
-              <div><label className="block text-[11px] text-zinc-400 mb-1">Imagem do produto (URL)</label><input type="text" value={editingProduct.image || ''} onChange={e=>setEditingProduct({...editingProduct,image:e.target.value})} placeholder="https://... ou /imagem.webp" className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white"/></div>
-              <div className="space-y-2"><label className="flex items-center gap-2"><input type="checkbox" checked={editingProduct.featured===true} onChange={e=>setEditingProduct({...editingProduct,featured:e.target.checked})}/>Produto em destaque na página inicial</label><label className="flex items-center gap-2"><input type="checkbox" checked={editingProduct.allowQuantity!==false} onChange={e=>setEditingProduct({...editingProduct,allowQuantity:e.target.checked})}/>Permitir várias unidades no carrinho</label><label>Limite de unidades<input type="number" min={1} max={64} value={editingProduct.maxQuantity||64} onChange={e=>setEditingProduct({...editingProduct,maxQuantity:Number(e.target.value)})} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg"/></label></div>
-              <RewardEditor value={editingProduct.rewardDraft} onChange={rewardDraft=>setEditingProduct({...editingProduct,rewardDraft})}/>
-              <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">Descrição</label>
-                <textarea
-                  rows={3}
-                  value={editingProduct.description || ''}
-                  onChange={e => setEditingProduct({ ...editingProduct, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
-                  placeholder="Detalhes sobre o item entregue no servidor"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">Destaques / Itens inclusos (um por linha)</label>
-                <textarea
-                  rows={2}
-                  value={editingProduct.highlights?.join('\n') || ''}
-                  onChange={e =>
-                    setEditingProduct({
-                      ...editingProduct,
-                      highlights: e.target.value.split('\n').filter(h => h.trim())
-                    })
-                  }
-                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
-                  placeholder="Espada de Netherite Sharpness V&#10;32 Maçãs Douradas"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-zinc-300 font-bold mb-1 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-white">
-                    <span className="text-[#00e676]">⚡</span> Link do LivePix deste Item
-                  </span>
-                  <span className="text-[10px] text-zinc-500 font-mono">https://livepix.gg/...</span>
-                </label>
-                <input
-                  type="url"
-                  value={editingProduct.livepixUrl || ''}
-                  onChange={e => setEditingProduct({ ...editingProduct, livepixUrl: e.target.value })}
-                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] focus:border-[#00e676] rounded-lg text-xs font-mono text-white outline-none placeholder-zinc-600"
-                  placeholder="https://livepix.gg/SEU_LINK_ITEM"
-                />
-                <p className="text-[10px] text-zinc-500 mt-1">
-                  Cole o link do LivePix específico para este item da loja. Ao escolher LivePix no checkout, o jogador será direcionado para cá.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-zinc-300 font-bold mb-1 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-white">
-                    <span className="text-cyan-400">💠</span> Link de Cobrança PIX deste Item
-                  </span>
-                  <span className="text-[10px] text-zinc-500 font-mono">Mercado Pago / Nubank / etc.</span>
-                </label>
-                <input
-                  type="text"
-                  value={editingProduct.pixUrl || ''}
-                  onChange={e => setEditingProduct({ ...editingProduct, pixUrl: e.target.value })}
-                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] focus:border-cyan-400 rounded-lg text-xs font-mono text-white outline-none placeholder-zinc-600"
-                  placeholder="https://link.mercadopago.com.br/... ou sua chave PIX"
-                />
-                <p className="text-[10px] text-zinc-500 mt-1">
-                  Cole o link de cobrança PIX específico para este item (Mercado Pago, Nubank, PicPay ou chave). Ao escolher PIX no checkout, o jogador será direcionado para cá.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="prod-active"
-                  checked={editingProduct.active !== false}
-                  onChange={e => setEditingProduct({ ...editingProduct, active: e.target.checked })}
-                  className="rounded accent-emerald-500 cursor-pointer"
-                />
-                <label htmlFor="prod-active" className="text-xs text-zinc-300 cursor-pointer">
-                  Item ativo na loja
-                </label>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-white/[0.06]">
-                <button
-                  type="button"
-                  onClick={() => setEditingProduct(null)}
-                  className="px-3.5 py-1.5 rounded-lg border border-white/[0.08] text-xs text-zinc-300 hover:bg-white/[0.03] cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-white text-zinc-950 text-xs font-semibold hover:bg-zinc-200 cursor-pointer"
-                >
-                  Salvar Item
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================== */}
-      {/* MODAL: EDIT / CREATE COUPON */}
       {/* ============================================================== */}
       {editingCoupon && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">

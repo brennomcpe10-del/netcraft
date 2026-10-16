@@ -1,6 +1,7 @@
+import {productCatalog,ProductCatalogError} from '../services/productCatalog.ts';
+import {firestoreProducts} from '../services/firestoreProducts.ts';
 import {quoteCart,validateCartRequest} from '../../src/lib/cartQuote.ts';
 import {validateCategories} from '../../src/lib/storeCategories.ts';
-import {validateRewardDraft} from '../../src/lib/rewardDraft.ts';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import crypto from 'crypto';
 import { dbStore } from '../data/store.ts';
@@ -350,87 +351,11 @@ apiRouter.get('/products', async (req, res) => {
   res.json(dbStore.getProducts(includeInactive, category));
 });
 
-apiRouter.post('/admin/products', requireAdmin, async (req, res) => {
-  try { validateRewardDraft(req.body.rewardDraft); } catch(error) { return res.status(400).json({error: error instanceof Error ? error.message : 'Recompensa inválida.'}); }
-  const { id, name, category, price, description, image, active, highlights, order, livepixUrl, pixUrl, rewardDraft, allowQuantity, maxQuantity, featured } = req.body;
-  if (!name || !category || price == null) {
-    return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
-  }
-
-  const newProd = dbStore.createProduct({
-    ...(id ? { id: String(id).trim() } : {}),
-    ...(rewardDraft ? {rewardDraft} : {}),
-    allowQuantity: allowQuantity !== false,
-    maxQuantity: Math.max(1,Math.min(64,Math.floor(Number(maxQuantity)||64))),
-    featured: featured === true,
-    name,
-    category,
-    price: Number(price),
-    description: description || '',
-    image: image || 'cube',
-    active: active !== false,
-    highlights: Array.isArray(highlights) ? highlights : [],
-    order: Number(order) || 1,
-    livepixUrl: livepixUrl ? String(livepixUrl).trim() : '',
-    pixUrl: pixUrl ? String(pixUrl).trim() : ''
-  });
-
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, setDoc } = await import('firebase/firestore');
-    await setDoc(doc(db, 'products', newProd.id), newProd);
-  } catch (err) {
-    console.warn('Firestore product create notice:', err);
-  }
-
-  res.status(201).json(newProd);
-});
-
-apiRouter.put('/admin/products/:id', requireAdmin, async (req, res) => {
-  try { validateRewardDraft(req.body.rewardDraft); } catch(error) { return res.status(400).json({error: error instanceof Error ? error.message : 'Recompensa inválida.'}); }
-  const { id } = req.params;
-  const updated = dbStore.updateProduct(id, req.body);
-  if (!updated) {
-    return res.status(404).json({ error: 'Produto não encontrado.' });
-  }
-
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, setDoc } = await import('firebase/firestore');
-    await setDoc(doc(db, 'products', updated.id), updated);
-  } catch (err) {
-    console.warn('Firestore product update notice:', err);
-  }
-
-  res.json(updated);
-});
-
-apiRouter.delete('/admin/products/:id', requireAdmin, async (req, res) => {
-  const { id } = req.params;
-  const name = typeof req.query.name === 'string' ? req.query.name : req.body?.name;
-  const deleted = dbStore.deleteProduct(id, name);
-
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, deleteDoc, collection, getDocs } = await import('firebase/firestore');
-    await deleteDoc(doc(db, 'products', id)).catch(() => {});
-    const cleanId = id.trim().toLowerCase();
-    const cleanName = (name || '').trim().toLowerCase();
-    const snap = await getDocs(collection(db, 'products'));
-    for (const d of snap.docs) {
-      const data = d.data();
-      const matchId = d.id === id || d.id.toLowerCase() === cleanId || data.id === id;
-      const matchName = cleanName && data.name && String(data.name).trim().toLowerCase() === cleanName;
-      if (matchId || matchName) {
-        await deleteDoc(doc(db, 'products', d.id)).catch(() => {});
-      }
-    }
-  } catch (err) {
-    console.warn('Firestore product delete notice:', err);
-  }
-
-  res.json({ success: true, message: 'Produto excluído com sucesso.', removed: deleted });
-});
+const productsAdmin=productCatalog(firestoreProducts);
+function productError(res:express.Response,error:unknown){return res.status(error instanceof ProductCatalogError?error.status:503).json({error:error instanceof ProductCatalogError?error.message:'Não foi possível confirmar a alteração no Firebase. Tente novamente.'});}
+apiRouter.post('/admin/products',requireAdmin,async(req,res)=>{try{const product=await productsAdmin.save({...req.body,id:req.body.id||`prod-${crypto.randomUUID()}`});dbStore.createProduct(product);return res.status(201).json(product);}catch(error){return productError(res,error);}});
+apiRouter.put('/admin/products/:id',requireAdmin,async(req,res)=>{try{const product=await productsAdmin.save(req.body,req.params.id);dbStore.updateProduct(product.id,product);return res.json(product);}catch(error){return productError(res,error);}});
+apiRouter.delete('/admin/products/:id',requireAdmin,async(req,res)=>{try{const result=await productsAdmin.remove(req.params.id);await dbStore.syncFromFirestore().catch(()=>{});return res.json(result);}catch(error){return productError(res,error);}});
 
 // -------------------------------------------------------------
 // ORDERS & CHECKOUT & GATEWAY WEBHOOK
