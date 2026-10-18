@@ -1832,3 +1832,12 @@ button:disabled {
     padding-inline: 12px;
   }
 }
+
+/* Category editor stays usable on narrow phones and with large uploaded images. */
+.category-edit fieldset { display:grid; gap:16px; border:0; min-width:0; padding:0; }
+.category-edit .category-image-preview { width:120px; height:100px; object-fit:cover; border-radius:12px; }
+.category-edit input[type="file"] { max-width:100%; white-space:normal; }
+.manager-grid article > div { min-width:0; }
+.manager-grid h3 { overflow-wrap:anywhere; }
+.category-manager button, .admin-products button { min-height:44px; }
+.admin-delete-confirm { scroll-margin-block:90px; }

@@ -107,6 +107,10 @@ export function validateCategories(
 ): asserts value is StoreCategory[] {
   if (!Array.isArray(value) || value.length > 50)
     throw new Error("Use até 50 categorias.");
+  if (new TextEncoder().encode(JSON.stringify(value)).length > 900000)
+    throw new Error(
+      "As imagens das categorias excedem o limite. Reduza o tamanho delas.",
+    );
   const ids = new Set();
   for (const c of value) {
     if (
@@ -124,14 +128,18 @@ export function validateCategories(
       typeof c.description !== "string" ||
       c.description.length > 500 ||
       typeof c.image !== "string" ||
-      c.image.length > 2000 ||
+      c.image.length > 170000 ||
       !Number.isFinite(c.order) ||
       typeof c.active !== "boolean"
     )
       throw new Error("Dados da categoria inválidos.");
     if (c.showWhenEmpty !== undefined && typeof c.showWhenEmpty !== "boolean")
       throw new Error("Visibilidade da categoria inválida.");
-    if (!/^(https:\/\/|\/(?!\/))/.test(c.image))
+    if (
+      !/^(https:\/\/|\/(?!\/)|data:image\/(png|jpeg|webp|gif);base64,)/.test(
+        c.image,
+      )
+    )
       throw new Error("Use imagem HTTPS ou caminho local.");
   }
 }

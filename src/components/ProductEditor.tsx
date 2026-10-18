@@ -24,8 +24,8 @@ export function ProductEditor({
     [error, setError] = useState(""),
     [uploading, setUploading] = useState(false);
   const handleClose = useCallback(() => {
-    if (!busy) onClose();
-  }, [busy, onClose]);
+    if (!busy && !uploading) onClose();
+  }, [busy, uploading, onClose]);
   const ref = useModalFocus(handleClose);
   const patch = (data: Partial<Product>) =>
     setValue((previous) => ({ ...previous, ...data }));
@@ -82,7 +82,7 @@ export function ProductEditor({
             type="button"
             className="icon-button"
             aria-label="Fechar editor"
-            disabled={busy}
+            disabled={busy || uploading}
             onClick={onClose}
           >
             <X size={20} />
@@ -122,6 +122,7 @@ export function ProductEditor({
               <label>
                 Preço (R$)
                 <input
+                  inputMode="decimal"
                   type="number"
                   min="0"
                   step="0.01"
@@ -270,7 +271,7 @@ export function ProductEditor({
             <button
               className="text-link"
               type="button"
-              disabled={busy}
+              disabled={busy || uploading}
               onClick={onClose}
             >
               Cancelar

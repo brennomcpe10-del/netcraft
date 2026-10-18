@@ -71,7 +71,7 @@ function MainAppContent() {
     type: "vip" | "product";
   } | null>(null);
 
-  const { isAdminLoggedIn, openAdminModal } = useAdmin();
+  const { isAdminLoggedIn, isAdminChecking, openAdminModal } = useAdmin();
 
   // 1. Initial Firestore data fetch (Official Source of Truth)
   const fetchGlobalData = useCallback(async () => {
@@ -144,14 +144,21 @@ function MainAppContent() {
   useEffect(() => {
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
-    if (path.includes("/admin") || hash === "#admin") {
+    if (!isAdminChecking && (path === "/admin" || path === "/admin/" || hash === "#admin")) {
       if (isAdminLoggedIn) {
         setCurrentTab("admin");
       } else {
         openAdminModal();
       }
     }
-  }, [isAdminLoggedIn, openAdminModal]);
+  }, [isAdminLoggedIn, isAdminChecking, openAdminModal]);
+
+  useEffect(() => {
+    if (currentTab === "admin" && !isAdminChecking && !isAdminLoggedIn) {
+      setCurrentTab("home");
+      openAdminModal();
+    }
+  }, [currentTab, isAdminChecking, isAdminLoggedIn, openAdminModal]);
 
   // Handle buy item trigger
   const handleBuyItem = (item: VIP | Product, type: "vip" | "product") => {
@@ -160,12 +167,7 @@ function MainAppContent() {
   };
 
   // If viewing admin panel, show AdminView full screen
-  if (currentTab === "admin") {
-    if (!isAdminLoggedIn) {
-      openAdminModal();
-      setCurrentTab("home");
-      return null;
-    }
+  if (currentTab === "admin" && isAdminLoggedIn) {
     return (
       <Suspense
         fallback={

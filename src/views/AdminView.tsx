@@ -1,3 +1,4 @@
+import {formatStoredMoney} from '../lib/adminDisplay.ts';
 import {ProductManager} from "../components/ProductManager.tsx";
 import {CategoryManager} from "../components/CategoryManager.tsx";
 import {useStoreCategories} from "../hooks/useStoreCategories.ts";
@@ -733,7 +734,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                     </div>
                     <div className="text-right">
                       <div className="font-bold text-white">
-                        R$ {o.amount.toFixed(2).replace('.', ',')}
+                        {formatStoredMoney(o.amount)}
                       </div>
                       <span className="text-[10px] uppercase font-mono text-zinc-400">
                         {o.status}
@@ -912,7 +913,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                     <div className="flex items-center gap-3 self-end sm:self-center">
                       <div className="text-right">
                         <div className="font-bold text-white font-mono">
-                          R$ {order.amount.toFixed(2).replace('.', ',')}
+                          {formatStoredMoney(order.amount)}
                         </div>
                         {order.originalAmount && order.originalAmount > order.amount && (
                           <div className="text-[10px] text-zinc-500 line-through font-mono">

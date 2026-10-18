@@ -1,3 +1,4 @@
+import { adminAuthRouter, requireAdmin, isValidAdminToken } from '../auth/admin.ts';
 import {productCatalog,ProductCatalogError} from '../services/productCatalog.ts';
 import {firestoreProducts} from '../services/firestoreProducts.ts';
 import {quoteCart,validateCartRequest} from '../../src/lib/cartQuote.ts';
@@ -9,112 +10,7 @@ import type { Player } from '../../src/types/index.ts';
 
 export const apiRouter = express.Router();
 
-// The secret keyword is strictly handled on the server side
-const ADMIN_SECRET = process.env.ADMIN_KEYWORD || '';
-
-// In-memory set of explicitly revoked admin tokens
-const revokedAdminTokens = new Set<string>();
-
-// Generate cryptographic HMAC-signed token
-export function generateAdminToken(): string {
-  if (!ADMIN_SECRET) throw new Error('Segredo administrativo não configurado.');
-  const timestamp = Date.now().toString();
-  const nonce = crypto.randomBytes(16).toString('hex');
-  const payload = `${timestamp}.${nonce}`;
-  const hmac = crypto.createHmac('sha256', ADMIN_SECRET).update(payload).digest('hex');
-  return `adm_${payload}.${hmac}`;
-}
-
-// Validate admin token (cryptographically verified, immune to server restarts and multi-instance statelessness)
-export function isValidAdminToken(token: string): boolean {
-  if (!ADMIN_SECRET || !token || typeof token !== 'string') return false;
-  if (revokedAdminTokens.has(token)) return false;
-
-
-  // Validate HMAC token format: adm_<timestamp>.<nonce>.<signature>
-  if (token.startsWith('adm_')) {
-    const raw = token.substring(4);
-    const parts = raw.split('.');
-    if (parts.length === 3) {
-      const [timestampStr, nonce, sig] = parts;
-      const timestamp = parseInt(timestampStr, 10);
-      if (!isNaN(timestamp)) {
-        // Valid for 30 days
-        const MAX_AGE = 30 * 24 * 60 * 60 * 1000;
-        const now = Date.now();
-        if (now - timestamp <= MAX_AGE && timestamp <= now + 5 * 60 * 1000) {
-          const payload = `${timestampStr}.${nonce}`;
-          const expectedSig = crypto.createHmac('sha256', ADMIN_SECRET).update(payload).digest('hex');
-          try {
-            if (crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) {
-              return true;
-            }
-          } catch {
-            return false;
-          }
-        }
-      }
-    }
-  }
-
-  return false;
-}
-
-// Middleware to protect admin routes
-export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  let token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.substring(7) : (req.headers['x-admin-token'] as string);
-
-  if (!token) {
-    return res.status(401).json({ error: 'Acesso negado: Credencial de administrador ausente.' });
-  }
-
-  if (!isValidAdminToken(token)) {
-    return res.status(403).json({ error: 'Sessão administrativa inválida ou expirada.' });
-  }
-
-  next();
-}
-
-// -------------------------------------------------------------
-// ADMIN AUTHENTICATION
-// -------------------------------------------------------------
-apiRouter.post('/admin/login', (req, res) => {
-  if (!ADMIN_SECRET) return res.status(503).json({error:'Acesso administrativo indisponível: configure o segredo no backend.'});
-  const { password } = req.body;
-  if (!password || typeof password !== 'string') {
-    return res.status(400).json({ error: 'Credencial não informada.' });
-  }
-
-  if (password.trim() === ADMIN_SECRET) {
-    const token = generateAdminToken();
-    return res.json({
-      success: true,
-      token,
-      message: 'Autenticado com sucesso no Painel NetCraftBR.'
-    });
-  }
-
-  return res.status(401).json({ error: 'Palavra-chave administrativa incorreta.' });
-});
-
-apiRouter.post('/admin/logout', (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    revokedAdminTokens.add(token);
-  }
-  res.json({ success: true });
-});
-
-apiRouter.get('/admin/verify', (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.json({ authenticated: false });
-  }
-  const token = authHeader.substring(7);
-  return res.json({ authenticated: isValidAdminToken(token) });
-});
+apiRouter.use('/admin', adminAuthRouter);
 
 // -------------------------------------------------------------
 // PLAYER / ACCOUNT IDENTIFICATION
@@ -341,7 +237,7 @@ apiRouter.post('/cart/quote', async (req,res)=>{
  }catch(error){return res.status(400).json({error:error instanceof Error?error.message:'Não foi possível conferir o carrinho.'});}
 });
 apiRouter.put('/admin/store-categories',requireAdmin,async(req,res)=>{
- try {validateCategories(req.body.categories);const {db}=await import('../../src/lib/firebase.ts');const {doc,setDoc}=await import('firebase/firestore');await setDoc(doc(db,'settings','storeCategories'),{categories:req.body.categories});return res.json({success:true});}catch(error){return res.status(400).json({error:error instanceof Error?error.message:'Falha ao salvar categorias.'});}
+ try {validateCategories(req.body.categories);const {db}=await import('../../src/lib/firebase.ts');const {doc,setDoc}=await import('firebase/firestore');await setDoc(doc(db,'settings','storeCategories'),{categories:req.body.categories},{merge:true});return res.json({success:true});}catch(error){return res.status(400).json({error:error instanceof Error?error.message:'Falha ao salvar categorias.'});}
 });
 
 apiRouter.get('/products', async (req, res) => {

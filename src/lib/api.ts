@@ -42,6 +42,16 @@ function getHeaders(adminToken?: string | null) {
   return headers;
 }
 
+async function adminRequest<T>(path: string, options: RequestInit): Promise<T> {
+  let res: Response;
+  try { res = await fetch(`${API_BASE}${path}`, {...options, cache:'no-store', signal:AbortSignal.timeout(15000)}); }
+  catch { throw new Error('Não foi possível conectar à API administrativa. Verifique sua conexão e tente novamente.'); }
+  const data = await res.json().catch(() => null);
+  if (!data || typeof data !== 'object') throw new Error('A API administrativa não respondeu em JSON. Verifique o deploy e as rotas /api no Vercel.');
+  if (!res.ok) throw new Error(data.error || `Falha no acesso administrativo (HTTP ${res.status}).`);
+  return data as T;
+}
+
 export const api = {
   // --- PLAYER / AUTH ---
   async loginPlayer(nickname: string): Promise<{ success: boolean; player: Player }> {
@@ -71,28 +81,17 @@ export const api = {
 
   // --- ADMIN AUTH ---
   async loginAdmin(password: string): Promise<{ success: boolean; token: string }> {
-    const res = await fetch(`${API_BASE}/admin/login`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({ password })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Palavra-chave incorreta.');
-    }
-    return res.json();
+    return adminRequest('/admin/login', {method:'POST', headers:getHeaders(), body:JSON.stringify({password})});
   },
 
   async verifyAdmin(token: string): Promise<boolean> {
-    try {
-      const res = await fetch(`${API_BASE}/admin/verify`, {
-        headers: getHeaders(token)
-      });
-      const data = await res.json();
-      return !!data.authenticated;
-    } catch {
-      return false;
-    }
+    const data = await adminRequest<{authenticated:boolean}>('/admin/verify', {headers:getHeaders(token)});
+    return data.authenticated === true;
+  },
+
+  async saveStoreCategories(categories: import('./storeCategories.ts').StoreCategory[], token: string) {
+    const res = await fetch(`${API_BASE}/admin/store-categories`, {method:'PUT',headers:getHeaders(token),body:JSON.stringify({categories})});
+    return handleAdminFetch<{success:boolean}>(res, 'Não foi possível salvar as categorias.');
   },
 
   async logoutAdmin(token: string): Promise<void> {
