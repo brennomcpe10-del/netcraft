@@ -1,3 +1,4 @@
+import {revenueReport,brasiliaPeriod} from '../../src/lib/revenue.ts';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -946,7 +947,7 @@ class Store {
   getDashboardStats(): DashboardStats {
     const orders = this.data.orders;
     const paidOrders = orders.filter(o => o.status === 'Pago' || o.status === 'Entregue');
-    const totalRevenue = paidOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
+    const totalRevenue = revenueReport(orders,brasiliaPeriod(new Date())!).totalCents/100;
     const vipsSold = paidOrders.filter(o => o.productType === 'vip').length;
 
     return {

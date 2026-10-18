@@ -1,3 +1,6 @@
+import {IdentityManager} from "../components/IdentityManager.tsx";
+import {RevenuePanel} from "../components/RevenuePanel.tsx";
+import {revenueReport,brasiliaPeriod} from "../lib/revenue.ts";
 import {formatStoredMoney} from '../lib/adminDisplay.ts';
 import {ProductManager} from "../components/ProductManager.tsx";
 import {CategoryManager} from "../components/CategoryManager.tsx";
@@ -67,7 +70,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const { showSuccess, showError } = useToast();
 
   const [activeTab, setActiveTab] = useState<
-    'categories' | 'dashboard' | 'vips' | 'orders' | 'coupons' | 'players' | 'store' | 'events' | 'news' | 'community' | 'server' | 'settings'
+    'identity' | 'categories' | 'dashboard' | 'vips' | 'orders' | 'coupons' | 'players' | 'store' | 'events' | 'news' | 'community' | 'server' | 'settings'
   >('dashboard');
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -173,7 +176,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       } else {
         // Fallback: calculate stats from orders & players so dashboard never crashes
         const paid = loadedOrders.filter(o => o.status === 'Pago' || o.status === 'Entregue');
-        const rev = paid.reduce((sum, o) => sum + (o.amount || 0), 0);
+        const rev = revenueReport(loadedOrders,brasiliaPeriod(new Date())!).totalCents/100;
         setStats({
           playersCount: loadedPlayers.length,
           ordersCount: loadedOrders.length,
@@ -316,16 +319,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         prev.map(o => (o.id === rawId || o.id.replace(/^#/, '') === rawId.replace(/^#/, '')) ? { ...o, status } : o)
       );
 
-      // 2. Direct Firestore update for guaranteed persistence
-      await updateOrderStatusInFirestore(rawId, status).catch(fsErr => {
-        console.warn('Firestore direct order status update warning:', fsErr);
-      });
-
-      // 3. Backend API update
-      const updated = await api.updateOrderStatus(rawId, status, adminToken);
-      if (updated) {
-        await saveOrderToFirestore(updated).catch(() => {});
-      }
+      await api.updateOrderStatus(rawId, status, adminToken);
 
       showSuccess(`Status do pedido alterado para "${status}" com sucesso!`);
       await loadData();
@@ -609,6 +603,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     { id: 'players', label: 'Jogadores' },
     { id: 'store', label: 'Loja' },
     { id: 'categories', label: 'Categorias' },
+    { id: 'identity', label: 'Identidade Visual' },
     { id: 'events', label: 'Eventos' },
     { id: 'news', label: 'Notícias' },
     { id: 'community', label: 'Comunidade' },
@@ -671,12 +666,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           })}
         </div>
 
+        {activeTab === 'identity' && <IdentityManager />}
         {activeTab === 'categories' && <CategoryManager onManageProducts={id=>{setAdminProductCategory(id);setActiveTab('store');}}/>}
         {/* ============================================================== */}
         {/* 1. DASHBOARD */}
         {/* ============================================================== */}
         {activeTab === 'dashboard' && stats && (
           <div className="space-y-10">
+            <RevenuePanel />
             {/* KPI Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="p-5 rounded-xl border border-white/[0.06] bg-white/[0.01]">
@@ -706,14 +703,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                 </span>
               </div>
 
-              <div className="p-5 rounded-xl border border-white/[0.06] bg-white/[0.01]">
-                <span className="text-[11px] font-mono uppercase text-zinc-400 block mb-1">
-                  Receita Total
-                </span>
-                <span className="text-2xl font-bold text-emerald-400 font-heading">
-                  R$ {stats.totalRevenue.toFixed(2).replace('.', ',')}
-                </span>
-              </div>
+
             </div>
 
             {/* Últimos Pedidos */}
@@ -937,6 +927,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                         <option value="Pago">Pago</option>
                         <option value="Entregue">Entregue</option>
                         <option value="Cancelado">Cancelado</option>
+                        <option value="Reembolsado">Reembolsado</option>
+                        <option value="Estornado">Estornado</option>
                       </select>
 
                       {/* Botão de Excluir Pedido */}

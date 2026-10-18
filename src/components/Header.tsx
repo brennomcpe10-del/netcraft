@@ -1,16 +1,21 @@
+import {LogoMedia} from "./LogoMedia.tsx";
+import {useIdentity} from "../context/IdentityContext.tsx";
 import React, { useState, useEffect, useRef } from "react";
 import { Menu, X, User, ShoppingCart, ArrowUpRight } from "lucide-react";
 import { usePlayer } from "../context/PlayerContext.tsx";
 import { useAdmin } from "../context/AdminContext.tsx";
-export const Brand = () => (
+export const Brand = () => {
+ const {identity}=useIdentity();
+ return (
   <span className="nc-brand">
-    <span className="brand-cube">N</span>
+    <LogoMedia identity={identity}/>
     <span>
       NETCRAFT<span className="brand-br">BR</span>
       <small>MINECRAFT BEDROCK</small>
     </span>
   </span>
 );
+};
 export function Header({
   currentTab,
   setCurrentTab,

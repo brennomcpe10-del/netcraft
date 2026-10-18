@@ -1,4 +1,4 @@
-export type OrderStatus = 'Pendente' | 'Pago' | 'Cancelado' | 'Entregue';
+export type OrderStatus = 'Pendente' | 'Pago' | 'Cancelado' | 'Entregue' | 'Reembolsado' | 'Estornado';
 export type PaymentMethod = 'LIVEPIX' | 'PIX' | 'Cartao' | 'Boleto';
 export type EventStatus = 'Próximo' | 'Em andamento' | 'Encerrado';
 export type NewsCategory = 'Atualização' | 'Evento' | 'Manutenção' | 'Novidade';
@@ -77,6 +77,13 @@ export interface Order {
   transactionId: string;
   paymentMethod: PaymentMethod;
   paidAt?: string;
+  approvedAt?: string;
+  refundedAmount?: number;
+  refundedAt?: string;
+  paymentId?: string;
+  paymentStatus?: string;
+  paymentProvider?: string;
+  refunds?: {id:string;amount:number;status:string}[];
   deliveredAt?: string;
   pixCode?: string;
   pixQrCodeUrl?: string;

@@ -1,3 +1,6 @@
+import {identityRouter} from './identity.ts';
+import {paymentStatusPatch} from '../../src/lib/paymentStatus.ts';
+import {revenueReport,brasiliaPeriod} from '../../src/lib/revenue.ts';
 import { adminAuthRouter, requireAdmin, isValidAdminToken } from '../auth/admin.ts';
 import {productCatalog,ProductCatalogError} from '../services/productCatalog.ts';
 import {firestoreProducts} from '../services/firestoreProducts.ts';
@@ -11,6 +14,14 @@ import type { Player } from '../../src/types/index.ts';
 export const apiRouter = express.Router();
 
 apiRouter.use('/admin', adminAuthRouter);
+apiRouter.use(identityRouter);
+apiRouter.get('/admin/revenue',requireAdmin,async(req,res)=>{
+ try{const period=typeof req.query.period==='string'?req.query.period:brasiliaPeriod(new Date())!;if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(period))return res.status(400).json({error:'Selecione mês e ano válidos.'});
+ const {db}=await import('../../src/lib/firebase.ts');const {collection,getDocs}=await import('firebase/firestore');const snapshot=await getDocs(collection(db,'orders'));
+ return res.json(revenueReport(snapshot.docs.map(d=>({...d.data(),sourceOrderId:d.data().id||d.id,id:d.id})),period));
+ }catch{return res.status(503).json({error:'Não foi possível consultar os pedidos no Firebase. Nenhum valor foi estimado.'});}
+});
+
 
 // -------------------------------------------------------------
 // PLAYER / ACCOUNT IDENTIFICATION
@@ -541,108 +552,13 @@ apiRouter.post('/orders/:id/simulate-payment', (req, res) => {
 });
 
 // Handler for Order Status Update with comprehensive Firestore sync and flexible ID parsing
-const handleOrderStatusUpdate = async (req: express.Request, res: express.Response) => {
-  const rawId = String(req.params.id || req.body.id || '').trim();
-  const { status } = req.body;
-
-  if (!status) {
-    return res.status(400).json({ error: 'Status não especificado.' });
-  }
-  if (!rawId) {
-    return res.status(400).json({ error: 'ID do pedido não informado.' });
-  }
-
-  const validStatuses = ['Pendente', 'Pago', 'Entregue', 'Cancelado'];
-  if (!validStatuses.includes(status)) {
-    return res.status(400).json({
-      error: `Status inválido. Escolha um dos seguintes: ${validStatuses.join(', ')}`
-    });
-  }
-
-  try {
-    const cleanNoHash = rawId.replace(/^#/, '');
-    const cleanLower = cleanNoHash.toLowerCase();
-
-    // 1. Update in local dbStore memory cache
-    let order = dbStore.updateOrderStatus(rawId, status);
-
-    // 2. Direct Firestore synchronization for persistent durability
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, getDoc, updateDoc, setDoc, getDocs, collection } = await import('firebase/firestore');
-
-    const now = new Date().toISOString();
-    const updatePayload: Record<string, any> = {
-      status,
-      updatedAt: now
-    };
-    if (status === 'Pago' || status === 'Entregue') {
-      updatePayload.paidAt = now;
-      updatePayload.deliveredAt = now;
-    }
-
-    let firestoreUpdated = false;
-    const testIds = [rawId, cleanNoHash, `#${cleanNoHash}`];
-
-    for (const testId of testIds) {
-      try {
-        const dRef = doc(db, 'orders', testId);
-        const snap = await getDoc(dRef);
-        if (snap.exists()) {
-          const currentData = snap.data();
-          if (currentData.paidAt && (status === 'Pago' || status === 'Entregue')) {
-            updatePayload.paidAt = currentData.paidAt;
-          }
-          await updateDoc(dRef, updatePayload);
-          firestoreUpdated = true;
-          if (order) {
-            order = { ...order, ...currentData, ...updatePayload };
-          }
-          break;
-        }
-      } catch {}
-    }
-
-    if (!firestoreUpdated) {
-      try {
-        const allOrdersSnap = await getDocs(collection(db, 'orders'));
-        for (const d of allOrdersSnap.docs) {
-          const data = d.data();
-          const dClean = d.id.replace(/^#/, '').toLowerCase();
-          const dataClean = String(data.id || '').replace(/^#/, '').toLowerCase();
-          const numClean = String(data.orderNumber || '').replace(/^#/, '').toLowerCase();
-
-          if (d.id === rawId || dClean === cleanLower || dataClean === cleanLower || numClean === cleanLower) {
-            if (data.paidAt && (status === 'Pago' || status === 'Entregue')) {
-              updatePayload.paidAt = data.paidAt;
-            }
-            await updateDoc(doc(db, 'orders', d.id), updatePayload);
-            firestoreUpdated = true;
-            if (order) {
-              order = { ...order, ...data, ...updatePayload };
-            }
-            break;
-          }
-        }
-      } catch (findErr) {
-        console.warn('Erro ao buscar pedidos no Firestore:', findErr);
-      }
-    }
-
-    if (!firestoreUpdated && order) {
-      await setDoc(doc(db, 'orders', order.id), order, { merge: true }).catch(() => {});
-    }
-
-    if (!order) {
-      return res.status(404).json({ error: `Pedido "${rawId}" não encontrado.` });
-    }
-
-    console.log(`[Admin] Status do pedido ${rawId} alterado com sucesso para ${status}`);
-    return res.json(order);
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error(`[Admin] Falha ao atualizar status do pedido ${rawId}:`, err);
-    return res.status(500).json({ error: `Erro ao atualizar status do pedido: ${errorMsg}` });
-  }
+const handleOrderStatusUpdate = async(req:express.Request,res:express.Response)=>{
+ const id=String(req.params.id||req.body.id||'').trim(),status=req.body.status;
+ if(!id||id.includes('/')||!['Pendente','Pago','Entregue','Cancelado','Reembolsado','Estornado'].includes(status))return res.status(400).json({error:'Pedido ou status inválido.'});
+ try{const {db}=await import('../../src/lib/firebase.ts');const {doc,getDoc,getDocs,collection,runTransaction}=await import('firebase/firestore');let ref=doc(db,'orders',id);
+ if(!(await getDoc(ref)).exists()){const snapshot=await getDocs(collection(db,'orders'));const normalized=id.replace(/^#/,'').toLowerCase();const matches=snapshot.docs.filter(d=>[d.id,d.data().id,d.data().orderNumber].some(value=>String(value||'').replace(/^#/,'').toLowerCase()===normalized));if(matches.length!==1)return res.status(matches.length?409:404).json({error:'Pedido não encontrado de forma única. Use o identificador do documento.'});ref=matches[0].ref;}
+ const updated=await runTransaction(db,async tx=>{const snapshot=await tx.get(ref);if(!snapshot.exists())throw new Error('Pedido não encontrado.');const current=snapshot.data();const patch=paymentStatusPatch(current,status,new Date().toISOString());tx.update(ref,patch);return {...current,...patch,id:snapshot.id};});await dbStore.syncFromFirestore().catch(()=>{});return res.json(updated);
+ }catch{return res.status(503).json({error:'Não foi possível confirmar a alteração do pedido no Firebase.'});}
 };
 
 apiRouter.put('/admin/orders/:id/status', requireAdmin, handleOrderStatusUpdate);

@@ -1,3 +1,4 @@
+import {IdentityProvider} from "./context/IdentityContext.tsx";
 import { CartProvider, useCart } from "./context/CartContext.tsx";
 import { CartView } from "./views/CartView.tsx";
 import { useStoreCategories } from "./hooks/useStoreCategories.ts";
@@ -330,6 +331,7 @@ function MainAppContent() {
 export default function App() {
   return (
     <ToastProvider>
+      <IdentityProvider>
       <PlayerProvider>
         <AdminProvider>
           <CartProvider>
@@ -337,6 +339,7 @@ export default function App() {
           </CartProvider>
         </AdminProvider>
       </PlayerProvider>
+    </IdentityProvider>
     </ToastProvider>
   );
 }
