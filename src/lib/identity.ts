@@ -1,5 +1,6 @@
 export interface LogoAsset {
   path: string;
+  storage?: "firestore" | "storage";
   url: string;
   kind: "image" | "gif" | "video";
   mime: string;

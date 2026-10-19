@@ -1,3 +1,4 @@
+import { compressImageFile } from "../lib/imageUtils.ts";
 import React, { useEffect, useState } from "react";
 import { useAdmin } from "../context/AdminContext.tsx";
 import { useIdentity } from "../context/IdentityContext.tsx";
@@ -9,7 +10,7 @@ import {
 import { LogoMedia } from "./LogoMedia.tsx";
 import { api } from "../lib/api.ts";
 export function IdentityManager() {
-  const { identity, refresh } = useIdentity(),
+  const { identity, refresh, publish } = useIdentity(),
     { adminToken } = useAdmin();
   const [draft, setDraft] = useState<SiteIdentity>(identity),
     [token, setToken] = useState<string | null>(null),
@@ -30,7 +31,7 @@ export function IdentityManager() {
     setError("");
     setMessage("");
     try {
-      const mime = file.type === "image/jpg" ? "image/jpeg" : file.type;
+      let mime = file.type === "image/jpg" ? "image/jpeg" : file.type;
       const kind = mime.startsWith("video/")
         ? "video"
         : mime === "image/gif"
@@ -46,19 +47,50 @@ export function IdentityManager() {
           "video/mp4",
           "video/webm",
         ].includes(mime) ||
-        file.size > LOGO_LIMITS[kind]
+        file.size >
+          (["image/png", "image/jpeg", "image/webp"].includes(mime)
+            ? 10 * 1024 * 1024
+            : LOGO_LIMITS[kind])
       )
         throw new Error(
           "Use imagens até 1 MB, GIF até 2 MB ou vídeo até 3 MB.",
         );
       setBusy(true);
-      const data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () =>
-          reject(new Error("Não foi possível ler o arquivo."));
-        reader.onload = () => resolve(String(reader.result).split(",")[1]);
-        reader.readAsDataURL(file);
-      });
+      let data: string;
+      if (["image/png", "image/jpeg", "image/webp"].includes(mime)) {
+        // WebP preserves a transparent logo while reducing its persisted size.
+        let compressed = await compressImageFile(
+          file,
+          512,
+          512,
+          0.82,
+          "image/webp",
+        );
+        if (compressed.length > 226700)
+          compressed = await compressImageFile(
+            file,
+            320,
+            320,
+            0.65,
+            "image/webp",
+          );
+        const match = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(
+          compressed,
+        );
+        if (!match || match[2].length > 226668)
+          throw new Error(
+            "Não foi possível reduzir a imagem. Use um arquivo menor.",
+          );
+        mime = match[1];
+        data = match[2];
+      } else
+        data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () =>
+            reject(new Error("Não foi possível ler o arquivo."));
+          reader.onload = () => resolve(String(reader.result).split(",")[1]);
+          reader.readAsDataURL(file);
+        });
       const uploaded = await api.uploadIdentity({ data, mime }, adminToken);
       setDirty(true);
       setDraft((previous) => ({ ...previous, asset: uploaded.asset }));
@@ -76,10 +108,11 @@ export function IdentityManager() {
     setError("");
     setMessage("");
     try {
-      await api.saveIdentity(
+      const saved = await api.saveIdentity(
         { ...draft, uploadToken: token || undefined, reset },
         adminToken,
       );
+      publish(saved);
       await refresh();
       setDirty(false);
       setMessage("Identidade visual salva. O cabeçalho foi atualizado.");
@@ -119,8 +152,9 @@ export function IdentityManager() {
           />
         </label>
         <p>
-          PNG, JPG, WebP ou SVG seguro até 1 MB; GIF até 2 MB; MP4/WebM até 3 MB
-          e 8 segundos. Máximo 2048 × 2048 px.
+          PNG, JPG e WebP até 10 MB, comprimidos antes de salvar; SVG seguro até
+          1 MB; GIF até 2 MB; MP4/WebM até 3 MB e 8 segundos. Máximo 2048 × 2048
+          px.
         </p>
         <label>
           Enquadramento

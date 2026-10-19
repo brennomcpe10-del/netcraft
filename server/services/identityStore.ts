@@ -1,3 +1,6 @@
+import { identityPersistence } from "./identityPersistence.ts";
+import { doc, getDocFromServer, runTransaction } from "firebase/firestore";
+import { db as catalogDb } from "../../src/lib/firebase.ts";
 import {
   initializeApp,
   getApps,
@@ -65,7 +68,7 @@ function services() {
     emulator,
   };
 }
-export async function readIdentity(): Promise<SiteIdentity> {
+async function readLegacyIdentity(): Promise<SiteIdentity> {
   const { db } = services();
   const snap = await db.doc("siteIdentity/current").get();
   return snap.exists ? (snap.data() as SiteIdentity) : defaultIdentity;
@@ -78,6 +81,22 @@ export async function storeLogo(value: {
   height: number;
   duration?: number;
 }): Promise<LogoAsset> {
+  // Static logos use the same small Firestore image representation as categories.
+  if (["image/png", "image/jpeg", "image/webp"].includes(value.mime)) {
+    if (value.bytes.length > 170000)
+      throw new Error(
+        "A imagem deve ser comprimida para até 170 KB. Escolha uma imagem menor.",
+      );
+    return {
+      path: `inline:${crypto.randomUUID()}`,
+      storage: "firestore",
+      url: `data:${value.mime};base64,${value.bytes.toString("base64")}`,
+      kind: "image",
+      mime: value.mime,
+      width: value.width,
+      height: value.height,
+    };
+  }
   const { bucket, emulator } = services();
   const extension: Record<string, string> = {
     "image/png": "png",
@@ -90,16 +109,14 @@ export async function storeLogo(value: {
   };
   const path = `site-identity/${crypto.randomUUID()}.${extension[value.mime]}`,
     downloadToken = crypto.randomUUID();
-  await bucket
-    .file(path)
-    .save(value.bytes, {
-      resumable: false,
-      metadata: {
-        contentType: value.mime,
-        cacheControl: "public,max-age=31536000,immutable",
-        metadata: { firebaseStorageDownloadTokens: downloadToken },
-      },
-    });
+  await bucket.file(path).save(value.bytes, {
+    resumable: false,
+    metadata: {
+      contentType: value.mime,
+      cacheControl: "public,max-age=31536000,immutable",
+      metadata: { firebaseStorageDownloadTokens: downloadToken },
+    },
+  });
   const host = emulator
     ? "http://127.0.0.1:9199"
     : "https://firebasestorage.googleapis.com";
@@ -112,34 +129,6 @@ export async function storeLogo(value: {
     height: value.height,
     ...(value.duration ? { duration: value.duration } : {}),
   };
-}
-export async function saveIdentity(asset: LogoAsset | null, frame: unknown) {
-  const { db, bucket } = services();
-  const next = { asset, ...identityFrame(frame) };
-  if (asset && !(await bucket.file(asset.path).exists())[0])
-    throw new Error("Envie o arquivo novamente.");
-  const ref = db.doc("siteIdentity/current");
-  const old = await db.runTransaction(async (tx) => {
-    const snapshot = await tx.get(ref);
-    tx.set(
-      ref,
-      { ...next, updatedAt: new Date().toISOString() },
-      { merge: true },
-    );
-    return snapshot.data()?.asset;
-  });
-  if (
-    old?.path &&
-    old.path !== asset?.path &&
-    /^site-identity\/[a-f0-9-]+\.(png|jpg|webp|gif|svg|mp4|webm)$/.test(
-      old.path,
-    )
-  )
-    await bucket
-      .file(old.path)
-      .delete({ ignoreNotFound: true })
-      .catch(() => {});
-  return next;
 }
 export function signUpload(asset: LogoAsset) {
   const payload = Buffer.from(
@@ -155,7 +144,7 @@ export function signUpload(asset: LogoAsset) {
   );
 }
 export function verifyUpload(token: unknown): LogoAsset {
-  if (typeof token !== "string" || token.length > 6000)
+  if (typeof token !== "string" || token.length > 350000)
     throw new Error("Envie o arquivo novamente.");
   const [payload, signature, ...rest] = token.split(".");
   const expected = crypto
@@ -173,4 +162,49 @@ export function verifyUpload(token: unknown): LogoAsset {
   if (data.expires < Date.now())
     throw new Error("A prévia expirou. Envie o arquivo novamente.");
   return data.asset;
+}
+
+const identityRef = () => doc(catalogDb, "settings", "siteIdentity");
+const persistent = identityPersistence({
+  async read() {
+    const snapshot = await getDocFromServer(identityRef());
+    return snapshot.exists() ? snapshot.data() : null;
+  },
+  async write(value) {
+    await runTransaction(catalogDb, async (transaction) => {
+      const ref = identityRef();
+      await transaction.get(ref);
+      transaction.set(
+        ref,
+        { ...value, updatedAt: new Date().toISOString() },
+        { merge: true },
+      );
+    });
+  },
+});
+export async function readIdentity(): Promise<SiteIdentity> {
+  const current = await persistent.read();
+  if (current !== null) return current;
+  // Existing Storage logos remain readable. Missing Storage configuration must not block the new static path.
+  try {
+    return await readLegacyIdentity();
+  } catch {
+    return defaultIdentity;
+  }
+}
+export async function saveIdentity(asset: LogoAsset | null, frame: unknown) {
+  const next = { asset, ...identityFrame(frame) };
+  if (asset && asset.storage !== "firestore") {
+    try {
+      const { bucket } = services();
+      if (!(await bucket.file(asset.path).exists())[0])
+        throw new Error("Objeto ausente.");
+    } catch {
+      throw new Error(
+        "O arquivo animado não está disponível no Storage. PNG, JPG e WebP continuam disponíveis.",
+      );
+    }
+  }
+  await persistent.save(next);
+  return next;
 }

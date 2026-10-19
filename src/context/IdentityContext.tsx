@@ -9,6 +9,7 @@ import { defaultIdentity, type SiteIdentity } from "../lib/identity.ts";
 const Context = createContext({
   identity: defaultIdentity,
   refresh: async () => {},
+  publish: (_value: SiteIdentity) => {},
 });
 export function IdentityProvider({ children }: { children: React.ReactNode }) {
   const [identity, setIdentity] = useState<SiteIdentity>(defaultIdentity);
@@ -40,7 +41,7 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
     };
   }, [refresh]);
   return (
-    <Context.Provider value={{ identity, refresh }}>
+    <Context.Provider value={{ identity, refresh, publish: setIdentity }}>
       {children}
     </Context.Provider>
   );

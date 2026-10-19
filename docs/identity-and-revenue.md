@@ -1,3 +1,5 @@
+> Atualização do upload: PNG/JPG/WebP são comprimidos e persistidos pelo caminho do catálogo no Firestore, sem depender de FIREBASE_SERVICE_ACCOUNT_JSON ou Firebase Admin SDK. As instruções de Storage/credenciais abaixo aplicam-se somente a GIF, SVG e vídeo. Veja [a correção e os testes](logo-static-upload.md).
+
 # Identidade Visual e faturamento
 
 Em Administração → Identidade Visual, envie um arquivo, confira a prévia, selecione enquadramento/posição e salve. Remover/restaurar também precisa salvar; descartar mantém a configuração publicada. O nome NETCRAFTBR permanece.
