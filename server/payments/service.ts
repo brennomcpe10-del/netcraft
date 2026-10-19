@@ -95,7 +95,8 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
         quote = quoteCart(input.lines, items);
       items.forEach((item: any) => validateRewardDraft(item?.rewardDraft));
       let coupon: any = null,
-        couponRef: any = null;
+        couponRef: any = null,
+        couponReservations = 0;
       if (input.couponCode) {
         if (
           typeof input.couponCode !== "string" ||
@@ -108,8 +109,12 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
             .where("code", "==", input.couponCode.trim().toUpperCase()),
         );
         if (found.size !== 1) throw new PixError("Cupom não encontrado.");
-        coupon = found.docs[0].data();
-        couponRef = found.docs[0].ref;
+        const reservationRef = db.collection("pixTestCouponUsage").doc(found.docs[0].id);
+        couponRef = reservationRef;
+        const usage = await tx.get(reservationRef);
+        couponReservations = Number(usage.data()?.reservedCount || 0);
+        const source = found.docs[0].data();
+        coupon = {...source, usedCount: Number(source.usedCount || 0) + couponReservations};
       }
       const discountCents = discounted(quote.subtotalCents, coupon),
         totalCents = quote.subtotalCents - discountCents;
@@ -136,7 +141,7 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
         couponCode: coupon?.code || null,
       };
       if (couponRef)
-        tx.update(couponRef, { usedCount: Number(coupon.usedCount || 0) + 1 }); // reservation is retained on ambiguous gateway failures
+        tx.set(couponRef, { reservedCount: couponReservations + 1 }); // reservation is retained on ambiguous gateway failures
       tx.create(ref, saved);
       return saved;
     });

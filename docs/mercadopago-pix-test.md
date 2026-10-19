@@ -22,11 +22,11 @@ O corpo recebido nunca aprova pedidos. Cada reconciliação consulta a API e com
 
 - `pixTestOrders`: pedidos privados de teste, separados dos pedidos históricos e do faturamento real.
 - `pixTestDeliveries`: uma entrada determinística por linha do pedido, com quantidade, snapshot editorial, approval timestamp e dispatchEnabled=false. Não executa comandos, não entrega itens, não inicia contador paralelo e não concede VIPs.
-- As regras negam acesso cliente a ambas as coleções. Admin SDK efetua as transações. Não foram publicadas regras ou configurações Firebase de produção.
+- As regras negam acesso cliente a essas coleções. Admin SDK efetua as transações. Não foram publicadas regras ou configurações Firebase de produção.
 - A chave UUID da compra gera o identificador SHA-256 do pedido e a chave de idempotência do provedor. Repetir a mesma compra reaproveita a cobrança; reutilizar a chave com outro conteúdo é rejeitado. Falha ambígua deve ser repetida com a mesma chave.
 - Aprovação e criação das entradas da fila ocorrem em transação. Repetições preservam approvedAt e a fila. Reembolso parcial, total ou chargeback bloqueia todas as entradas preventivamente para revisão futura. Um retorno pendente atrasado não desfaz aprovação; reembolso não é revertido.
 - A validade VIP deverá usar approvedAt como origem quando o adaptador NetCraft Core existir. Os textos legados de duração e rewardDraft são editoriais, **não** recompensas autorizadas para execução. Renovação e expiração serão validadas com o addon antes de habilitar dispatch.
-- Cupons são conferidos e reservados em transação (usedCount) para impedir ultrapassar maxUses. Uma reserva não é liberada automaticamente em falhas ambíguas, cancelamento ou expiração; exige conciliação antes de eventual liberação, para não permitir exceder o limite. A regra de expiração é a validade do cupom no momento da compra.
+- Cupons são conferidos e reservados em transação na coleção privada pixTestCouponUsage, sem alterar usedCount nem consumir limites dos cupons reais para impedir ultrapassar maxUses. Uma reserva não é liberada automaticamente em falhas ambíguas, cancelamento ou expiração; exige conciliação antes de eventual liberação, para não permitir exceder o limite. A regra de expiração é a validade do cupom no momento da compra.
 - O endpoint público antigo simulate-payment retorna 410 para todos os pedidos. As rotas administrativas antigas operam apenas na coleção orders e não conseguem alterar os novos pedidos privados. Nenhum pedido de teste é espelhado na coleção pública orders.
 
 ## Limitações que impedem ativação real

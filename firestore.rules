@@ -3,6 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Backend Admin SDK only. Never mirror these records into public orders.
+    match /pixTestCouponUsage/{id} { allow read, write: if false; }
     match /pixTestOrders/{id} { allow read, write: if false; }
     match /pixTestDeliveries/{id} { allow read, write: if false; }
 

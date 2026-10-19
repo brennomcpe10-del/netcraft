@@ -91,7 +91,8 @@ for (const j of jobs.docs) {
   assert.equal(j.data().approvedAt, "2026-10-19T01:00:00.000Z");
   assert.equal(j.data().dispatchEnabled, false);
 }
-assert.equal((await db.doc("coupons/fixture").get()).data()!.usedCount, 1);
+assert.equal((await db.doc("coupons/fixture").get()).data()!.usedCount, 0);
+assert.equal((await db.doc("pixTestCouponUsage/fixture").get()).data()!.reservedCount, 1);
 await assert.rejects(() => api.create(input, crypto.randomUUID()));
 provider = { ...provider, transaction_amount: 0.01 };
 await assert.rejects(() => api.reconcile(id));
@@ -109,7 +110,7 @@ jobs = await db
   .get();
 for (const j of jobs.docs) assert.equal(j.data().state, "blocked");
 // REST client without credentials must not read or mutate private financial records.
-for (const collection of ["pixTestOrders", "pixTestDeliveries"]) {
+for (const collection of ["pixTestOrders", "pixTestDeliveries", "pixTestCouponUsage"]) {
   const url = `http://127.0.0.1:8085/v1/projects/demo-netcraft-admin-test/databases/(default)/documents/${collection}/unauthorized`;
   const response = await fetch(url, {
     method: "PATCH",
