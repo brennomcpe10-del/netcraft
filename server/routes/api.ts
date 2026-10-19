@@ -1,3 +1,4 @@
+import {pixRouter} from './pix.ts';
 import {identityRouter} from './identity.ts';
 import {paymentStatusPatch} from '../../src/lib/paymentStatus.ts';
 import {revenueReport,brasiliaPeriod} from '../../src/lib/revenue.ts';
@@ -15,6 +16,7 @@ export const apiRouter = express.Router();
 
 apiRouter.use('/admin', adminAuthRouter);
 apiRouter.use(identityRouter);
+apiRouter.use(pixRouter);
 apiRouter.get('/admin/revenue',requireAdmin,async(req,res)=>{
  try{const period=typeof req.query.period==='string'?req.query.period:brasiliaPeriod(new Date())!;if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(period))return res.status(400).json({error:'Selecione mês e ano válidos.'});
  const {db}=await import('../../src/lib/firebase.ts');const {collection,getDocs}=await import('firebase/firestore');const snapshot=await getDocs(collection(db,'orders'));
@@ -531,25 +533,7 @@ apiRouter.post('/orders', async (req, res) => {
 });
 
 // Webhook / Simulated Payment Confirmation
-apiRouter.post('/orders/:id/simulate-payment', (req, res) => {
-  const { id } = req.params;
-  const order = dbStore.getOrderById(id);
-  if (!order) {
-    return res.status(404).json({ error: 'Pedido não encontrado.' });
-  }
-
-  if (order.status === 'Entregue' || order.status === 'Pago') {
-    return res.json({ message: 'Pedido já foi processado e entregue.', order });
-  }
-
-  // Server processes payment and delivers items
-  const updatedOrder = dbStore.updateOrderStatus(id, 'Pago');
-  res.json({
-    success: true,
-    message: 'Pagamento confirmado pelo backend! Vantagens entregues na conta do jogador.',
-    order: updatedOrder
-  });
-});
+apiRouter.post('/orders/:id/simulate-payment', (_req,res) => res.status(410).json({error:'Simulação pública desativada. Pagamentos são confirmados somente pelo provedor.'}));
 
 // Handler for Order Status Update with comprehensive Firestore sync and flexible ID parsing
 const handleOrderStatusUpdate = async(req:express.Request,res:express.Response)=>{
@@ -557,7 +541,7 @@ const handleOrderStatusUpdate = async(req:express.Request,res:express.Response)=
  if(!id||id.includes('/')||!['Pendente','Pago','Entregue','Cancelado','Reembolsado','Estornado'].includes(status))return res.status(400).json({error:'Pedido ou status inválido.'});
  try{const {db}=await import('../../src/lib/firebase.ts');const {doc,getDoc,getDocs,collection,runTransaction}=await import('firebase/firestore');let ref=doc(db,'orders',id);
  if(!(await getDoc(ref)).exists()){const snapshot=await getDocs(collection(db,'orders'));const normalized=id.replace(/^#/,'').toLowerCase();const matches=snapshot.docs.filter(d=>[d.id,d.data().id,d.data().orderNumber].some(value=>String(value||'').replace(/^#/,'').toLowerCase()===normalized));if(matches.length!==1)return res.status(matches.length?409:404).json({error:'Pedido não encontrado de forma única. Use o identificador do documento.'});ref=matches[0].ref;}
- const updated=await runTransaction(db,async tx=>{const snapshot=await tx.get(ref);if(!snapshot.exists())throw new Error('Pedido não encontrado.');const current=snapshot.data();const patch=paymentStatusPatch(current,status,new Date().toISOString());tx.update(ref,patch);return {...current,...patch,id:snapshot.id};});await dbStore.syncFromFirestore().catch(()=>{});return res.json(updated);
+ const updated=await runTransaction(db,async tx=>{const snapshot=await tx.get(ref);if(!snapshot.exists())throw new Error('Pedido não encontrado.');const current=snapshot.data();if(current.paymentProvider==='mercadopago'||current.paymentId&&current.environment==='test')throw new Error('Pagamento gerenciado exclusivamente pelo provedor.');const patch=paymentStatusPatch(current,status,new Date().toISOString());tx.update(ref,patch);return {...current,...patch,id:snapshot.id};});await dbStore.syncFromFirestore().catch(()=>{});return res.json(updated);
  }catch{return res.status(503).json({error:'Não foi possível confirmar a alteração do pedido no Firebase.'});}
 };
 

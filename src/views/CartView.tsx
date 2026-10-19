@@ -1,3 +1,4 @@
+import { PixCheckout } from "../components/PixCheckout.tsx";
 import React, { useEffect, useState } from "react";
 import { Trash2, Minus, Plus, ArrowRight } from "lucide-react";
 import { useCart } from "../context/CartContext.tsx";
@@ -151,10 +152,6 @@ export function CartView({
               <span>Total{!quote ? " estimado" : ""}</span>
               <strong>{money(quote?.totalCents ?? subtotal)}</strong>
             </div>
-            <p>
-              Cupons ficam indisponíveis enquanto a cobrança utiliza links com
-              valores fixos.
-            </p>
             {checking && (
               <p role="status">Conferindo preços e disponibilidade…</p>
             )}
@@ -163,22 +160,21 @@ export function CartView({
                 {error}
               </p>
             )}
-            <button
-              className="nc-button"
-              disabled={!single || !quote || checking}
-              onClick={() => {
-                if (single?.item) onCheckout(single.item, single.productType);
-              }}
-            >
-              Continuar para pagamento
-              <ArrowRight size={16} />
-            </button>
-            {!single && (
-              <p>
-                O pagamento conjunto de vários produtos ainda está em
-                preparação. Seu carrinho permanece salvo; as cobranças atuais
-                aceitam uma unidade por checkout.
-              </p>
+            <PixCheckout
+              lines={lines}
+              disabled={
+                !quote || checking || resolved.some((line) => !line.available)
+              }
+            />
+            {single && (
+              <button
+                className="text-link"
+                onClick={() => {
+                  if (single.item) onCheckout(single.item, single.productType);
+                }}
+              >
+                Usar pagamento anterior (uma unidade)
+              </button>
             )}
             <button className="text-link" onClick={onShop}>
               Continuar comprando
