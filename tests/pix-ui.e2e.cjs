@@ -33,7 +33,9 @@ const crypto = require("node:crypto");
     const input = r.request().postDataJSON();
     assert.equal(input.lines.length, 2);
     assert.equal(input.couponCode, "LOCALTEST");
-    key = r.request().headers()["idempotency-key"];
+    const receivedKey = r.request().headers()["idempotency-key"];
+    if (key) assert.equal(receivedKey,key);
+    key = receivedKey;
     creates++;
     order = {
       id: crypto.createHash("sha256").update(key).digest("hex"),
@@ -46,6 +48,7 @@ const crypto = require("node:crypto");
       expiresAt: new Date(Date.now() + 1800000).toISOString(),
       delivery: "Integração Minecraft desativada no ambiente de teste.",
     };
+    if(creates===1){order.state="creating";return r.fulfill({status:502,json:{error:"Falha temporária de teste"}});}
     return r.fulfill({ status: 201, json: order });
   });
   await context.route("**/api/pix/orders/*", (r) =>
@@ -71,9 +74,11 @@ const crypto = require("node:crypto");
     await page
       .getByRole("button", { name: "Gerar Pix de teste", exact: true })
       .click();
+    await page.getByText(/Cobrança ainda não concluída/).waitFor();
+    await page.getByRole("button",{name:"Gerar Pix de teste",exact:true}).click();
     await page.getByText("Aguardando pagamento", { exact: true }).waitFor();
     await page.getByRole("img", { name: "QR Code Pix de teste" }).waitFor();
-    assert.equal(creates, 1);
+    assert.equal(creates, 2);
     for (const width of [320, 360, 430]) {
       await page.setViewportSize({ width, height: 800 });
       assert.equal(

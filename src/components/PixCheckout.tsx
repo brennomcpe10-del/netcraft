@@ -113,7 +113,8 @@ export function PixCheckout({
       <p className="text-sm text-zinc-400">
         Não pague com seu banco. Este fluxo não entrega itens no servidor.
       </p>
-      {order ? (
+      {order?.state === "creating" && <p role="status">Cobrança ainda não concluída. Confira os mesmos dados e tente novamente; o pedido será reutilizado.</p>}
+      {order && order.state !== "creating" ? (
         <div className="space-y-3">
           <p role="status">{labels[order.state] || order.state}</p>
           <strong>{money(order.totalCents)}</strong>
