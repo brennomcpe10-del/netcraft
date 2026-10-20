@@ -7,6 +7,7 @@ import {
   verifyPayment,
   paymentState,
   MercadoPago,
+  normalizeCpf,
 } from "../server/payments/mercadoPago.ts";
 import { discounted, pixService } from "../server/payments/service.ts";
 const order = { id: "order", paymentId: "123", totalCents: 2500 };
@@ -22,16 +23,14 @@ const payment = {
   status: "approved",
   date_approved: "2026-10-19T02:00:00Z",
 };
-test("Pix fails closed for production and non-test tokens", () => {
+test("Pix rejects production URLs and validates supported token formats", () => {
   assert.throws(() =>
     testToken({
       VERCEL_ENV: "production",
       MERCADOPAGO_ACCESS_TOKEN: "TEST-test",
     }),
   );
-  assert.throws(() =>
-    testToken({ MERCADOPAGO_ACCESS_TOKEN: "APP_USR-secret" }),
-  );
+  assert.equal(testToken({MERCADOPAGO_ACCESS_TOKEN:"APP_USR-fixture"}),"APP_USR-fixture");
   assert.equal(
     testToken({ MERCADOPAGO_ACCESS_TOKEN: "TEST-test" }),
     "TEST-test",
@@ -218,4 +217,42 @@ test("cart idempotency, approval, outbox and refund blocking are persisted witho
   state = "refunded";
   await api.reconcile(id);
   assert.equal(db.records.get(jobs[0][0]).state, "blocked");
+});
+
+test("formatted CPF is normalized without inventing buyer identity",()=>{
+ assert.equal(normalizeCpf("123.456.789-09"),"12345678909");
+ assert.equal(normalizeCpf("12345678909"),"12345678909");
+ assert.equal(normalizeCpf("not a CPF"),"");
+ assert.equal(normalizeCpf(null),"");
+});
+test("APP_USR real account is blocked before POST; verified test account is allowed",async()=>{
+ for(const isTest of [false,true]){
+  const calls:string[]=[];
+  const gateway=new MercadoPago("APP_USR-fixture",async(url,options)=>{
+   calls.push(String(options?.method));
+   return new Response(JSON.stringify(options?.method==="POST"?{id:123}:{id:42,tags:isTest?["test_user"]:["normal"]}));
+  });
+  if(isTest)await gateway.create({transaction_amount:0.99},"same-key");
+  else await assert.rejects(()=>gateway.create({transaction_amount:0.99},"same-key"),/conta real/);
+  assert.equal(calls.includes("POST"),isTest);
+ }
+});
+test("live-mode flag alone never authorizes a real receiver",()=>{
+ assert.throws(()=>verifyPayment({...payment,live_mode:true},order,"42"));
+ verifyPayment({...payment,live_mode:true},{...order,receiverIsTestAccount:true},"42");
+ assert.throws(()=>verifyPayment({...payment,live_mode:true,collector_id:43},{...order,receiverIsTestAccount:true},"42"));
+});
+test("sub-real catalog price and formatted CPF reach the provider unchanged in value",async()=>{
+ const db=memoryDB();db.records.set("products/cheap",{name:"Local fixture",price:0.99,active:true});
+ let recorded:any;const key="sub-real-checkout-test-123456789";
+ const id=crypto.createHash("sha256").update(key).digest("hex");
+ const gateway:any={
+  me:async()=>({id:42}),
+  create:async(body:any)=>{recorded=body;return {...payment,...body,status:"pending",point_of_interaction:{transaction_data:{qr_code:"fixture",qr_code_base64:"aGVsbG8="}}};},
+  get:async()=>({...payment,external_reference:id,metadata:{netcraft_order_id:id},status:"pending",transaction_amount:0.99})
+ };
+ const before=Date.now();const result=await pixService(db as any,gateway).create({lines:[{productId:"cheap",productType:"product",quantity:1}],gamertag:"Local Tester",email:"tester@testuser.com",cpf:"123.456.789-09"},key);
+ assert.equal(result.totalCents,99);assert.equal(recorded.transaction_amount,0.99);
+ assert.equal(recorded.payer.identification.number,"12345678909");
+ assert.ok(Date.parse(recorded.date_of_expiration)-before>=1800000);
 });

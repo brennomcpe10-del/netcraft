@@ -20,6 +20,8 @@ export function PixCheckout({
   disabled: boolean;
 }) {
   const [available, setAvailable] = useState(false),
+    [configChecking,setConfigChecking] = useState(true),
+    [configError,setConfigError] = useState(""),
     [gamertag, setGamertag] = useState(""),
     [email, setEmail] = useState(""),
     [cpf, setCpf] = useState(""),
@@ -34,11 +36,29 @@ export function PixCheckout({
       return "";
     }
   });
+  async function checkConfiguration(signal?: AbortSignal) {
+    setConfigChecking(true);setConfigError("");
+    try {
+      const response = await fetch("/api/pix/config",{cache:"no-store",signal});
+      if (!response.headers.get("content-type")?.includes("application/json"))
+        throw new Error("A API do checkout não retornou JSON. O acesso pode estar bloqueado pela proteção da Preview ou pela rota do servidor.");
+      const config = await response.json();
+      if (!signal?.aborted) {
+        setAvailable(response.ok && config.available === true);
+        if(!response.ok || !config.available)
+          setConfigError(config.reason || "A API do checkout não conseguiu validar a configuração desta versão.");
+      }
+    } catch(error) {
+      if(!signal?.aborted) {
+        setAvailable(false);
+        setConfigError(error instanceof Error ? error.message : "Falha de conexão com o checkout.");
+      }
+    } finally {if(!signal?.aborted)setConfigChecking(false);}
+  }
   useEffect(() => {
-    fetch("/api/pix/config")
-      .then((r) => r.json())
-      .then((d) => setAvailable(d.available))
-      .catch(() => {});
+    const abort = new AbortController();
+    checkConfiguration(abort.signal);
+    return ()=>abort.abort();
   }, []);
   async function refresh(k = key, signal?: AbortSignal) {
     const id = await crypto.subtle.digest(
@@ -88,7 +108,7 @@ export function PixCheckout({
       const r = await fetch("/api/pix/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json", "idempotency-key": k },
-        body: JSON.stringify({ lines, gamertag, email, cpf, couponCode }),
+        body: JSON.stringify({ lines, gamertag:gamertag.trim(), email:email.trim(), cpf:cpf.replace(/\D/g,""), couponCode:couponCode.trim() }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
@@ -191,6 +211,8 @@ export function PixCheckout({
                 type={String(type)}
                 value={String(value)}
                 onChange={(e) => (set as (v: string) => void)(e.target.value)}
+                inputMode={label === "CPF do comprador de teste" ? "numeric" : undefined}
+                placeholder={label === "Cupom (opcional)" ? "Deixe vazio se não tiver cupom" : label === "CPF do comprador de teste" ? "Com ou sem pontos e traço" : undefined}
                 required={label !== "Cupom (opcional)"}
                 maxLength={100}
               />
@@ -198,18 +220,17 @@ export function PixCheckout({
           ))}
           <button
             className="nc-button w-full"
-            disabled={disabled || busy || !available}
+            disabled={disabled || busy || configChecking || !available}
           >
-            {busy ? "Gerando Pix…" : "Gerar Pix de teste"}
+            {configChecking ? "Verificando integração…" : busy ? "Gerando Pix…" : "Gerar Pix de teste"}
           </button>
         </form>
       )}
-      {!available && (
-        <p role="status">
-          Integração Pix de teste indisponível neste ambiente. Nenhuma cobrança
-          real será criada.
-        </p>
-      )}
+      {configChecking && <p role="status">Verificando a conta de teste no Mercado Pago…</p>}
+      {!configChecking && !available && <div className="space-y-2">
+        <p role="alert" className="text-amber-300 text-sm">{configError}</p>
+        <button className="text-link" type="button" onClick={()=>checkConfiguration()}>Verificar integração novamente</button>
+      </div>}
       {error && (
         <p role="alert" className="text-amber-300 text-sm">
           {error}

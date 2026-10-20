@@ -25,19 +25,22 @@ function failure(res: express.Response, e: unknown) {
           : "Não foi possível confirmar a operação. Seu pedido não foi marcado como pago.",
     });
 }
-pixRouter.get("/pix/config", (_req, res) => {
+pixRouter.get("/pix/config", async (_req, res) => {
+  res.setHeader("Cache-Control","no-store");
+  let stage = "environment";
   try {
     testToken();
-    return res.json({
-      available: true,
-      environment: "test",
-      realPayments: false,
-    });
-  } catch {
-    return res.json({
-      available: false,
-      environment: "test",
-      realPayments: false,
+    stage = "provider";
+    await new MercadoPago().me();
+    stage = "persistence";
+    paymentDatabase();
+    return res.json({available:true,environment:"test",realPayments:false});
+  } catch (error) {
+    return res.status(503).json({
+      available:false,environment:"test",realPayments:false,stage,
+      reason:error instanceof PixError ? error.message :
+        stage === "persistence" ? "A credencial de persistência do backend não pôde ser inicializada." :
+        "Não foi possível consultar a API do Mercado Pago. Tente verificar novamente."
     });
   }
 });

@@ -1,10 +1,12 @@
+> Atualização de compatibilidade: CPF formatado é normalizado no backend. Tokens APP_USR- são aceitos SOMENTE se GET /users/me confirmar tags contendo test_user ANTES de qualquer POST de pagamento. Contas reais e VERCEL_ENV=production continuam bloqueados. live_mode=true só é aceito para o recebedor de teste já verificado e gravado pelo backend; esse indicador nunca vem do comprador. O limite mínimo artificial de R$ 1 foi removido (valores positivos em centavos são encaminhados ao provedor, que pode impor seus próprios limites). A validade solicitada é de 45 minutos para não ficar abaixo dos 30 minutos mínimos durante o processamento. /api/pix/config agora consulta a conta e informa a etapa/causa sanitizada da indisponibilidade, sem revelar credenciais. O build da branch executa lint, testes e build antes do deploy.
+
 # Checkout Pix Mercado Pago — somente testes
 
 ## Uso na Preview
 
 Abra a loja → adicione produtos → Carrinho → Pix automático. Informe gamertag, e-mail e CPF do comprador de teste, cupom opcional e gere a cobrança. A resposta do Mercado Pago fornece QR Code e Copia e Cola. **Não tente pagar esses códigos em banco real.** O mesmo navegador retoma o pedido após atualizar a página; a chave privada de consulta permanece em sessionStorage e não é enviada em URLs.
 
-O backend usa a API oficial `POST /v1/payments` com `X-Idempotency-Key`, `GET /v1/payments/:id` e `GET /users/me`. `MERCADOPAGO_ACCESS_TOKEN` precisa ser TEST-. `VERCEL_ENV=production` sempre bloqueia a integração. `MERCADOPAGO_PUBLIC_KEY` não é necessário no fluxo Pix servidor a servidor e não é exposto. Não existe chave de configuração que habilite produção nesta implementação.
+O backend usa a API oficial `POST /v1/payments` com `X-Idempotency-Key`, `GET /v1/payments/:id` e `GET /users/me`. `MERCADOPAGO_ACCESS_TOKEN` pode ser TEST- ou APP_USR- de uma conta comprovadamente de teste pela API. `VERCEL_ENV=production` sempre bloqueia a integração. `MERCADOPAGO_PUBLIC_KEY` não é necessário no fluxo Pix servidor a servidor e não é exposto. Não existe chave de configuração que habilite produção nesta implementação.
 
 A persistência utiliza o Firebase Admin SDK com o `FIREBASE_SERVICE_ACCOUNT_JSON` já existente e confere o projeto da credencial. Credencial ausente/inválida causa erro explícito, nunca fallback para pedidos em RAM ou confirmação otimista. A função de upload estático de logos continua independente do Admin SDK.
 
@@ -31,7 +33,7 @@ O corpo recebido nunca aprova pedidos. Cada reconciliação consulta a API e com
 
 ## Limitações que impedem ativação real
 
-O catálogo legado e os cupons ainda possuem permissões públicas de gravação no firestore.rules existente. Embora o navegador não envie preços nem recompensas ao checkout e os novos registros financeiros sejam privados, a migração da autorização de todo o catálogo para backend é obrigatória antes de produção. Os dados históricos e as regras dessas coleções não foram alterados para não interromper os gerenciadores existentes. Credenciais reais são bloqueadas independentemente disso.
+O catálogo legado e os cupons ainda possuem permissões públicas de gravação no firestore.rules existente. Embora o navegador não envie preços nem recompensas ao checkout e os novos registros financeiros sejam privados, a migração da autorização de todo o catálogo para backend é obrigatória antes de produção. Os dados históricos e as regras dessas coleções não foram alterados para não interromper os gerenciadores existentes. Contas reais são bloqueadas independentemente disso.
 
 O sandbox Pix pode rejeitar operações ou manter pagamentos pendentes. Uma resposta de teste não equivale a liquidação bancária. Não há endpoint público para forçar aprovação. Erros do provedor são exibidos sem expor credenciais ou dados da requisição. Os testes de aprovação, expiração e estorno usam mocks isolados.
 

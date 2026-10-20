@@ -8,15 +8,15 @@ export class PixError extends Error {
   }
 }
 export function testToken(env = process.env) {
-  if (
-    env.VERCEL_ENV === "production" ||
-    !env.MERCADOPAGO_ACCESS_TOKEN?.startsWith("TEST-")
-  )
-    throw new PixError(
-      "Pix de teste indisponível. Pagamentos reais estão desativados.",
-      503,
-    );
-  return env.MERCADOPAGO_ACCESS_TOKEN;
+  if (env.VERCEL_ENV === "production") throw new PixError("Esta URL é de produção. Abra a Preview da branch redesign-mobile-solaris para testar o Pix.",503);
+  const token = env.MERCADOPAGO_ACCESS_TOKEN?.trim();
+  if (!token) throw new PixError("O backend desta versão não recebeu MERCADOPAGO_ACCESS_TOKEN. A cobrança não foi iniciada.",503);
+  if (!/^(TEST-|APP_USR-)/.test(token)) throw new PixError("O backend recebeu uma credencial de formato incompatível. É necessário o Access Token privado do Mercado Pago.",503);
+  return token;
+}
+export function normalizeCpf(value: unknown) {
+  return typeof value === "string" && /^[\d.\s-]+$/.test(value)
+    ? value.replace(/\D/g, "") : "";
 }
 export class MercadoPago {
   constructor(
@@ -24,6 +24,8 @@ export class MercadoPago {
     private transport: typeof fetch = fetch,
   ) {}
   async request(path: string, body?: unknown, key?: string) {
+    // Check the account BEFORE any payment mutation, even for direct callers.
+    if (body) await this.me();
     const response = await this.transport(
       `https://api.mercadopago.com${path}`,
       {
@@ -38,15 +40,22 @@ export class MercadoPago {
       },
     );
     const data = await response.json();
-    if (!response.ok)
-      throw new PixError(
-        "Mercado Pago não aceitou a operação de teste. Nenhum pagamento foi confirmado. Tente novamente com o mesmo pedido.",
-        502,
-      );
+    if (!response.ok) {
+      const providerCode = String(data?.cause?.[0]?.code || data?.error || "").replace(/[^a-zA-Z0-9_.-]/g,"").slice(0,60);
+      const details = response.status === 401 || response.status === 403
+        ? "A API do Mercado Pago recusou a autenticação da credencial desta versão."
+        : "A API do Mercado Pago recusou a operação de teste.";
+      throw new PixError(details + " HTTP " + response.status + (providerCode ? " · " + providerCode : "") + ". Nenhum pagamento foi confirmado.",502);
+    }
     return data;
   }
-  me() {
-    return this.request("/users/me");
+  async me() {
+    const account = await this.request("/users/me");
+    const isTestAccount = Array.isArray(account.tags) && account.tags.includes("test_user");
+    if (!/^\d+$/.test(String(account.id))) throw new PixError("A API não identificou o recebedor de teste.",503);
+    if (this.token.startsWith("APP_USR-") && !isTestAccount)
+      throw new PixError("A credencial pertence a uma conta real ou não pôde ser identificada como conta de teste. Cobranças reais permanecem bloqueadas.",503);
+    return {...account, netcraftTestAccount: isTestAccount};
   }
   create(body: unknown, key: string) {
     return this.request("/v1/payments", body, key);
@@ -92,7 +101,7 @@ export function verifyPayment(payment: any, order: any, collector: string) {
     String(payment.collector_id) !== collector ||
     payment.currency_id !== "BRL" ||
     payment.payment_method_id !== "pix" ||
-    payment.live_mode !== false ||
+    (payment.live_mode !== false && !(payment.live_mode === true && order.receiverIsTestAccount === true)) ||
     Math.round(Number(payment.transaction_amount) * 100) !== order.totalCents ||
     payment.metadata?.netcraft_order_id !== order.id
   )

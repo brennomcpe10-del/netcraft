@@ -7,6 +7,7 @@ import {
   PixError,
   verifyPayment,
   paymentState,
+  normalizeCpf,
 } from "./mercadoPago.ts";
 export function discounted(subtotal: number, c: any, now = Date.now()) {
   if (!c) return 0;
@@ -40,6 +41,7 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
     jobs = db.collection("pixTestDeliveries");
   async function create(input: any, key: string) {
     validateCartRequest(input.lines);
+    const cpf = normalizeCpf(input.cpf);
     if (!/^[a-zA-Z0-9-]{20,80}$/.test(key))
       throw new PixError("Identificador da compra inválido.");
     if (
@@ -47,7 +49,7 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
       !/^.{3,32}$/.test(input.gamertag.trim()) ||
       typeof input.email !== "string" ||
       !/^[^\s@]{1,100}@[^\s@]{1,100}\.[^\s@]{2,30}$/.test(input.email) ||
-      !/^\d{11}$/.test(input.cpf || "")
+      !/^\d{11}$/.test(cpf)
     )
       throw new PixError(
         "Informe gamertag, e-mail e CPF válidos para o teste.",
@@ -61,12 +63,13 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
           lines: input.lines,
           gamertag: input.gamertag.trim(),
           email: input.email,
-          cpf: input.cpf,
+          cpf,
           couponCode: input.couponCode || "",
         }),
       )
       .digest("hex");
-    const collector = String((await gateway.me()).id);
+    const receiver = await gateway.me();
+    const collector = String(receiver.id);
     if (!/^\d+$/.test(collector))
       throw new PixError("Recebedor de teste inválido.", 503);
     const order: any = await db.runTransaction(async (tx) => {
@@ -118,12 +121,13 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
       }
       const discountCents = discounted(quote.subtotalCents, coupon),
         totalCents = quote.subtotalCents - discountCents;
-      if (totalCents < 100 || totalCents > 1000000)
-        throw new PixError("O total Pix deve estar entre R$ 1 e R$ 10.000.");
+      if (totalCents < 1 || totalCents > 1000000)
+        throw new PixError("O total Pix deve ser positivo e não pode ultrapassar R$ 10.000.");
       const saved = {
         id,
         requestHash,
         collector,
+        receiverIsTestAccount: receiver.netcraftTestAccount === true,
         totalCents,
         subtotalCents: quote.subtotalCents,
         discountCents,
@@ -137,7 +141,7 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
         state: "creating",
         environment: "test",
         createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 1800000).toISOString(),
+        expiresAt: new Date(Date.now() + 2700000).toISOString(),
         couponCode: coupon?.code || null,
       };
       if (couponRef)
@@ -162,7 +166,7 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
             : {}),
           payer: {
             email: input.email,
-            identification: { type: "CPF", number: input.cpf },
+            identification: { type: "CPF", number: cpf },
           },
         },
         id,
