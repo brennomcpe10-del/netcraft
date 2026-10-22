@@ -45,7 +45,8 @@ export class MercadoPago {
       const details = response.status === 401 || response.status === 403
         ? "A API do Mercado Pago recusou a autenticação da credencial desta versão."
         : "A API do Mercado Pago recusou a operação de teste.";
-      throw new PixError(details + " HTTP " + response.status + (providerCode ? " · " + providerCode : "") + ". Nenhum pagamento foi confirmado.",502);
+      const safeOperation = path === "/users/me" ? "verificação da conta (/users/me)" : path === "/v1/payments" ? "criação do pagamento (/v1/payments)" : path.startsWith("/v1/payments/") ? "consulta do pagamento (/v1/payments/:id)" : "operação da API";
+      throw new PixError(details + " Etapa: " + safeOperation + ". HTTP " + response.status + (providerCode ? " · " + providerCode : "") + ". Nenhum pagamento foi confirmado.",502);
     }
     return data;
   }
