@@ -75,13 +75,13 @@ export function orderRequest(
     type: "online",
     processing_mode: "automatic",
     external_reference: order.id,
-    total_amount: order.totalCents / 100,
+    total_amount: amountString(order.totalCents),
     payer,
     items: orderItems(order),
     transactions: {
       payments: [
         {
-          amount: order.totalCents / 100,
+          amount: amountString(order.totalCents),
           payment_method: { id: "pix", type: "bank_transfer" },
         },
       ],
