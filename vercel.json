@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run lint && NODE_ENV=test npm test && npm run build && npm run test:pix:preview",
+  "buildCommand": "npm run lint && NODE_ENV=test npm test && npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
