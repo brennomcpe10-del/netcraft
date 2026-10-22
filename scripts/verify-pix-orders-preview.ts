@@ -57,7 +57,7 @@ try {
         },
       ],
     },
-    { email: "test_payer@example.com", first_name: "APRO" },
+    { email: "test@testuser.com", first_name: "APRO" },
   );
   const resource = await gateway.create(request, crypto.randomUUID());
   const expected = {
