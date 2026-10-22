@@ -140,7 +140,7 @@ test("transport creates and queries ORD IDs; legacy is read-only; errors never e
       !e.message.includes("TEST-fixture"),
   );
 });
-test("contract uses numeric amounts, Pix bank_transfer and server item prices; no legacy fields", () => {
+test("contract uses string amounts, Pix bank_transfer and server item prices; no legacy fields", () => {
   const req = orderRequest(
     {
       ...expected,
@@ -158,10 +158,10 @@ test("contract uses numeric amounts, Pix bank_transfer and server item prices; n
     },
     { email: "local@testuser.com" },
   );
-  assert.equal(req.total_amount, 25);
+  assert.equal(req.total_amount, "25.00");
   assert.deepEqual(req.transactions.payments, [
     {
-      amount: 25,
+      amount: "25.00",
       payment_method: { id: "pix", type: "bank_transfer" },
     },
   ]);
