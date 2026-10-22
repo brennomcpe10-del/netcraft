@@ -8,15 +8,28 @@ export class PixError extends Error {
   }
 }
 export function testToken(env = process.env) {
-  if (env.VERCEL_ENV === "production") throw new PixError("Esta URL é de produção. Abra a Preview da branch redesign-mobile-solaris para testar o Pix.",503);
+  if (env.VERCEL_ENV === "production")
+    throw new PixError(
+      "Esta URL é de produção. Abra a Preview da branch redesign-mobile-solaris para testar o Pix.",
+      503,
+    );
   const token = env.MERCADOPAGO_ACCESS_TOKEN?.trim();
-  if (!token) throw new PixError("O backend desta versão não recebeu MERCADOPAGO_ACCESS_TOKEN. A cobrança não foi iniciada.",503);
-  if (!/^(TEST-|APP_USR-)/.test(token)) throw new PixError("O backend recebeu uma credencial de formato incompatível. É necessário o Access Token privado do Mercado Pago.",503);
+  if (!token)
+    throw new PixError(
+      "O backend desta versão não recebeu MERCADOPAGO_ACCESS_TOKEN. A cobrança não foi iniciada.",
+      503,
+    );
+  if (!/^(TEST-|APP_USR-)/.test(token))
+    throw new PixError(
+      "O backend recebeu uma credencial de formato incompatível. É necessário o Access Token privado do Mercado Pago.",
+      503,
+    );
   return token;
 }
 export function normalizeCpf(value: unknown) {
   return typeof value === "string" && /^[\d.\s-]+$/.test(value)
-    ? value.replace(/\D/g, "") : "";
+    ? value.replace(/\D/g, "")
+    : "";
 }
 export class MercadoPago {
   constructor(
@@ -41,28 +54,62 @@ export class MercadoPago {
     );
     const data = await response.json();
     if (!response.ok) {
-      const providerCode = String(data?.cause?.[0]?.code || data?.error || "").replace(/[^a-zA-Z0-9_.-]/g,"").slice(0,60);
-      const details = response.status === 401 || response.status === 403
-        ? "A API do Mercado Pago recusou a autenticação da credencial desta versão."
-        : "A API do Mercado Pago recusou a operação de teste.";
-      const safeOperation = path === "/users/me" ? "verificação da conta (/users/me)" : path === "/v1/payments" ? "criação do pagamento (/v1/payments)" : path.startsWith("/v1/payments/") ? "consulta do pagamento (/v1/payments/:id)" : "operação da API";
-      throw new PixError(details + " Etapa: " + safeOperation + ". HTTP " + response.status + (providerCode ? " · " + providerCode : "") + ". Nenhum pagamento foi confirmado.",502);
+      const providerCode = String(
+        data?.errors?.[0]?.code ?? data?.cause?.[0]?.code ?? data?.error ?? "",
+      )
+        .replace(/[^a-zA-Z0-9_.-]/g, "")
+        .slice(0, 60);
+      const details =
+        response.status === 401 || response.status === 403
+          ? "A API do Mercado Pago recusou a autenticação da credencial desta versão."
+          : "A API do Mercado Pago recusou a operação de teste.";
+      const safeOperation =
+        path === "/users/me"
+          ? "verificação da conta (/users/me)"
+          : path === "/v1/orders"
+            ? "criação da order (/v1/orders)"
+            : path.startsWith("/v1/orders/")
+              ? "consulta da order (/v1/orders/:id)"
+              : path.startsWith("/v1/payments/")
+                ? "consulta de pagamento histórico"
+                : "operação da API";
+      throw new PixError(
+        details +
+          " Etapa: " +
+          safeOperation +
+          ". HTTP " +
+          response.status +
+          (providerCode ? " · " + providerCode : "") +
+          ". Nenhum pagamento foi confirmado.",
+        502,
+      );
     }
     return data;
   }
   async me() {
     const account = await this.request("/users/me");
-    const isTestAccount = Array.isArray(account.tags) && account.tags.includes("test_user");
-    if (!/^\d+$/.test(String(account.id))) throw new PixError("A API não identificou o recebedor de teste.",503);
+    const isTestAccount =
+      Array.isArray(account.tags) && account.tags.includes("test_user");
+    if (!/^\d+$/.test(String(account.id)))
+      throw new PixError("A API não identificou o recebedor de teste.", 503);
     if (this.token.startsWith("APP_USR-") && !isTestAccount)
-      throw new PixError("A credencial pertence a uma conta real ou não pôde ser identificada como conta de teste. Cobranças reais permanecem bloqueadas.",503);
-    return {...account, netcraftTestAccount: isTestAccount};
+      throw new PixError(
+        "A credencial pertence a uma conta real ou não pôde ser identificada como conta de teste. Cobranças reais permanecem bloqueadas.",
+        503,
+      );
+    return { ...account, netcraftTestAccount: isTestAccount };
   }
   create(body: unknown, key: string) {
-    return this.request("/v1/payments", body, key);
+    return this.request("/v1/orders", body, key);
   }
   get(id: string) {
-    if (!/^\d{1,30}$/.test(id)) throw new PixError("Pagamento inválido.");
+    if (!/^ORD[A-Z0-9]{20,40}$/.test(id)) throw new PixError("Order inválida.");
+    return this.request(`/v1/orders/${id}`);
+  }
+  // Read-only compatibility for historical records. Never create a legacy payment.
+  getLegacyPayment(id: string) {
+    if (!/^\d{1,30}$/.test(id))
+      throw new PixError("Pagamento legado inválido.");
     return this.request(`/v1/payments/${id}`);
   }
 }
@@ -102,7 +149,8 @@ export function verifyPayment(payment: any, order: any, collector: string) {
     String(payment.collector_id) !== collector ||
     payment.currency_id !== "BRL" ||
     payment.payment_method_id !== "pix" ||
-    (payment.live_mode !== false && !(payment.live_mode === true && order.receiverIsTestAccount === true)) ||
+    (payment.live_mode !== false &&
+      !(payment.live_mode === true && order.receiverIsTestAccount === true)) ||
     Math.round(Number(payment.transaction_amount) * 100) !== order.totalCents ||
     payment.metadata?.netcraft_order_id !== order.id
   )

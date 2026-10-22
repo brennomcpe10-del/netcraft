@@ -1,3 +1,11 @@
+import QRCode from "qrcode";
+import {
+  orderRequest,
+  verifyOrder,
+  ordersState,
+  orderExpiry,
+  providerKey,
+} from "./ordersContract.ts";
 import crypto from "node:crypto";
 import type { Firestore } from "firebase-admin/firestore";
 import { validateRewardDraft } from "../../src/lib/rewardDraft.ts";
@@ -65,6 +73,8 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
           email: input.email,
           cpf,
           couponCode: input.couponCode || "",
+          first_name: typeof input.first_name === "string" && input.first_name.length<=100 ? input.first_name.trim() : "",
+          last_name: typeof input.last_name === "string" && input.last_name.length<=100 ? input.last_name.trim() : "",
         }),
       )
       .digest("hex");
@@ -76,6 +86,11 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
       const previous = await tx.get(ref);
       if (previous.exists) {
         const saved = previous.data()!;
+        if (saved.apiVersion !== "orders-v1")
+          throw new PixError(
+            "Pedido anterior preservado na Payments API. Consulte esse pedido antes de iniciar uma nova compra.",
+            409,
+          );
         if (saved.requestHash !== requestHash)
           throw new PixError(
             "Este identificador já pertence a outra compra.",
@@ -112,21 +127,30 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
             .where("code", "==", input.couponCode.trim().toUpperCase()),
         );
         if (found.size !== 1) throw new PixError("Cupom não encontrado.");
-        const reservationRef = db.collection("pixTestCouponUsage").doc(found.docs[0].id);
+        const reservationRef = db
+          .collection("pixTestCouponUsage")
+          .doc(found.docs[0].id);
         couponRef = reservationRef;
         const usage = await tx.get(reservationRef);
         couponReservations = Number(usage.data()?.reservedCount || 0);
         const source = found.docs[0].data();
-        coupon = {...source, usedCount: Number(source.usedCount || 0) + couponReservations};
+        coupon = {
+          ...source,
+          usedCount: Number(source.usedCount || 0) + couponReservations,
+        };
       }
       const discountCents = discounted(quote.subtotalCents, coupon),
         totalCents = quote.subtotalCents - discountCents;
       if (totalCents < 1 || totalCents > 1000000)
-        throw new PixError("O total Pix deve ser positivo e não pode ultrapassar R$ 10.000.");
+        throw new PixError(
+          "O total Pix deve ser positivo e não pode ultrapassar R$ 10.000.",
+        );
       const saved = {
         id,
         requestHash,
         collector,
+        apiVersion: "orders-v1",
+        providerIdempotencyKey: providerKey(id),
         receiverIsTestAccount: receiver.netcraftTestAccount === true,
         totalCents,
         subtotalCents: quote.subtotalCents,
@@ -149,57 +173,38 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
       tx.create(ref, saved);
       return saved;
     });
-    if (!order.paymentId) {
-      const p = await gateway.create(
-        {
-          transaction_amount: order.totalCents / 100,
-          payment_method_id: "pix",
-          description: `NetCraftBR teste ${id.slice(0, 8)}`,
-          external_reference: id,
-          metadata: { netcraft_order_id: id },
-          date_of_expiration: order.expiresAt,
-          ...(process.env.VERCEL_BRANCH_URL &&
-          /^[a-zA-Z0-9.-]+\.vercel\.app$/.test(process.env.VERCEL_BRANCH_URL)
-            ? {
-                notification_url: `https://${process.env.VERCEL_BRANCH_URL}/api/pix/webhook`,
-              }
-            : {}),
-          payer: {
-            email: input.email,
-            identification: { type: "CPF", number: cpf },
-          },
-        },
-        id,
+    if (!order.providerOrderId) {
+      const payer: any = {
+        email: input.email,
+        identification: { type: "CPF", number: cpf },
+      };
+      for (const field of ["first_name", "last_name"]) {
+        if (
+          typeof input[field] === "string" &&
+          input[field].trim() &&
+          input[field].length <= 100
+        )
+          payer[field] = input[field].trim();
+      }
+      const resource = await gateway.create(
+        orderRequest(order, payer),
+        order.providerIdempotencyKey,
       );
-      // Fail closed before publishing any QR code.
-      verifyPayment(p, { ...order, paymentId: String(p.id) }, collector);
-      const qr = p.point_of_interaction?.transaction_data;
-      if (
-        typeof qr?.qr_code !== "string" ||
-        !qr.qr_code ||
-        typeof qr?.qr_code_base64 !== "string" ||
-        !/^[A-Za-z0-9+/=]+$/.test(qr.qr_code_base64) ||
-        qr.qr_code_base64.length > 500000
-      )
-        throw new PixError(
-          "O ambiente de teste não retornou um QR Code Pix válido.",
-          502,
-        );
+      const payment = verifyOrder(resource, order, collector);
+      // Bind the provider order immediately, including asynchronous responses without QR/payment.
+      // POST never approves a local order. Only the subsequent authenticated GET can approve it.
       await db.runTransaction(async (tx) => {
         const current = (await tx.get(ref)).data()!;
-        if (current.paymentId && current.paymentId !== String(p.id))
-          throw new PixError("Conflito de pagamento.", 409);
-        tx.update(ref, {
-          paymentId: String(p.id),
-          qrCode: qr.qr_code,
-          qrBase64: qr.qr_code_base64,
-          expiresAt:
-            typeof p.date_of_expiration === "string" &&
-            Number.isFinite(Date.parse(p.date_of_expiration))
-              ? p.date_of_expiration
-              : order.expiresAt,
-          state: current.paymentId ? current.state : "pending",
-        });
+        if (current.providerOrderId && current.providerOrderId !== resource.id)
+          throw new PixError("Conflito de order.", 409);
+        verifyOrder(resource, current, collector);
+        if (!current.providerOrderId)
+          tx.update(ref, {
+            providerOrderId: resource.id,
+            paymentId: payment?.id || null,
+            state: "processing",
+            expiresAt: orderExpiry(resource, payment, current.expiresAt),
+          });
       });
     }
     await reconcile(id);
@@ -207,26 +212,71 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
   }
   async function reconcile(id: string) {
     const saved = (await orders.doc(id).get()).data();
-    if (!saved?.paymentId) return;
-    const payment = await gateway.get(saved.paymentId);
-    verifyPayment(payment, saved, String((await gateway.me()).id));
+    if (!saved) return;
+    if (saved.apiVersion !== "orders-v1") return reconcileLegacy(id, saved);
+    if (!saved.providerOrderId) return;
+    const receiver = await gateway.me(),
+      resource = await gateway.get(saved.providerOrderId);
+    const payment = verifyOrder(resource, saved, String(receiver.id));
+    let qrCode = payment?.payment_method?.qr_code || "",
+      qrBase64 = payment?.payment_method?.qr_code_base64 || "";
+    if (
+      typeof qrCode !== "string" ||
+      qrCode.length > 10000 ||
+      typeof qrBase64 !== "string" ||
+      qrBase64.length > 500000
+    )
+      throw new PixError("QR Code inválido na resposta da Orders API.", 502);
+    if (qrBase64 && !/^[A-Za-z0-9+/=]+$/.test(qrBase64))
+      throw new PixError("Imagem Pix inválida.", 502);
+    // The official Pix sandbox may return an empty base64 image. Encode its verified copy/paste code.
+    if (qrCode && !qrBase64)
+      qrBase64 = (
+        await QRCode.toDataURL(qrCode, { width: 300, margin: 2 })
+      ).split(",")[1];
     await db.runTransaction(async (tx) => {
       const ref = orders.doc(id),
         o = (await tx.get(ref)).data()!;
-      verifyPayment(payment, o, o.collector);
-      // A stale pending event may never undo an approval/refund. Provider lookup is authoritative.
-      let state = paymentState(payment);
+      const payment = verifyOrder(resource, o, String(receiver.id));
+      const expiresAt = orderExpiry(resource, payment, o.expiresAt);
+      let state = ordersState(resource, payment, expiresAt);
+      const providerUpdatedAt = Number.isFinite(
+        Date.parse(resource.last_updated_date),
+      )
+        ? new Date(resource.last_updated_date).toISOString()
+        : null;
+      if (
+        o.providerStatusUpdatedAt &&
+        providerUpdatedAt &&
+        Date.parse(providerUpdatedAt) < Date.parse(o.providerStatusUpdatedAt)
+      )
+        return;
       if (o.state === "refunded") state = "refunded";
-      else if (o.approvedAt && state !== "refunded") state = "approved";
-      const approvedAt =
-        o.approvedAt ||
-        (state === "approved"
-          ? new Date(payment.date_approved).toISOString()
-          : null);
+      else if (o.state === "approved" && state !== "refunded")
+        state = "approved";
+      // Orders API documents last_updated_date, not an immutable approval timestamp.
+      // Record observation separately; never start a future VIP timer from an invented date.
+      const approvedAt = o.approvedAt || null;
+      const approvalObservedAt =
+        o.approvalObservedAt ||
+        (state === "approved" ? new Date().toISOString() : null);
       const jobRefs = o.lines.map((_: any, i: number) =>
         jobs.doc(`${id}-${i}`),
       );
-      const snapshots = await Promise.all(jobRefs.map((r: any) => tx.get(r)));
+      const eventData = {
+        state,
+        providerStatus: resource.status,
+        transactionStatus: payment?.status || null,
+        providerUpdatedAt,
+        paymentId: payment?.id || null,
+      };
+      const eventId = crypto
+          .createHash("sha256")
+          .update(JSON.stringify(eventData))
+          .digest("hex"),
+        eventRef = ref.collection("events").doc(eventId);
+      const snapshots = await Promise.all(jobRefs.map((r: any) => tx.get(r))),
+        event = await tx.get(eventRef);
       if (state === "approved")
         o.lines.forEach((line: any, i: number) => {
           if (!snapshots[i].exists)
@@ -237,6 +287,8 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
               gamertag: o.gamertag,
               line,
               approvedAt,
+              approvalObservedAt,
+              requiresApprovalTimestamp: !approvedAt,
               state: "pending",
               environment: "test",
               dispatchEnabled: false,
@@ -245,7 +297,73 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
             });
         });
       if (state === "refunded")
-        snapshots.forEach((s: any) => {
+        snapshots.forEach((snap: any) => {
+          if (snap.exists)
+            tx.update(snap.ref, {
+              state: "blocked",
+              reason: "refund_or_chargeback",
+            });
+        });
+      tx.update(ref, {
+        state,
+        approvedAt,
+        approvalObservedAt,
+        requiresApprovalTimestamp: state === "approved" && !approvedAt,
+        updatedAt: new Date().toISOString(),
+        providerStatus: resource.status,
+        providerStatusDetail: resource.status_detail || null,
+        transactionStatus: payment?.status || null,
+        providerStatusUpdatedAt: providerUpdatedAt,
+        paymentId: payment?.id || o.paymentId || null,
+        expiresAt,
+        ...(qrCode ? { qrCode } : {}),
+        ...(qrBase64 ? { qrBase64 } : {}),
+      });
+      if (!event.exists)
+        tx.create(eventRef, {
+          ...eventData,
+          recordedAt: new Date().toISOString(),
+          source: "authenticated_orders_get",
+        });
+    });
+  }
+  async function reconcileLegacy(id: string, saved: any) {
+    if (!saved.paymentId) return;
+    const payment = await gateway.getLegacyPayment(saved.paymentId);
+    verifyPayment(payment, saved, String((await gateway.me()).id));
+    await db.runTransaction(async (tx) => {
+      const ref = orders.doc(id),
+        o = (await tx.get(ref)).data()!;
+      verifyPayment(payment, o, o.collector);
+      let state = paymentState(payment);
+      if (o.state === "refunded") state = "refunded";
+      else if (o.approvedAt && state !== "refunded") state = "approved";
+      // Preserve legacy timestamps and outbox. New legacy fulfillment is never dispatched.
+      const approvedAt =
+        o.approvedAt ||
+        (state === "approved"
+          ? new Date(payment.date_approved).toISOString()
+          : null);
+      const refs = o.lines.map((_: any, i: number) => jobs.doc(`${id}-${i}`)),
+        snaps = await Promise.all(refs.map((r: any) => tx.get(r)));
+      if (state === "approved")
+        o.lines.forEach((line: any, i: number) => {
+          if (!snaps[i].exists)
+            tx.create(refs[i], {
+              id: refs[i].id,
+              orderId: id,
+              lineIndex: i,
+              gamertag: o.gamertag,
+              line,
+              approvedAt,
+              state: "pending",
+              environment: "test",
+              dispatchEnabled: false,
+              attempts: 0,
+            });
+        });
+      if (state === "refunded")
+        snaps.forEach((s: any) => {
           if (s.exists)
             tx.update(s.ref, {
               state: "blocked",
@@ -257,9 +375,6 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
         approvedAt,
         updatedAt: new Date().toISOString(),
         providerStatus: payment.status,
-        refundedCents: Math.round(
-          Number(payment.transaction_amount_refunded || 0) * 100,
-        ),
       });
     });
   }
@@ -269,6 +384,11 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
     return {
       id: o.id,
       state: o.state,
+      apiVersion: o.apiVersion || "payments-legacy",
+      providerOrderId: o.providerOrderId || null,
+      paymentId: o.paymentId || null,
+      approvalObservedAt: o.approvalObservedAt || null,
+      requiresApprovalTimestamp: o.requiresApprovalTimestamp || false,
       environment: "test",
       totalCents: o.totalCents,
       subtotalCents: o.subtotalCents,

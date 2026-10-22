@@ -3,6 +3,9 @@ import type { CartLine } from "../lib/cart.ts";
 type Order = {
   id: string;
   state: string;
+  apiVersion?: string;
+  providerOrderId?: string;
+  paymentId?:string|null;
   totalCents: number;
   discountCents: number;
   qrCode?: string;
@@ -20,8 +23,8 @@ export function PixCheckout({
   disabled: boolean;
 }) {
   const [available, setAvailable] = useState(false),
-    [configChecking,setConfigChecking] = useState(true),
-    [configError,setConfigError] = useState(""),
+    [configChecking, setConfigChecking] = useState(true),
+    [configError, setConfigError] = useState(""),
     [gamertag, setGamertag] = useState(""),
     [email, setEmail] = useState(""),
     [cpf, setCpf] = useState(""),
@@ -37,28 +40,43 @@ export function PixCheckout({
     }
   });
   async function checkConfiguration(signal?: AbortSignal) {
-    setConfigChecking(true);setConfigError("");
+    setConfigChecking(true);
+    setConfigError("");
     try {
-      const response = await fetch("/api/pix/config",{cache:"no-store",signal});
+      const response = await fetch("/api/pix/config", {
+        cache: "no-store",
+        signal,
+      });
       if (!response.headers.get("content-type")?.includes("application/json"))
-        throw new Error("A API do checkout não retornou JSON. O acesso pode estar bloqueado pela proteção da Preview ou pela rota do servidor.");
+        throw new Error(
+          "A API do checkout não retornou JSON. O acesso pode estar bloqueado pela proteção da Preview ou pela rota do servidor.",
+        );
       const config = await response.json();
       if (!signal?.aborted) {
         setAvailable(response.ok && config.available === true);
-        if(!response.ok || !config.available)
-          setConfigError(config.reason || "A API do checkout não conseguiu validar a configuração desta versão.");
+        if (!response.ok || !config.available)
+          setConfigError(
+            config.reason ||
+              "A API do checkout não conseguiu validar a configuração desta versão.",
+          );
       }
-    } catch(error) {
-      if(!signal?.aborted) {
+    } catch (error) {
+      if (!signal?.aborted) {
         setAvailable(false);
-        setConfigError(error instanceof Error ? error.message : "Falha de conexão com o checkout.");
+        setConfigError(
+          error instanceof Error
+            ? error.message
+            : "Falha de conexão com o checkout.",
+        );
       }
-    } finally {if(!signal?.aborted)setConfigChecking(false);}
+    } finally {
+      if (!signal?.aborted) setConfigChecking(false);
+    }
   }
   useEffect(() => {
     const abort = new AbortController();
     checkConfiguration(abort.signal);
-    return ()=>abort.abort();
+    return () => abort.abort();
   }, []);
   async function refresh(k = key, signal?: AbortSignal) {
     const id = await crypto.subtle.digest(
@@ -75,7 +93,10 @@ export function PixCheckout({
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error);
-    if(!signal?.aborted){setOrder(d); setError("");}
+    if (!signal?.aborted) {
+      setOrder(d);
+      setError("");
+    }
   }
   useEffect(() => {
     if (!key || busy) return;
@@ -115,10 +136,20 @@ export function PixCheckout({
       cpf: cpf.replace(/\D/g, ""),
       couponCode: couponCode.trim(),
     };
-    const fingerprint = JSON.stringify(request);
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(JSON.stringify(request)),
+    );
+    const fingerprint = Array.from(new Uint8Array(digest), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
     let previousFingerprint = "";
-    try { previousFingerprint = sessionStorage.getItem("netcraft-pix-request") || ""; } catch {}
-    const k = key && previousFingerprint === fingerprint ? key : crypto.randomUUID();
+    try {
+      previousFingerprint =
+        sessionStorage.getItem("netcraft-pix-request") || "";
+    } catch {}
+    const k =
+      key && previousFingerprint === fingerprint ? key : crypto.randomUUID();
     setKey(k);
     setOrder(null);
     try {
@@ -133,10 +164,6 @@ export function PixCheckout({
       });
       const d = await r.json();
       if (!r.ok) {
-        if (r.status === 409) {
-          resetCheckout();
-          throw new Error("Identificador de compra antigo detectado. Os dados foram mantidos; clique novamente para iniciar um novo pedido.");
-        }
         throw new Error(d.error || "Falha ao gerar Pix.");
       }
       setOrder(d);
@@ -149,6 +176,7 @@ export function PixCheckout({
   const labels: Record<string, string> = {
     creating: "Criando cobrança",
     pending: "Aguardando pagamento",
+    processing: "Processando no Mercado Pago",
     approved: "Pagamento aprovado — teste",
     expired: "Pix expirado",
     cancelled: "Pagamento cancelado",
@@ -160,7 +188,13 @@ export function PixCheckout({
       <p className="text-sm text-zinc-400">
         Não pague com seu banco. Este fluxo não entrega itens no servidor.
       </p>
-      {order?.state === "creating" && <p role="status">Cobrança ainda não concluída. Confira os mesmos dados e tente novamente; o pedido será reutilizado.</p>}
+      {order?.apiVersion === "payments-legacy" && !order.paymentId && <div className="space-y-2"><p>Esta tentativa pertence ao checkout anterior. O registro será preservado; reiniciar não cancela uma eventual cobrança anterior.</p><button className="text-link" type="button" onClick={resetCheckout}>Reiniciar checkout</button></div>}
+      {order?.state === "creating" && (
+        <p role="status">
+          Cobrança ainda não concluída. Confira os mesmos dados e tente
+          novamente; o pedido será reutilizado.
+        </p>
+      )}
       {order && order.state !== "creating" ? (
         <div className="space-y-3">
           <p role="status">{labels[order.state] || order.state}</p>
@@ -168,7 +202,7 @@ export function PixCheckout({
           {order.discountCents > 0 && (
             <p>Desconto validado: {money(order.discountCents)}</p>
           )}
-          {order.state === "pending" && (
+          {(order.state === "pending" || order.state === "processing") && (
             <>
               {order.qrBase64 && (
                 <img
@@ -177,25 +211,37 @@ export function PixCheckout({
                   src={`data:image/png;base64,${order.qrBase64}`}
                 />
               )}
-              <label className="block">
-                Pix Copia e Cola
-                <textarea
-                  readOnly
-                  className="w-full bg-zinc-900 p-3 rounded-xl text-xs"
-                  value={order.qrCode || ""}
-                />
-              </label>
-              <button
-                className="nc-button"
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(order.qrCode || "")
-                    .then(() => setError("Código copiado."))
-                    .catch(() => setError("Selecione e copie o código acima."))
-                }
-              >
-                Copiar código Pix
-              </button>
+              {!order.qrCode && (
+                <p role="status">
+                  Aguardando a geração do QR Code pela Orders API. O pedido já
+                  foi registrado e será consultado novamente.
+                </p>
+              )}
+              {order.qrCode && (
+                <>
+                  <label className="block">
+                    Pix Copia e Cola
+                    <textarea
+                      readOnly
+                      className="w-full bg-zinc-900 p-3 rounded-xl text-xs"
+                      value={order.qrCode || ""}
+                    />
+                  </label>
+                  <button
+                    className="nc-button"
+                    onClick={() =>
+                      navigator.clipboard
+                        .writeText(order.qrCode || "")
+                        .then(() => setError("Código copiado."))
+                        .catch(() =>
+                          setError("Selecione e copie o código acima."),
+                        )
+                    }
+                  >
+                    Copiar código Pix
+                  </button>
+                </>
+              )}
               <p>
                 Validade: {new Date(order.expiresAt).toLocaleString("pt-BR")}
               </p>
@@ -236,8 +282,16 @@ export function PixCheckout({
                 type={String(type)}
                 value={String(value)}
                 onChange={(e) => (set as (v: string) => void)(e.target.value)}
-                inputMode={label === "CPF do comprador de teste" ? "numeric" : undefined}
-                placeholder={label === "Cupom (opcional)" ? "Deixe vazio se não tiver cupom" : label === "CPF do comprador de teste" ? "Com ou sem pontos e traço" : undefined}
+                inputMode={
+                  label === "CPF do comprador de teste" ? "numeric" : undefined
+                }
+                placeholder={
+                  label === "Cupom (opcional)"
+                    ? "Deixe vazio se não tiver cupom"
+                    : label === "CPF do comprador de teste"
+                      ? "Com ou sem pontos e traço"
+                      : undefined
+                }
                 required={label !== "Cupom (opcional)"}
                 maxLength={100}
               />
@@ -247,15 +301,31 @@ export function PixCheckout({
             className="nc-button w-full"
             disabled={disabled || busy || configChecking || !available}
           >
-            {configChecking ? "Verificando integração…" : busy ? "Gerando Pix…" : "Gerar Pix de teste"}
+            {configChecking
+              ? "Verificando integração…"
+              : busy
+                ? "Gerando Pix…"
+                : "Gerar Pix de teste"}
           </button>
         </form>
       )}
-      {configChecking && <p role="status">Verificando a conta de teste no Mercado Pago…</p>}
-      {!configChecking && !available && <div className="space-y-2">
-        <p role="alert" className="text-amber-300 text-sm">{configError}</p>
-        <button className="text-link" type="button" onClick={()=>checkConfiguration()}>Verificar integração novamente</button>
-      </div>}
+      {configChecking && (
+        <p role="status">Verificando a conta de teste no Mercado Pago…</p>
+      )}
+      {!configChecking && !available && (
+        <div className="space-y-2">
+          <p role="alert" className="text-amber-300 text-sm">
+            {configError}
+          </p>
+          <button
+            className="text-link"
+            type="button"
+            onClick={() => checkConfiguration()}
+          >
+            Verificar integração novamente
+          </button>
+        </div>
+      )}
       {error && (
         <p role="alert" className="text-amber-300 text-sm">
           {error}

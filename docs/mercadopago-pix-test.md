@@ -1,47 +1,56 @@
-> Atualização de compatibilidade: CPF formatado é normalizado no backend. Tokens APP_USR- são aceitos SOMENTE se GET /users/me confirmar tags contendo test_user ANTES de qualquer POST de pagamento. Contas reais e VERCEL_ENV=production continuam bloqueados. live_mode=true só é aceito para o recebedor de teste já verificado e gravado pelo backend; esse indicador nunca vem do comprador. O limite mínimo artificial de R$ 1 foi removido (valores positivos em centavos são encaminhados ao provedor, que pode impor seus próprios limites). A validade solicitada é de 45 minutos para não ficar abaixo dos 30 minutos mínimos durante o processamento. /api/pix/config agora consulta a conta e informa a etapa/causa sanitizada da indisponibilidade, sem revelar credenciais. O build da branch executa lint, testes e build antes do deploy.
+# Pix NetCraftBR — Checkout Transparente via Orders API, somente Preview
 
-# Checkout Pix Mercado Pago — somente testes
+## Contrato e segurança
 
-## Uso na Preview
+Novos checkouts usam exclusivamente `POST /v1/orders` e `GET /v1/orders/ORD…` no backend Express. O navegador envia IDs, quantidades, gamertag e dados do pagador; preços, disponibilidade, limites e cupom são conferidos pelo servidor no catálogo existente. Um único Pix paga todo o carrinho. Os valores da order e da transação são strings decimais com duas casas. A requisição contém `type: online`, `processing_mode: automatic` e `transactions.payments[0].payment_method: {id: pix, type: bank_transfer}`, com `expiration_time: PT45M`.
 
-Abra a loja → adicione produtos → Carrinho → Pix automático. Informe gamertag, e-mail e CPF do comprador de teste, cupom opcional e gere a cobrança. A resposta do Mercado Pago fornece QR Code e Copia e Cola. **Não tente pagar esses códigos em banco real.** O mesmo navegador retoma o pedido após atualizar a página; a chave privada de consulta permanece em sessionStorage e não é enviada em URLs.
+Itens são serializados com SKU (`external_code`), título, descrição, quantidade e preço. O desconto autorizado é distribuído em centavos; eventual arredondamento divide somente a apresentação de uma linha em dois preços. A soma enviada corresponde exatamente ao total líquido. Os produtos, preços originais, quantidades e recompensas internas não são modificados. Unidades integralmente descontadas permanecem no pedido interno, mas não geram itens de valor zero na requisição ao provedor. `metadata`, `notification_url`, `transaction_amount`, `payment_method_id` e a data absoluta do antigo contrato não são enviados.
 
-O backend usa a API oficial `POST /v1/payments` com `X-Idempotency-Key`, `GET /v1/payments/:id` e `GET /users/me`. `MERCADOPAGO_ACCESS_TOKEN` pode ser TEST- ou APP_USR- de uma conta comprovadamente de teste pela API. `VERCEL_ENV=production` sempre bloqueia a integração. `MERCADOPAGO_PUBLIC_KEY` não é necessário no fluxo Pix servidor a servidor e não é exposto. Não existe chave de configuração que habilite produção nesta implementação.
+As credenciais existentes continuam exclusivamente no backend de Preview. `VERCEL_ENV=production` bloqueia operações. Antes de qualquer POST, `GET /users/me` precisa confirmar a conta de teste quando o token é APP_USR. Tokens e mensagens brutas do provedor nunca são devolvidos em respostas ou logs; somente etapa, HTTP e código de erro sanitizado. Não há fallback para credenciais de produção.
 
-A persistência utiliza o Firebase Admin SDK com o `FIREBASE_SERVICE_ACCOUNT_JSON` já existente e confere o projeto da credencial. Credencial ausente/inválida causa erro explícito, nunca fallback para pedidos em RAM ou confirmação otimista. A função de upload estático de logos continua independente do Admin SDK.
+A resposta é conferida contra o pedido privado: ID ORD, referência externa, `user_id` do recebedor, Brasil (BRA/MLB), BRL se explicitamente retornado, valor da order e valor da única transação Pix. O ID PAY fica vinculado à linha de pagamento e não pode ser substituído. A API não documenta `live_mode` como campo obrigatório de Orders: a proteção de teste depende da conta autenticada, não de um booleano no webhook.
 
-## Confirmação e notificações
+## QR e respostas assíncronas
 
-Endpoint: `POST /api/pix/webhook?data.id=ID_DO_PAGAMENTO`.
+O ID da order é persistido assim que a criação autenticada é conferida. Respostas `processing`/`created` sem transação são aceitas como processamento pendente, sem repetir o POST. O GET posterior preenche a transação e o QR.
 
-A assinatura HMAC é validada com `MERCADOPAGO_WEBHOOK_SECRET`, x-request-id e x-signature, com tolerância de cinco minutos. Esse segredo é próprio do webhook, diferente do access token. Se não estiver disponível, notificações são rejeitadas; a consulta autenticada do comprador ainda reconcilia diretamente com a API. Não envie nenhum segredo pelo chat.
+O código é extraído de `transactions.payments[0].payment_method.qr_code` e a imagem de `qr_code_base64`. O procedimento oficial de teste pode retornar base64 vazio; nesse caso a imagem PNG é gerada com qrcode a partir do texto recebido e verificado na API. Não é criado código de pagamento fictício. A ausência temporária dos dois dados mantém a interface em processamento e a consulta continua.
 
-Quando `VERCEL_BRANCH_URL` está disponível, a criação informa essa URL de callback. Uma Preview protegida pela autenticação Vercel pode bloquear notificações externas antes que cheguem ao Express. A consulta do comprador evita depender desse callback durante a avaliação. Sem um webhook acessível e seu segredo, não há reconciliação em background quando o comprador fecha a página. Isso deve ser validado antes de produção.
+## Reconciliação, status e webhook
 
-O corpo recebido nunca aprova pedidos. Cada reconciliação consulta a API e compara ID, referência externa, metadata, valor em centavos, BRL, Pix, live_mode=false e recebedor associado ao token, incluindo o recebedor gravado no pedido. Aprovação exige date_approved válida. Não são armazenados CPF/e-mail do comprador; apenas hash da requisição, gamertag, itens e dados necessários de pagamento.
+O POST nunca aprova o pedido local. Aprovação exige um GET autenticado com order e pagamento `processed/accredited`, `total_paid_amount` integral e `paid_amount` integral. `action_required/waiting_transfer` continua pendente; `processing` e `created` continuam em processamento. Cancelamento, expiração, recusa, reembolso parcial/total e chargeback possuem tratamento explícito. Divergências impedem confirmação. Respostas mais antigas não sobrescrevem versões mais novas; devoluções bloqueiam a fila preventivamente.
 
-## Persistência e idempotência
+Configure **Order (Mercado Pago)** em Suas integrações → Webhooks para a URL Preview `/api/pix/webhook`. A documentação chama o tópico de orders, mas o payload e query usam `type=order`; ambos são aceitos. Não se usa notification_url no body. A assinatura HMAC SHA256 confere `data.id`, x-request-id e ts com `MERCADOPAGO_WEBHOOK_SECRET`. A notificação assinada é somente um sinal: o backend busca novamente `/v1/orders/ORD…` e confere o recurso contra o registro privado. Dados monetários/status enviados no corpo não confirmam nada. Sem segredo, assinatura válida ou acesso externo permitido pela proteção da Vercel, o webhook não é processado; a consulta do comprador permanece disponível.
 
-- `pixTestOrders`: pedidos privados de teste, separados dos pedidos históricos e do faturamento real.
-- `pixTestDeliveries`: uma entrada determinística por linha do pedido, com quantidade, snapshot editorial, approval timestamp e dispatchEnabled=false. Não executa comandos, não entrega itens, não inicia contador paralelo e não concede VIPs.
-- As regras negam acesso cliente a essas coleções. Admin SDK efetua as transações. Não foram publicadas regras ou configurações Firebase de produção.
-- A chave UUID da compra gera o identificador SHA-256 do pedido e a chave de idempotência do provedor. Repetir a mesma compra reaproveita a cobrança; reutilizar a chave com outro conteúdo é rejeitado. Falha ambígua deve ser repetida com a mesma chave.
-- Aprovação e criação das entradas da fila ocorrem em transação. Repetições preservam approvedAt e a fila. Reembolso parcial, total ou chargeback bloqueia todas as entradas preventivamente para revisão futura. Um retorno pendente atrasado não desfaz aprovação; reembolso não é revertido.
-- A validade VIP deverá usar approvedAt como origem quando o adaptador NetCraft Core existir. Os textos legados de duração e rewardDraft são editoriais, **não** recompensas autorizadas para execução. Renovação e expiração serão validadas com o addon antes de habilitar dispatch.
-- Cupons são conferidos e reservados em transação na coleção privada pixTestCouponUsage, sem alterar usedCount nem consumir limites dos cupons reais para impedir ultrapassar maxUses. Uma reserva não é liberada automaticamente em falhas ambíguas, cancelamento ou expiração; exige conciliação antes de eventual liberação, para não permitir exceder o limite. A regra de expiração é a validade do cupom no momento da compra.
-- O endpoint público antigo simulate-payment retorna 410 para todos os pedidos. As rotas administrativas antigas operam apenas na coleção orders e não conseguem alterar os novos pedidos privados. Nenhum pedido de teste é espelhado na coleção pública orders.
+IDs locais continuam SHA-256 da chave privada da compra. A chave do provedor é um UUID estável derivado do ID local; retries usam a mesma chave e o mesmo contrato. Mudança de comprador, nome, linhas ou cupom na mesma chave é recusada. Eventos de conciliação são auditados em subcoleção privada com ID determinístico e origem `authenticated_orders_get`.
 
-## Limitações que impedem ativação real
+## Dados existentes e coexistência
 
-O catálogo legado e os cupons ainda possuem permissões públicas de gravação no firestore.rules existente. Embora o navegador não envie preços nem recompensas ao checkout e os novos registros financeiros sejam privados, a migração da autorização de todo o catálogo para backend é obrigatória antes de produção. Os dados históricos e as regras dessas coleções não foram alterados para não interromper os gerenciadores existentes. Contas reais são bloqueadas independentemente disso.
+Nenhuma coleção histórica é apagada, recriada ou convertida. Novos registros em `pixTestOrders` têm `apiVersion: orders-v1`, `providerOrderId` e ID PAY separado. Registros antigos com pagamento numérico permanecem consultáveis por GET na Payments API e aceitam somente notificações legacy do tópico payment. Não existe novo POST na Payments API. Pedidos antigos nunca são reinterpretados como IDs ORD ou automaticamente recriados na nova API.
 
-O sandbox Pix pode rejeitar operações ou manter pagamentos pendentes. Uma resposta de teste não equivale a liquidação bancária. Não há endpoint público para forçar aprovação. Erros do provedor são exibidos sem expor credenciais ou dados da requisição. Os testes de aprovação, expiração e estorno usam mocks isolados.
+Reservas de cupons de teste continuam em `pixTestCouponUsage`; os contadores reais dos cupons não são consumidos. Pedidos e entregas de teste permanecem fora do faturamento histórico e das coleções públicas. Reservas não são liberadas automaticamente após falhas ambíguas: qualquer liberação exige conciliação.
 
-## Verificações executáveis
+## Entrega Minecraft e data de aprovação
+
+`pixTestDeliveries` mantém um registro determinístico por linha, com quantidade, gamertag e snapshot editorial. `dispatchEnabled` permanece false. Não há conexão, comando, ativação VIP ou entrega no servidor Minecraft.
+
+A referência pública de Orders expõe `last_updated_date`, mas não garante um timestamp imutável da aprovação. Portanto, novos pedidos registram `approvalObservedAt` quando a confirmação é vista; `approvedAt` não é inventado a partir da data da consulta, criação ou última atualização. A fila fica com `requiresApprovalTimestamp: true` quando necessário. Antes de qualquer integração real com o Core, será obrigatório reconciliar a data efetiva da aprovação. Datas históricas existentes são preservadas.
+
+As regras legadas do catálogo e dos cupons ainda permitem gravações públicas: a migração de autorização desses gerenciadores continua sendo requisito antes de habilitar dinheiro ou entregas reais. Nenhuma regra de produção foi publicada nesta etapa.
+
+## Testes locais e verificação oficial na Preview
 
 - `npm run lint`, `npm test`, `npm run build`.
-- `tests/pix.test.tsx`: transporte, idempotência, cálculo, assinatura, divergências e fila.
-- `tests/pix-emulator.integration.ts`: executar com node --import tsx em FIRESTORE_EMULATOR_HOST=127.0.0.1:8085 e regras firestore.rules carregadas, projeto demo-netcraft-admin-test. Produtos ilustrativos existem **somente** no emulador local, jamais são cadastrados na loja real.
-- `tests/pix-ui.e2e.cjs`: Playwright, servidor local com o emulador e os fixtures anteriores, TEST_CHROME_PATH apontando para Chromium. Usa interceptação das respostas Pix, verifica QR, retomada e mobile 320/360/430. Não deve ser apresentado como pagamento sandbox aprovado.
+- Testes de contrato, transporte, proteção contra conta real, valores, cupons, status, QR vazio, respostas assíncronas, coexistência e webhook HTTP assinado com consulta autenticada (mocks).
+- `tests/pix-emulator.integration.ts`: transações concorrentes, carrinho misto, reserva de cupom, outbox sem duplicação, auditoria e regras privadas, exclusivamente em demo-netcraft-admin-test no emulador local.
+- `tests/pix-ui.e2e.cjs`: navegação mobile 320/360/430, QR, recuperação de falha e retomada após atualizar a página, com respostas Pix interceptadas. Isso não prova aceitação do Mercado Pago.
+- `npm run test:pix:preview`: usa as credenciais já existentes **dentro da Vercel Preview**, exige recebedor test_user e realiza o procedimento oficial com `50.00`, `test_payer@example.com` e `first_name: APRO`, usando o mesmo construtor de contrato do carrinho. A linha técnica enviada em items não é cadastrada na loja e não é persistida no Firebase. Consulta em seguida a order criada e valida toda a resposta. Nenhum segredo ou dado do pagador é registrado, e não há fila de entrega para esse diagnóstico.
 
-Referências oficiais: https://www.mercadopago.com.br/developers/en/docs/checkout-api-payments/integration-configuration/integrate-pix e https://www.mercadopago.com.br/developers/en/docs/checkout-api-payments/additional-content/your-integrations/notifications/webhooks .
+O comando de build da branch executa lint, testes, build e a verificação oficial. A verificação falha com código não zero se a API não fornecer uma resposta autenticada válida, impedindo um deploy rotulado como aprovado sem essa evidência. Fora da Preview ela recusa execução com código não zero, sem utilizar credenciais locais. Quando passa, um recibo sanitizado é gerado em `/pix-orders-sandbox-check.json`, contendo somente operações/status HTTP, estado observado, presença do QR e horário, sem tokens nem identificadores do comprador. A obtenção de resposta válida não é uma liquidação bancária real.
+
+Referências oficiais consultadas:
+- https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/payment-integration/websites/pix
+- https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/integration-test/pix
+- https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/notifications
+- https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/resources/migrate-payments-to-orders
+- https://github.com/mercadopago/openapi (contrato de Orders)
