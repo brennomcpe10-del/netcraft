@@ -95,23 +95,50 @@ export function PixCheckout({
       clearInterval(timer);
     };
   }, [key, busy]);
+  function resetCheckout() {
+    try {
+      sessionStorage.removeItem("netcraft-pix-key");
+      sessionStorage.removeItem("netcraft-pix-request");
+    } catch {}
+    setKey("");
+    setOrder(null);
+    setError("");
+  }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError("");
-    const k = key || crypto.randomUUID();
+    const request = {
+      lines,
+      gamertag: gamertag.trim(),
+      email: email.trim(),
+      cpf: cpf.replace(/\D/g, ""),
+      couponCode: couponCode.trim(),
+    };
+    const fingerprint = JSON.stringify(request);
+    let previousFingerprint = "";
+    try { previousFingerprint = sessionStorage.getItem("netcraft-pix-request") || ""; } catch {}
+    const k = key && previousFingerprint === fingerprint ? key : crypto.randomUUID();
     setKey(k);
+    setOrder(null);
     try {
       sessionStorage.setItem("netcraft-pix-key", k);
+      sessionStorage.setItem("netcraft-pix-request", fingerprint);
     } catch {}
     try {
       const r = await fetch("/api/pix/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json", "idempotency-key": k },
-        body: JSON.stringify({ lines, gamertag:gamertag.trim(), email:email.trim(), cpf:cpf.replace(/\D/g,""), couponCode:couponCode.trim() }),
+        body: JSON.stringify(request),
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
+      if (!r.ok) {
+        if (r.status === 409) {
+          resetCheckout();
+          throw new Error("Identificador de compra antigo detectado. Os dados foram mantidos; clique novamente para iniciar um novo pedido.");
+        }
+        throw new Error(d.error || "Falha ao gerar Pix.");
+      }
       setOrder(d);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao gerar Pix.");
@@ -187,9 +214,7 @@ export function PixCheckout({
             <button
               className="text-link"
               onClick={() => {
-                try {sessionStorage.removeItem("netcraft-pix-key");} catch {}
-                setKey("");
-                setOrder(null);
+                resetCheckout();
               }}
             >
               Iniciar outro pedido
