@@ -46,11 +46,11 @@ try {
     type: "online",
     processing_mode: "automatic",
     external_reference: reference,
-    total_amount: 50,
+    total_amount: "50.00",
     payer: { email: "test@testuser.com", first_name: "APRO" },
     transactions: {
       payments: [{
-        amount: 50,
+        amount: "50.00",
         payment_method: { id: "pix", type: "bank_transfer" },
       }],
     },
