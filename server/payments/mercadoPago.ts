@@ -31,6 +31,49 @@ export function normalizeCpf(value: unknown) {
     ? value.replace(/\D/g, "")
     : "";
 }
+// Only schema identifiers are eligible for diagnostics. Never sanitize arbitrary
+// provider text into an identifier: reject it instead (it may contain payer data).
+const diagnosticFields = new Set([
+  "type", "processing_mode", "external_reference", "total_amount", "payer",
+  "email", "first_name", "last_name", "identification", "number", "items",
+  "external_code", "title", "description", "quantity", "unit_price",
+  "transactions", "payments", "amount", "payment_method", "id", "expiration_time",
+  "notification_url", "currency_id", "statement_descriptor", "metadata",
+]);
+const diagnosticCodes = new Set([
+  "property_type", "property_value", "property_required", "required_property",
+  "invalid_property", "invalid_type", "invalid_value", "required",
+  "property_format", "property_length", "invalid_length", "property_not_allowed",
+]);
+export function validationDiagnostics(data: unknown) {
+  const properties = new Set<string>(), codes = new Set<string>();
+  const record = (value: unknown): Record<string, unknown> | null =>
+    value !== null && typeof value === "object" && !Array.isArray(value)
+      ? value as Record<string, unknown> : null;
+  const inspect = (value: unknown) => {
+    const entry = record(value);
+    if (!entry) return;
+    for (const key of ["property", "field", "path"]) {
+      const path = entry[key];
+      if (typeof path !== "string" || path.length > 160 ||
+          !/^[a-z_]+(?:\[\d{1,3}\])?(?:\.[a-z_]+(?:\[\d{1,3}\])?)*$/.test(path)) continue;
+      const segments = path.replace(/\[\d+\]/g, "").split(".");
+      if (segments.every(segment => diagnosticFields.has(segment))) properties.add(path);
+    }
+    for (const key of ["code", "error_code", "validation_code"]) {
+      const code = entry[key];
+      if (typeof code === "string" && diagnosticCodes.has(code)) codes.add(code);
+    }
+  };
+  const root = record(data);
+  const errors = root?.errors;
+  if (Array.isArray(errors)) for (const error of errors.slice(0, 20)) {
+    inspect(error);
+    const details = record(error)?.details;
+    if (Array.isArray(details)) for (const detail of details.slice(0, 30)) inspect(detail);
+  }
+  return { properties: [...properties].slice(0, 30), codes: [...codes].slice(0, 30) };
+}
 export class MercadoPago {
   constructor(
     private token = testToken(),
@@ -54,36 +97,11 @@ export class MercadoPago {
     );
     const data = await response.json();
     if (!response.ok) {
-      const providerCode = String(
-        data?.errors?.[0]?.code ?? data?.cause?.[0]?.code ?? data?.error ?? "",
-      )
-        .replace(/[^a-zA-Z0-9_.-]/g, "")
-        .slice(0, 60);
-      // Only expose validation codes and property paths, never raw API responses,
-      // request bodies, payer data, tokens or authorization headers.
-      const safeIssue = (issue: any) => {
-        const raw = [issue?.code, issue?.property, issue?.field, issue?.path]
-          .filter((v) => typeof v === "string")
-          .map((v: string) => v.replace(/[^a-zA-Z0-9_.\\[\\]-]/g, "").slice(0, 90))
-          .filter(Boolean);
-        return raw.join(":").slice(0, 160);
-      };
-      const validationIssues = [...(Array.isArray(data?.errors) ? data.errors : []),
-        ...(Array.isArray(data?.cause) ? data.cause : [])]
-        .map(safeIssue).filter(Boolean).slice(0, 4).join(", ");
-      // Diagnostic: expose only response schema (field names and primitive types).
-      // Never log response values, payer details, tokens, or raw error descriptions.
-      const errorShape = (entry: any) => {
-        if (!entry || typeof entry !== "object" || Array.isArray(entry)) return typeof entry;
-        return Object.entries(entry).slice(0, 12).map(([k, v]) =>
-          /^[a-zA-Z_]{1,40}$/.test(k)
-            ? k + "=" + (Array.isArray(v) ? "array" : v === null ? "null" : typeof v)
-            : "unknown"
-        ).join(",");
-      };
-      const shapes = [...(Array.isArray(data?.errors) ? data.errors : []),
-        ...(Array.isArray(data?.cause) ? data.cause : [])]
-        .slice(0, 3).map(errorShape).join(" | ");
+      if (process.env.VERCEL_ENV === "preview") {
+        const diagnostic = validationDiagnostics(data);
+        if (diagnostic.properties.length || diagnostic.codes.length)
+          console.warn("[MercadoPago validation]", diagnostic);
+      }
       const details =
         response.status === 401 || response.status === 403
           ? "A API do Mercado Pago recusou a autenticação da credencial desta versão."
@@ -104,9 +122,6 @@ export class MercadoPago {
           safeOperation +
           ". HTTP " +
           response.status +
-          (providerCode ? " · " + providerCode : "") +
-          (validationIssues ? " · Campos: " + validationIssues : "") +
-          (shapes ? " · Estrutura: " + shapes : "") +
           ". Nenhum pagamento foi confirmado.",
         502,
       );
