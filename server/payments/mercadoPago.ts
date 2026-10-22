@@ -59,6 +59,18 @@ export class MercadoPago {
       )
         .replace(/[^a-zA-Z0-9_.-]/g, "")
         .slice(0, 60);
+      // Only expose validation codes and property paths, never raw API responses,
+      // request bodies, payer data, tokens or authorization headers.
+      const safeIssue = (issue: any) => {
+        const raw = [issue?.code, issue?.property, issue?.field, issue?.path]
+          .filter((v) => typeof v === "string")
+          .map((v: string) => v.replace(/[^a-zA-Z0-9_.\\[\\]-]/g, "").slice(0, 90))
+          .filter(Boolean);
+        return raw.join(":").slice(0, 160);
+      };
+      const validationIssues = [...(Array.isArray(data?.errors) ? data.errors : []),
+        ...(Array.isArray(data?.cause) ? data.cause : [])]
+        .map(safeIssue).filter(Boolean).slice(0, 4).join(", ");
       const details =
         response.status === 401 || response.status === 403
           ? "A API do Mercado Pago recusou a autenticação da credencial desta versão."
@@ -80,6 +92,7 @@ export class MercadoPago {
           ". HTTP " +
           response.status +
           (providerCode ? " · " + providerCode : "") +
+          (validationIssues ? " · Campos: " + validationIssues : "") +
           ". Nenhum pagamento foi confirmado.",
         502,
       );
