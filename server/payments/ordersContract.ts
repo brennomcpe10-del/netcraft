@@ -3,12 +3,12 @@ import { PixError } from "./mercadoPago.ts";
 export const orderIdPattern = /^ORD[A-Z0-9]{20,40}$/;
 export const paymentIdPattern = /^PAY[A-Z0-9]{20,40}$/;
 export function amountCents(value: unknown): number {
-  if (typeof value !== "string" || !/^\d{1,10}(\.\d{1,2})?$/.test(value))
+  if ((typeof value !== "string" && typeof value !== "number") || !/^\d{1,10}(\.\d{1,2})?$/.test(String(value)))
     throw new PixError(
       "Valor monetário inválido na resposta da Orders API.",
       409,
     );
-  const [integer, fraction = ""] = value.split(".");
+  const [integer, fraction = ""] = String(value).split(".");
   const cents = Number(integer) * 100 + Number(fraction.padEnd(2, "0"));
   if (!Number.isSafeInteger(cents))
     throw new PixError("Valor inválido na Orders API.", 409);
@@ -75,15 +75,14 @@ export function orderRequest(
     type: "online",
     processing_mode: "automatic",
     external_reference: order.id,
-    total_amount: amountString(order.totalCents),
+    total_amount: order.totalCents / 100,
     payer,
     items: orderItems(order),
     transactions: {
       payments: [
         {
-          amount: amountString(order.totalCents),
+          amount: order.totalCents / 100,
           payment_method: { id: "pix", type: "bank_transfer" },
-          expiration_time: "PT45M",
         },
       ],
     },
