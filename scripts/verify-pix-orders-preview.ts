@@ -11,7 +11,6 @@ import {
   verifyOrder,
   ordersState,
   orderExpiry,
-  orderRequest,
 } from "../server/payments/ordersContract.ts";
 if (process.env.VERCEL_ENV !== "preview") {
   console.log(
@@ -42,23 +41,20 @@ try {
       503,
     );
   const reference = "netcraft_test_" + crypto.randomUUID().replaceAll("-", "");
-  const request = orderRequest(
-    {
-      id: reference,
-      totalCents: 5000,
-      subtotalCents: 5000,
-      lines: [
-        {
-          productId: "sandbox-diagnostic-only",
-          productType: "product",
-          name: "Homologação técnica Pix (não é produto da loja)",
-          quantity: 1,
-          lineCents: 5000,
-        },
-      ],
+  // Isolate the official sandbox Pix contract: do not include optional shop items.
+  const request = {
+    type: "online",
+    processing_mode: "automatic",
+    external_reference: reference,
+    total_amount: 50,
+    payer: { email: "test@testuser.com", first_name: "APRO" },
+    transactions: {
+      payments: [{
+        amount: 50,
+        payment_method: { id: "pix", type: "bank_transfer" },
+      }],
     },
-    { email: "test@testuser.com", first_name: "APRO" },
-  );
+  };
   const resource = await gateway.create(request, crypto.randomUUID());
   const expected = {
     id: reference,
