@@ -59,6 +59,25 @@ import {
   getStatsFromFirestore
 } from '../lib/firestoreSync.ts';
 
+function pixTestStateLabel(order: PixTestOrderSummary, now = Date.now()): string {
+  // A reservation may be left in "creating" after a sandbox gateway error.
+  // This is display-only: never infer a payment, refund or change Firestore state.
+  if (order.state === 'creating' && !order.providerOrderId &&
+      order.expiresAt && Date.parse(order.expiresAt) <= now)
+    return 'Criação não confirmada (teste)';
+  const labels: Record<PixTestOrderSummary['state'], string> = {
+    creating: 'Criando cobrança (teste)',
+    pending: 'Aguardando teste',
+    processing: 'Processando teste',
+    approved: 'Aprovado (simulado)',
+    expired: 'Expirado (teste)',
+    cancelled: 'Cancelado (teste)',
+    refunded: 'Devolvido (teste)',
+    unknown: 'Status não identificado',
+  };
+  return labels[order.state];
+}
+
 interface AdminViewProps {
   onExit: () => void;
   onRefreshGlobalData: () => Promise<void>;
@@ -857,6 +876,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                   <p className="text-zinc-400 text-[11px] mt-1">
                     Últimas 50 simulações, somente leitura. Não são vendas reais,
                     não entram no faturamento e não geram entregas Minecraft.
+                    Tentativas interrompidas não são pagamentos aprovados.
                   </p>
                 </div>
                 <button type="button" onClick={() => void loadPixTestOrders()} disabled={pixTestLoading}
@@ -889,11 +909,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                           {(testOrder.totalCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </div>
                         <div className={testOrder.state === 'approved' ? 'text-emerald-400' : 'text-amber-300'}>
-                          {testOrder.state === 'approved' ? 'Aprovado (simulado)' :
-                            testOrder.state === 'pending' ? 'Aguardando teste' :
-                            testOrder.state === 'processing' ? 'Processando teste' :
-                            testOrder.state === 'refunded' ? 'Devolvido (teste)' :
-                            testOrder.state}
+                          {pixTestStateLabel(testOrder)}
                         </div>
                       </div>
                     </div>
