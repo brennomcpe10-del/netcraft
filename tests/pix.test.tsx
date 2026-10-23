@@ -474,6 +474,16 @@ test("HTTP webhook verifies signature and re-queries Orders API instead of trust
       204,
     );
     assert.equal((await s.api.view(first.id)).state, "approved");
+    // Duplicate signed webhooks must not queue duplicate fulfillment jobs.
+    assert.equal((await fetch(url, { method: "POST", headers, body: "{}" })).status, 204);
+    const jobs = [...s.db.records.entries()].filter(([key]) => key.startsWith("pixTestDeliveries/"));
+    assert.equal(jobs.length, 1);
+    assert.equal(jobs[0][1].dispatchEnabled, false);
+    // A forged approval in the body cannot override the authenticated provider GET.
+    s.setResource(ordersFixture(first.id, "25.00", "refunded"));
+    assert.equal((await fetch(url, { method: "POST", headers, body: JSON.stringify({ type: "order", data: { id: ORD, status: "processed" } }) })).status, 204);
+    assert.equal((await s.api.view(first.id)).state, "refunded");
+    assert.equal(s.db.records.get(jobs[0][0]).state, "blocked");
     assert.equal(
       (
         await fetch(`http://127.0.0.1:${port}/pix/orders/${first.id}`, {
