@@ -42,10 +42,10 @@ test("legacy checkout cannot create unverified orders, and historical orders req
   }
 });
 
-test("Firestone rules deny public order and provider test record access", () => {
+test("Firestore rules deny public order and provider test record access", () => {
   const rules = readFileSync(new URL("../firestore.rules", import.meta.url), "utf8");
   for (const collection of ["orders", "pixTestOrders", "pixTestDeliveries", "pixTestCouponUsage", "coupons"]) {
-    const block = rules.match(new RegExp(`match /${collection}/\\{[^}]+\\} \\{([\\s\\S]*?)\\n    \\}`));
+    const block = rules.match(new RegExp(`match /${collection}/\\{[^}]+\\} \\{([\\s\\S]*?)\\}`));
     assert.ok(block, `Missing security policy: ${collection}`);
     assert.match(block[1], /allow read, write: if false;/);
   }
