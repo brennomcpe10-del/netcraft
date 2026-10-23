@@ -99,7 +99,7 @@ export function PixCheckout({
     }
   }
   useEffect(() => {
-    if (!key || busy) return;
+    if (!key || busy || order?.state === "creating") return;
     const abort = new AbortController();
     let active = true;
     const tick = () => {
@@ -115,7 +115,7 @@ export function PixCheckout({
       abort.abort();
       clearInterval(timer);
     };
-  }, [key, busy]);
+  }, [key, busy, order?.state === "creating"]);
   function resetCheckout() {
     try {
       sessionStorage.removeItem("netcraft-pix-key");
@@ -148,8 +148,9 @@ export function PixCheckout({
       previousFingerprint =
         sessionStorage.getItem("netcraft-pix-request") || "";
     } catch {}
-    const k =
-      key && previousFingerprint === fingerprint ? key : crypto.randomUUID();
+    // A previously reserved order must be retried with the same key.
+    // Never create a second provider order while the first is unresolved.
+    const k = key && previousFingerprint === fingerprint ? key : crypto.randomUUID();
     setKey(k);
     setOrder(null);
     try {
@@ -190,10 +191,10 @@ export function PixCheckout({
       </p>
       {order?.apiVersion === "payments-legacy" && !order.paymentId && <div className="space-y-2"><p>Esta tentativa pertence ao checkout anterior. O registro será preservado; reiniciar não cancela uma eventual cobrança anterior.</p><button className="text-link" type="button" onClick={resetCheckout}>Reiniciar checkout</button></div>}
       {order?.state === "creating" && (
-        <p role="status">
-          Cobrança ainda não concluída. Confira os mesmos dados e tente
-          novamente; o pedido será reutilizado.
-        </p>
+        <div role="status" className="space-y-2">
+          <p>Esta tentativa ainda não foi concluída pelo Mercado Pago. Preencha os mesmos dados e clique em Gerar Pix de teste para tentar recuperá-la sem duplicar a cobrança.</p>
+          <button className="text-link" type="button" onClick={resetCheckout}>Descartar esta tentativa local e começar outra</button>
+        </div>
       )}
       {order && order.state !== "creating" ? (
         <div className="space-y-3">
