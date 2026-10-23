@@ -14,6 +14,7 @@ import {
   VIP,
   Product,
   Order,
+  PixTestOrderSummary,
   Player,
   ServerEvent,
   EventStatus,
@@ -77,6 +78,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const [vips, setVips] = useState<VIP[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [pixTestOrders, setPixTestOrders] = useState<PixTestOrderSummary[]>([]);
+  const [pixTestLoading, setPixTestLoading] = useState(false);
+  const [pixTestError, setPixTestError] = useState('');
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [events, setEvents] = useState<ServerEvent[]>([]);
@@ -115,6 +119,25 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const [newPlayerNick, setNewPlayerNick] = useState('');
   const [newPlayerVipId, setNewPlayerVipId] = useState('');
   const [isSavingPlayer, setIsSavingPlayer] = useState(false);
+
+  const loadPixTestOrders = async () => {
+    if (!adminToken) return;
+    setPixTestLoading(true);
+    setPixTestError('');
+    try {
+      setPixTestOrders(await api.getPixTestOrders(adminToken));
+    } catch (error) {
+      setPixTestError(error instanceof Error ? error.message : 'Não foi possível consultar as simulações.');
+    } finally {
+      setPixTestLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (adminToken && activeTab === 'orders') {
+      void loadPixTestOrders();
+    }
+  }, [adminToken, activeTab]);
 
   useEffect(() => {
     if (adminToken) {
@@ -826,6 +849,58 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                 </div>
               </div>
             </div>
+
+            <section className="rounded-xl border border-emerald-500/20 bg-white/[0.02] p-4 sm:p-5 space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Pix de teste · Mercado Pago Orders API</h3>
+                  <p className="text-zinc-400 text-[11px] mt-1">
+                    Últimas 50 simulações, somente leitura. Não são vendas reais,
+                    não entram no faturamento e não geram entregas Minecraft.
+                  </p>
+                </div>
+                <button type="button" onClick={() => void loadPixTestOrders()} disabled={pixTestLoading}
+                  className="text-xs border border-white/10 rounded-lg px-3 py-2 text-emerald-300 disabled:opacity-50">
+                  {pixTestLoading ? 'Consultando…' : 'Atualizar testes Pix'}
+                </button>
+              </div>
+              {pixTestError ? (
+                <p role="alert" className="text-amber-300 text-xs">{pixTestError}</p>
+              ) : pixTestLoading && pixTestOrders.length === 0 ? (
+                <p role="status" className="text-zinc-400 text-xs">Consultando pedidos de teste…</p>
+              ) : pixTestOrders.length === 0 ? (
+                <p className="text-zinc-400 text-xs">Nenhum pedido de teste encontrado no banco.</p>
+              ) : (
+                <div className="divide-y divide-white/[0.06]">
+                  {pixTestOrders.map(testOrder => (
+                    <div key={testOrder.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-white text-xs">
+                          {testOrder.gamertag} · {testOrder.linesCount} item(ns)
+                        </div>
+                        <div className="font-mono text-[10px] text-zinc-500 mt-1 break-all">
+                          Teste #{testOrder.id.slice(0, 12)} · {testOrder.createdAt
+                            ? new Date(testOrder.createdAt).toLocaleString('pt-BR')
+                            : 'Data não disponível'}
+                        </div>
+                      </div>
+                      <div className="text-right text-xs">
+                        <div className="font-semibold text-white">
+                          {(testOrder.totalCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </div>
+                        <div className={testOrder.state === 'approved' ? 'text-emerald-400' : 'text-amber-300'}>
+                          {testOrder.state === 'approved' ? 'Aprovado (simulado)' :
+                            testOrder.state === 'pending' ? 'Aguardando teste' :
+                            testOrder.state === 'processing' ? 'Processando teste' :
+                            testOrder.state === 'refunded' ? 'Devolvido (teste)' :
+                            testOrder.state}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
 
             <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
               {orders
