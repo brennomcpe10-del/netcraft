@@ -159,6 +159,9 @@ test("contract uses string amounts, Pix bank_transfer and server item prices; no
     { email: "local@testuser.com" },
   );
   assert.equal(req.total_amount, "25.00");
+  assert.equal("processing_mode" in req, false);
+  assert.equal("items" in req, false);
+  assert.deepEqual(req.payer, { email: "local@testuser.com" });
   assert.deepEqual(req.transactions.payments, [
     {
       amount: "25.00",
