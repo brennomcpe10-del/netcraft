@@ -1,18 +1,7 @@
 // The test checkout persists into pixTestOrders, separate from legacy orders.
 // Export ONLY an allowlisted read-only projection; provider payloads, QR data,
 // buyer identifiers and reward drafts must not be sent to the admin UI.
-export interface PixTestOrderSummary {
-  id: string;
-  environment: "test";
-  state: "creating" | "pending" | "processing" | "approved" | "expired" | "cancelled" | "refunded" | "unknown";
-  gamertag: string;
-  totalCents: number;
-  linesCount: number;
-  createdAt: string | null;
-  approvedAt: string | null;
-  approvalObservedAt: string | null;
-  providerOrderId: string | null;
-}
+import type { PixTestOrderSummary } from "../../src/types/index.ts";
 
 const states = new Set(["creating", "pending", "processing", "approved", "expired", "cancelled", "refunded"]);
 const stringOrNull = (value: unknown, max: number): string | null =>
