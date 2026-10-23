@@ -61,6 +61,20 @@ export interface Product {
   pixUrl?: string;
 }
 
+// Admin-only, read-only inspection of simulated sandbox transactions.
+export interface PixTestOrderSummary {
+  id: string;
+  environment: 'test';
+  state: 'creating' | 'pending' | 'processing' | 'approved' | 'expired' | 'cancelled' | 'refunded' | 'unknown';
+  gamertag: string;
+  totalCents: number;
+  linesCount: number;
+  createdAt: string | null;
+  approvedAt: string | null;
+  approvalObservedAt: string | null;
+  providerOrderId: string | null;
+}
+
 export interface Order {
   id: string;
   buyerNickname: string;
