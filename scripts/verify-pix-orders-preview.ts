@@ -44,10 +44,9 @@ try {
   // Isolate the official sandbox Pix contract: do not include optional shop items.
   const request = {
     type: "online",
-    processing_mode: "automatic",
     external_reference: reference,
     total_amount: "50.00",
-    payer: { email: "test@testuser.com", first_name: "APRO" },
+    payer: { email: "test_payer@example.com", first_name: "APRO" },
     transactions: {
       payments: [{
         amount: "50.00",
