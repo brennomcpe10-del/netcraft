@@ -146,8 +146,10 @@ export const api = {
   },
 
   // --- VIPS ---
-  async getVips(all = false): Promise<VIP[]> {
-    const res = await fetch(`${API_BASE}/vips${all ? '?all=true' : ''}`);
+  async getVips(all = false, adminToken?: string): Promise<VIP[]> {
+    const res = await fetch(`${API_BASE}/vips${all ? '?all=true' : ''}`, {
+      headers: getHeaders(adminToken), cache: 'no-store'
+    });
     if (!res.ok) throw new Error('Erro ao buscar VIPs.');
     return res.json();
   },
@@ -185,12 +187,14 @@ export const api = {
   },
 
   // --- STORE PRODUCTS ---
-  async getProducts(all = false, category?: string): Promise<Product[]> {
+  async getProducts(all = false, category?: string, adminToken?: string): Promise<Product[]> {
     const params = new URLSearchParams();
     if (all) params.append('all', 'true');
     if (category) params.append('category', category);
     const query = params.toString() ? `?${params.toString()}` : '';
-    const res = await fetch(`${API_BASE}/products${query}`);
+    const res = await fetch(`${API_BASE}/products${query}`, {
+      headers: getHeaders(adminToken), cache: 'no-store'
+    });
     if (!res.ok) throw new Error('Erro ao buscar produtos.');
     return res.json();
   },
@@ -377,8 +381,10 @@ export const api = {
   },
 
   // --- EVENTS ---
-  async getEvents(all = false): Promise<ServerEvent[]> {
-    const res = await fetch(`${API_BASE}/events${all ? '?all=true' : ''}`);
+  async getEvents(all = false, adminToken?: string): Promise<ServerEvent[]> {
+    const res = await fetch(`${API_BASE}/events${all ? '?all=true' : ''}`, {
+      headers: getHeaders(adminToken), cache: 'no-store'
+    });
     if (!res.ok) throw new Error('Erro ao carregar eventos.');
     return res.json();
   },
@@ -413,8 +419,10 @@ export const api = {
   },
 
   // --- NEWS ---
-  async getNews(all = false): Promise<NewsArticle[]> {
-    const res = await fetch(`${API_BASE}/news${all ? '?all=true' : ''}`);
+  async getNews(all = false, adminToken?: string): Promise<NewsArticle[]> {
+    const res = await fetch(`${API_BASE}/news${all ? '?all=true' : ''}`, {
+      headers: getHeaders(adminToken), cache: 'no-store'
+    });
     if (!res.ok) throw new Error('Erro ao carregar notícias.');
     return res.json();
   },
@@ -449,8 +457,10 @@ export const api = {
   },
 
   // --- COMMUNITY ---
-  async getCommunity(): Promise<SocialLink[]> {
-    const res = await fetch(`${API_BASE}/community`);
+  async getCommunity(all = false, adminToken?: string): Promise<SocialLink[]> {
+    const res = await fetch(`${API_BASE}/community${all ? '?all=true' : ''}`, {
+      headers: getHeaders(adminToken), cache: 'no-store'
+    });
     if (!res.ok) throw new Error('Erro ao carregar redes sociais.');
     return res.json();
   },
