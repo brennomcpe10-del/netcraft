@@ -101,6 +101,26 @@ export class MercadoPago {
         const diagnostic = validationDiagnostics(data);
         if (diagnostic.properties.length || diagnostic.codes.length)
           console.warn("[MercadoPago validation]", diagnostic);
+        else if (path === "/v1/orders") {
+          // Categorize opaque provider failures without logging untrusted text,
+          // payer data, order identifiers, headers, or response bodies.
+          const record = data && typeof data === "object" && !Array.isArray(data)
+            ? data as Record<string, unknown> : {};
+          const knownCode = new Set([
+            "cc_rejected_other_reason", "invalid_request", "bad_request",
+            "unauthorized", "forbidden", "not_found", "internal_error",
+          ]);
+          const code = typeof record.code === "string" && knownCode.has(record.code)
+            ? record.code : "unclassified";
+          console.warn("[MercadoPago order rejection]", {
+            httpStatus: response.status,
+            code,
+            hasErrors: Array.isArray(record.errors),
+            hasCause: Array.isArray(record.cause),
+            hasMessage: typeof record.message === "string",
+            hasStatus: typeof record.status === "number",
+          });
+        }
       }
       const details =
         response.status === 401 || response.status === 403
