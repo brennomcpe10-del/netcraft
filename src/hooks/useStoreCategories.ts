@@ -1,60 +1,50 @@
-import { useEffect, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "../lib/firebase.ts";
+import { useCallback, useEffect, useState } from "react";
 import {
   defaultStoreCategories,
   StoreCategory,
   validateCategories,
 } from "../lib/storeCategories.ts";
+
+// The backend publishes the category snapshot from the same Firestore database
+// as Pix prices. Do not race against unauthenticated browser subscriptions.
 export function useStoreCategoryState() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [categories, setCategories] = useState<StoreCategory[]>(
-    defaultStoreCategories,
-  );
-  useEffect(
-    () =>
-      onSnapshot(
-        doc(db, "settings", "storeCategories"),
-        (snapshot) => {
-          setLoading(false);
-          setError("");
-          if (!snapshot.exists()) {
-            setCategories(defaultStoreCategories);
-            return;
-          }
-          try {
-            const value = snapshot.data().categories;
-            validateCategories(value);
-            setCategories(value);
-          } catch {
-            setCategories([]);
-            setError(
-              "As categorias salvas são inválidas. Nenhum dado foi alterado.",
-            );
-          }
-        },
-        () => {
-          // Browser subscriptions sometimes fail on Preview. Recover with the
-          // authenticated server database's read-only storefront snapshot.
-          fetch("/api/storefront/catalog", { cache: "no-store" })
-            .then(async response => {
-              if (!response.ok) throw new Error("Catálogo indisponível.");
-              const result = await response.json();
-              const value = result.categories ?? defaultStoreCategories;
-              validateCategories(value);
-              setCategories(value);
-              setError("");
-            })
-            .catch(() => setError(
-              "Não foi possível carregar as categorias. Recarregue antes de editar.",
-            ))
-            .finally(() => setLoading(false));
-        },
-      ),
-    [],
-  );
-  return { categories, loading, error };
+  const [categories, setCategories] = useState<StoreCategory[]>(defaultStoreCategories);
+
+  const refresh = useCallback(async () => {
+    try {
+      const response = await fetch("/api/storefront/catalog", { cache: "no-store" });
+      if (!response.ok) throw new Error("Catálogo indisponível.");
+      const result = await response.json();
+      const value = result.categories ?? defaultStoreCategories;
+      validateCategories(value);
+      setCategories(value);
+      setError("");
+    } catch {
+      setError("Não foi possível carregar as categorias oficiais. Recarregue antes de editar.");
+      // Retain the last valid categories for display only. Editing is disabled.
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, 60000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [refresh]);
+
+  return { categories, loading, error, refresh };
 }
 
 export function useStoreCategories() {
