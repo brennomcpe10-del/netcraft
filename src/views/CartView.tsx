@@ -12,12 +12,10 @@ const money = (cents: number) =>
 export function CartView({
   products,
   vips,
-  onCheckout,
   onShop,
 }: {
   products: Product[];
   vips: VIP[];
-  onCheckout: (item: VIP | Product, type: "vip" | "product") => void;
   onShop: () => void;
 }) {
   const { lines, remove, quantity } = useCart();
@@ -59,10 +57,6 @@ export function CartView({
       sum + (line.item ? Math.round(line.item.price * 100) * line.quantity : 0),
     0,
   );
-  const single =
-    resolved.length === 1 && resolved[0].quantity === 1 && resolved[0].available
-      ? resolved[0]
-      : null;
   return (
     <section className="nc-container nc-section">
       <span className="eyebrow">SUA SELEÇÃO</span>
@@ -166,16 +160,6 @@ export function CartView({
                 !quote || checking || resolved.some((line) => !line.available)
               }
             />
-            {single && (
-              <button
-                className="text-link"
-                onClick={() => {
-                  if (single.item) onCheckout(single.item, single.productType);
-                }}
-              >
-                Usar pagamento anterior (uma unidade)
-              </button>
-            )}
             <button className="text-link" onClick={onShop}>
               Continuar comprando
               <ArrowRight size={16} />
