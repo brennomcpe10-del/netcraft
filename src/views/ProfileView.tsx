@@ -154,7 +154,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ setCurrentTab }) => {
                 </div>
                 <div className="flex justify-between py-2 border-b border-white/[0.04]">
                   <span className="text-zinc-400">Total investido:</span>
-                  <span className="font-mono text-emerald-400">R$ {(player.totalSpent || 0).toFixed(2).replace('.', ',')}</span>
+                  <span className="font-mono text-zinc-400">Disponível após verificação de conta</span>
                 </div>
                 <div className="flex justify-between py-2">
                   <span className="text-zinc-400">Status VIP:</span>
