@@ -554,138 +554,77 @@ apiRouter.put('/admin/orders/status', requireAdmin, handleOrderStatusUpdate);
 
 // --- COUPONS MANAGEMENT ROUTES ---
 
-apiRouter.get('/admin/coupons', requireAdmin, async (_req, res) => {
-  try {
-    let coupons = dbStore.getCoupons();
-    try {
-      const { db } = await import('../../src/lib/firebase.ts');
-      const { getDocs, collection } = await import('firebase/firestore');
-      const snap = await getDocs(collection(db, 'coupons'));
-      if (!snap.empty) {
-        const firestoreList: any[] = [];
-        snap.forEach(d => firestoreList.push({ ...d.data(), id: d.id }));
-        coupons = firestoreList;
-      }
-    } catch {}
-    res.json(coupons);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao carregar cupons.' });
-  }
+function couponDraft(input:any,id:string,previous?:any) {
+ const code=String(input?.code ?? previous?.code ?? '').trim().toUpperCase();
+ const discountType=input?.discountType ?? previous?.discountType;
+ const discountValue=Number(input?.discountValue ?? previous?.discountValue);
+ const minOrderValue=Number(input?.minOrderValue ?? previous?.minOrderValue ?? 0);
+ const maxUsesRaw=input?.maxUses ?? previous?.maxUses;
+ const maxUses=maxUsesRaw===null||maxUsesRaw===undefined||maxUsesRaw===''?null:Number(maxUsesRaw);
+ if(!/^[a-zA-Z0-9_-]{2,128}$/.test(id) || !/^[A-Z0-9_-]{2,50}$/.test(code) ||
+   !['percentage','fixed'].includes(discountType) ||
+   !Number.isFinite(discountValue)||discountValue<=0||
+   (discountType==='percentage'&&discountValue>100) ||
+   !Number.isFinite(minOrderValue)||minOrderValue<0 ||
+   (maxUses!==null&&(!Number.isSafeInteger(maxUses)||maxUses<1)))
+  throw new ProductCatalogError('Confira o código e as regras do cupom.',400);
+ const now=new Date().toISOString();
+ return {
+  ...previous,
+  id,code,discountType,discountValue,minOrderValue,maxUses,
+  usedCount:Number(previous?.usedCount || 0),
+  expiresAt:input?.expiresAt ?? previous?.expiresAt ?? null,
+  active:input?.active !== undefined ? input.active === true : previous?.active !== false,
+  description:String(input?.description ?? previous?.description ?? '').slice(0,1000),
+  createdAt:previous?.createdAt || now,updatedAt:now
+ };
+}
+apiRouter.get('/admin/coupons',requireAdmin,async (_req,res)=>{
+ try{
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const snap=await paymentDatabase().collection('coupons').get();
+  res.setHeader('Cache-Control','no-store');
+  return res.json(snap.docs.map(d=>({...d.data(),id:d.id})));
+ }catch{return res.status(503).json({error:'Não foi possível consultar os cupons.'});}
 });
-
-apiRouter.post('/admin/coupons', requireAdmin, async (req, res) => {
-  try {
-    const { code, discountType, discountValue, minOrderValue, maxUses, expiresAt, active, description } = req.body;
-    if (!code || typeof code !== 'string' || !code.trim()) {
-      return res.status(400).json({ error: 'O código do cupom é obrigatório.' });
-    }
-    const cleanCode = code.trim().toUpperCase();
-    if (!discountValue || Number(discountValue) <= 0) {
-      return res.status(400).json({ error: 'O valor do desconto deve ser maior que zero.' });
-    }
-    if (discountType === 'percentage' && Number(discountValue) > 100) {
-      return res.status(400).json({ error: 'O desconto percentual não pode ser maior que 100%.' });
-    }
-
-    // Check duplicate in Firestore
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { collection, getDocs, setDoc, doc } = await import('firebase/firestore');
-
-    const snap = await getDocs(collection(db, 'coupons')).catch(() => null);
-    if (snap && !snap.empty) {
-      for (const d of snap.docs) {
-        const data = d.data();
-        if (data.code && String(data.code).trim().toUpperCase() === cleanCode) {
-          return res.status(400).json({ error: `Já existe um cupom cadastrado com o código "${cleanCode}".` });
-        }
-      }
-    }
-
-    const newCoupon = dbStore.createCoupon({
-      code: cleanCode,
-      discountType: discountType === 'fixed' ? 'fixed' : 'percentage',
-      discountValue: Number(discountValue),
-      minOrderValue: minOrderValue ? Number(minOrderValue) : 0,
-      maxUses: maxUses ? Number(maxUses) : null,
-      expiresAt: expiresAt || null,
-      active: active !== false,
-      description: description ? String(description).trim() : ''
-    });
-
-    await setDoc(doc(db, 'coupons', newCoupon.id), newCoupon).catch(err => {
-      console.warn('Firestore coupon persistence warning:', err);
-    });
-
-    res.status(201).json(newCoupon);
-  } catch (err: unknown) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Erro ao criar cupom.' });
-  }
+apiRouter.post('/admin/coupons',requireAdmin,async(req,res)=>{
+ try{
+  const id=typeof req.body?.id==='string'&&req.body.id.trim()?req.body.id.trim():`cupom-${crypto.randomUUID()}`;
+  const coupon=couponDraft(req.body,id);
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const db=paymentDatabase(),col=db.collection('coupons');
+  if(!(await col.where('code','==',coupon.code).limit(1).get()).empty)
+   throw new ProductCatalogError('Já existe um cupom com este código.',409);
+  await col.doc(id).create(coupon);
+  dbStore.createCoupon(coupon);
+  return res.status(201).json(coupon);
+ }catch(error){return productError(res,error);}
 });
-
-apiRouter.put('/admin/coupons/:id', requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const cleanId = id.trim();
-    const { code, discountType, discountValue, minOrderValue, maxUses, expiresAt, active, description } = req.body;
-
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, setDoc, getDocs, collection } = await import('firebase/firestore');
-
-    if (code) {
-      const cleanCode = String(code).trim().toUpperCase();
-      const snap = await getDocs(collection(db, 'coupons')).catch(() => null);
-      if (snap && !snap.empty) {
-        for (const d of snap.docs) {
-          if (d.id !== cleanId && d.data().code && String(d.data().code).trim().toUpperCase() === cleanCode) {
-            return res.status(400).json({ error: `Já existe outro cupom com o código "${cleanCode}".` });
-          }
-        }
-      }
-    }
-
-    const updated = dbStore.updateCoupon(cleanId, req.body);
-    const finalData = updated || {
-      id: cleanId,
-      code: code ? String(code).trim().toUpperCase() : '',
-      discountType: discountType || 'percentage',
-      discountValue: Number(discountValue) || 0,
-      minOrderValue: minOrderValue ? Number(minOrderValue) : 0,
-      maxUses: maxUses ? Number(maxUses) : null,
-      expiresAt: expiresAt || null,
-      active: active !== false,
-      description: description || '',
-      updatedAt: new Date().toISOString()
-    };
-
-    await setDoc(doc(db, 'coupons', cleanId), finalData, { merge: true }).catch(() => {});
-    res.json(finalData);
-  } catch (err: unknown) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Erro ao atualizar cupom.' });
-  }
+apiRouter.put('/admin/coupons/:id',requireAdmin,async(req,res)=>{
+ try{
+  const id=req.params.id;
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const col=paymentDatabase().collection('coupons'),ref=col.doc(id);
+  const snap=await ref.get();
+  if(!snap.exists) throw new ProductCatalogError('Cupom não encontrado.',404);
+  const coupon=couponDraft(req.body,id,snap.data());
+  if(coupon.code!==snap.data()?.code &&
+     !(await col.where('code','==',coupon.code).limit(1).get()).empty)
+   throw new ProductCatalogError('Já existe um cupom com este código.',409);
+  await ref.set(coupon);
+  dbStore.updateCoupon(id,coupon);
+  return res.json(coupon);
+ }catch(error){return productError(res,error);}
 });
-
-apiRouter.delete('/admin/coupons/:id', requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const cleanId = id.trim();
-    dbStore.deleteCoupon(cleanId);
-
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, deleteDoc, getDocs, collection } = await import('firebase/firestore');
-    await deleteDoc(doc(db, 'coupons', cleanId)).catch(() => {});
-    const snap = await getDocs(collection(db, 'coupons')).catch(() => null);
-    if (snap) {
-      for (const d of snap.docs) {
-        if (d.id.toLowerCase() === cleanId.toLowerCase() || String(d.data().code || '').toUpperCase() === cleanId.toUpperCase()) {
-          await deleteDoc(doc(db, 'coupons', d.id)).catch(() => {});
-        }
-      }
-    }
-
-    res.json({ success: true, message: 'Cupom excluído com sucesso.' });
-  } catch (err: unknown) {
-    res.status(500).json({ error: 'Erro ao excluir cupom.' });
-  }
+apiRouter.delete('/admin/coupons/:id',requireAdmin,async(req,res)=>{
+ try{
+  const id=req.params.id;
+  if(!/^[a-zA-Z0-9_-]{2,128}$/.test(id))return res.status(400).json({error:'Identificador inválido.'});
+  const {paymentDatabase}=await import('../payments/database.ts');
+  await paymentDatabase().collection('coupons').doc(id).delete();
+  dbStore.deleteCoupon(id);
+  return res.json({success:true,message:'Cupom excluído com sucesso.'});
+ }catch(error){return productError(res,error);}
 });
 
 apiRouter.post('/coupons/validate', async (req, res) => {
