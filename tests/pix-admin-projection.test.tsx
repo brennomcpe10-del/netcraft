@@ -11,6 +11,7 @@ test("admin sandbox summary excludes all checkout secrets and reward payloads", 
     approvedAt: null,
     approvalObservedAt: "2026-10-23T22:00:14.000Z",
     providerOrderId: "ORD-sandbox-test",
+    expiresAt: "2026-10-23T23:00:00.000Z",
     lines: [{ reward: { command: "give" }, productId: "kit" }],
     email: "private@example.com",
     cpf: "12345678901",
@@ -25,6 +26,7 @@ test("admin sandbox summary excludes all checkout secrets and reward payloads", 
   assert.equal(result.linesCount, 1);
   assert.equal(result.approvedAt, null);
   assert.equal(result.approvalObservedAt, raw.approvalObservedAt);
+  assert.equal(result.expiresAt, raw.expiresAt);
   for (const field of ["email", "cpf", "qrCode", "qrBase64", "requestHash", "lines"]) {
     assert.equal(Object.prototype.hasOwnProperty.call(result, field), false, field);
   }
@@ -43,4 +45,5 @@ test("sandbox summary never represents malformed provider amounts or statuses as
   assert.equal(result.state, "unknown");
   assert.equal(result.totalCents, 0);
   assert.equal(result.gamertag, "Jogador desconhecido");
+  assert.equal(result.expiresAt, null);
 });
