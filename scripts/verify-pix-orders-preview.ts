@@ -6,6 +6,7 @@ import {
   MercadoPago,
   PixError,
   testToken,
+  validationDiagnostics,
 } from "../server/payments/mercadoPago.ts";
 import {
   verifyOrder,
@@ -18,8 +19,17 @@ if (process.env.VERCEL_ENV !== "preview") {
   );
   process.exit(1);
 }
+const statuses: { operation: string; status: number }[] = [];
+const validation: ReturnType<typeof validationDiagnostics>[] = [];
+const metadata = {
+  environment: "preview",
+  commit: /^[a-f0-9]{40}$/.test(process.env.VERCEL_GIT_COMMIT_SHA || "")
+    ? process.env.VERCEL_GIT_COMMIT_SHA : null,
+  checkedAt: new Date().toISOString(),
+  deliveryEnabled: false,
+  firestoreTouched: false,
+};
 try {
-  const statuses: { operation: string; status: number }[] = [];
   const gateway = new MercadoPago(testToken(), async (url, options) => {
     const response = await fetch(url, options);
     const path = new URL(String(url)).pathname;
@@ -32,6 +42,10 @@ try {
             : "GET /v1/orders/:id",
       status: response.status,
     });
+    if (!response.ok) {
+      try { validation.push(validationDiagnostics(await response.clone().json())); }
+      catch { /* No raw response text in diagnostics. */ }
+    }
     return response;
   });
   const receiver = await gateway.me();
@@ -83,9 +97,9 @@ try {
     ),
   );
   const result = {
+    ...metadata,
     api: "orders-v1",
     result: "valid_authenticated_response",
-    checkedAt: new Date().toISOString(),
     state,
     qrCodeReturned: !!verified?.payment_method?.qr_code,
     qrImageReturned: !!verified?.payment_method?.qr_code_base64,
@@ -104,6 +118,18 @@ try {
     error instanceof PixError
       ? error.message
       : "Falha de rede ou resposta inválida no teste oficial Pix Orders API.";
+  await mkdir("dist", { recursive: true });
+  await writeFile("dist/pix-orders-sandbox-check.json", JSON.stringify({
+    ...metadata,
+    api: "orders-v1",
+    result: "failed",
+    qrCodeReturned: false,
+    qrImageReturned: false,
+    operations: statuses,
+    validation,
+    // Fixed text only; no exception messages, provider values or buyer data.
+    reason: "sandbox_probe_failed",
+  }, null, 2));
   console.error("Orders API official Pix probe: FAILED.", safe);
   process.exitCode = 1;
 }
