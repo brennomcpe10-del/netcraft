@@ -152,9 +152,16 @@ apiRouter.put('/admin/settings/pix', requireAdmin, async (req, res) => {
 // VIP PACKAGES
 // -------------------------------------------------------------
 apiRouter.get('/vips', async (req, res) => {
-  const includeInactive = req.query.all === 'true';
-  await dbStore.syncFromFirestore().catch(() => {});
-  res.json(dbStore.getVips(includeInactive));
+ try {
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const snap=await paymentDatabase().collection('vips').get();
+  const token=String(req.headers.authorization || '').replace(/^Bearer /,'');
+  const includeInactive=req.query.all==='true' && isValidAdminToken(token);
+  res.setHeader('Cache-Control','no-store');
+  return res.json(snap.docs.map(d=>({...d.data(),id:d.id}))
+   .filter((v:any)=>includeInactive || v.active===true)
+   .sort((a:any,b:any)=>Number(a.order||0)-Number(b.order||0)));
+ }catch{return res.status(503).json({error:'Não foi possível consultar os planos VIP.'});}
 });
 
 // VIP pricing must be persisted through the authenticated server, never a browser write.
@@ -284,10 +291,17 @@ apiRouter.get('/storefront/catalog', async (_req,res)=>{
 });
 
 apiRouter.get('/products', async (req, res) => {
-  const includeInactive = req.query.all === 'true';
-  const category = typeof req.query.category === 'string' ? req.query.category : undefined;
-  await dbStore.syncFromFirestore().catch(() => {});
-  res.json(dbStore.getProducts(includeInactive, category));
+ try {
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const snap=await paymentDatabase().collection('products').get();
+  const token=String(req.headers.authorization || '').replace(/^Bearer /,'');
+  const includeInactive=req.query.all==='true' && isValidAdminToken(token);
+  const category=typeof req.query.category==='string'?req.query.category:null;
+  res.setHeader('Cache-Control','no-store');
+  return res.json(snap.docs.map(d=>({...d.data(),id:d.id}))
+   .filter((p:any)=>(includeInactive||p.active===true)&&(!category||category==='all'||p.category===category))
+   .sort((a:any,b:any)=>Number(a.order||0)-Number(b.order||0)));
+ }catch{return res.status(503).json({error:'Não foi possível consultar os produtos.'});}
 });
 
 const productsAdmin=productCatalog(firestoreProducts);
