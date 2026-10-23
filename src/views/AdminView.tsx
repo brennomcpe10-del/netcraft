@@ -240,7 +240,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         showSuccess('Evento criado');
         setEvents(prev => [...prev.filter(ev => ev.id !== savedEv.id), savedEv]);
       }
-      await saveEventToFirestore(savedEv).catch(() => {});
       setEditingEvent(null);
       await loadData();
       await onRefreshGlobalData();
@@ -263,7 +262,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         showSuccess('Notícia publicada');
         setNews(prev => [...prev.filter(n => n.id !== savedN.id), savedN]);
       }
-      await saveNewsToFirestore(savedN).catch(() => {});
       setEditingNews(null);
       await loadData();
       await onRefreshGlobalData();
@@ -286,7 +284,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         showSuccess('Rede social adicionada');
         setSocialLinks(prev => [...prev.filter(s => s.id !== savedSoc.id), savedSoc]);
       }
-      await saveSocialLinkToFirestore(savedSoc).catch(() => {});
       setEditingSocial(null);
       await loadData();
       await onRefreshGlobalData();
@@ -529,24 +526,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           showSuccess(`Jogador ${name} removido do sistema`);
           break;
         case 'event':
-          await Promise.allSettled([
-            api.deleteEvent(id, adminToken, name),
-            deleteEventFromFirestore(id, name)
-          ]);
+          await api.deleteEvent(id, adminToken, name);
           showSuccess(`Evento ${name} excluído com sucesso`);
           break;
         case 'news':
-          await Promise.allSettled([
-            api.deleteNews(id, adminToken, name),
-            deleteNewsFromFirestore(id, name)
-          ]);
+          await api.deleteNews(id, adminToken, name);
           showSuccess(`Notícia ${name} excluída com sucesso`);
           break;
         case 'community':
-          await Promise.allSettled([
-            api.deleteSocialLink(id, adminToken, name),
-            deleteSocialLinkFromFirestore(id, name)
-          ]);
+          await api.deleteSocialLink(id, adminToken, name);
           showSuccess(`Comunidade ${name} excluída com sucesso`);
           break;
         case 'coupon':
