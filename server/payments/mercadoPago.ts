@@ -119,6 +119,30 @@ export class MercadoPago {
             hasCause: Array.isArray(record.cause),
             hasMessage: typeof record.message === "string",
             hasStatus: typeof record.status === "number",
+            // Structural diagnostics only: fixed field names and type categories.
+            // Do not log arbitrary error strings, codes, messages or values.
+            errorShapes: Array.isArray(record.errors)
+              ? record.errors.slice(0, 5).map((item: unknown) => {
+                  const entry = item && typeof item === "object" && !Array.isArray(item)
+                    ? item as Record<string, unknown> : {};
+                  const fields = ["code", "message", "details", "type", "status", "title"];
+                  return {
+                    fieldsPresent: fields.filter(field => Object.prototype.hasOwnProperty.call(entry, field)),
+                    detailsShape: Array.isArray(entry.details) ? "array"
+                      : entry.details && typeof entry.details === "object" ? "object"
+                      : typeof entry.details,
+                    detailsCount: Array.isArray(entry.details) ? Math.min(entry.details.length, 30) : 0,
+                    detailFields: Array.isArray(entry.details)
+                      ? entry.details.slice(0, 3).map((detail: unknown) => {
+                          const d = detail && typeof detail === "object" && !Array.isArray(detail)
+                            ? detail as Record<string, unknown> : {};
+                          return ["code", "message", "property", "field", "path", "type", "description"]
+                            .filter(field => Object.prototype.hasOwnProperty.call(d, field));
+                        })
+                      : [],
+                  };
+                })
+              : [],
           });
         }
       }
