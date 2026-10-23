@@ -25,5 +25,6 @@ export function testOrderSummary(
     approvedAt: stringOrNull(data.approvedAt, 60),
     approvalObservedAt: stringOrNull(data.approvalObservedAt, 60),
     providerOrderId: stringOrNull(data.providerOrderId, 100),
+    expiresAt: stringOrNull(data.expiresAt, 60),
   };
 }
