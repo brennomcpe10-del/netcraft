@@ -11,7 +11,6 @@ import { Header } from "./components/Header.tsx";
 import { Footer } from "./components/Footer.tsx";
 import { NicknameModal } from "./components/modals/NicknameModal.tsx";
 import { AdminLoginModal } from "./components/modals/AdminLoginModal.tsx";
-import { CheckoutModal } from "./components/modals/CheckoutModal.tsx";
 
 import { HomeView } from "./views/HomeView.tsx";
 import { ServerView } from "./views/ServerView.tsx";
@@ -65,12 +64,6 @@ function MainAppContent() {
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Active checkout item modal state
-  const [checkoutItem, setCheckoutItem] = useState<{
-    item: VIP | Product;
-    type: "vip" | "product";
-  } | null>(null);
 
   const { isAdminLoggedIn, isAdminChecking, openAdminModal } = useAdmin();
 
@@ -260,7 +253,6 @@ function MainAppContent() {
               setStoreCategory("all");
               setCurrentTab("store");
             }}
-            onCheckout={(item, type) => setCheckoutItem({ item, type })}
           />
         )}
         {currentTab === "server" && <ServerView settings={settings} />}
@@ -324,18 +316,6 @@ function MainAppContent() {
         }}
       />
 
-      {checkoutItem && (
-        <CheckoutModal
-          item={checkoutItem.item}
-          itemType={checkoutItem.type}
-          livePixUrl={settings?.livePixUrl}
-          pixUrl={settings?.pixUrl}
-          onClose={() => setCheckoutItem(null)}
-          onSuccess={async () => {
-            await fetchGlobalData();
-          }}
-        />
-      )}
     </div>
   );
 }
