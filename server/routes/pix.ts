@@ -106,7 +106,7 @@ export function createPixRouter(
           const parts = Object.fromEntries(
             signature.split(",").map(part => part.trim().split("=")),
           );
-          if (!secret || !requestId || !/^\\d{10,13}$/.test(parts.ts || "") ||
+          if (!secret || !requestId || !/^\d{10,13}$/.test(parts.ts || "") ||
               !/^[a-f0-9]{64}$/i.test(parts.v1 || "")) return false;
           const milliseconds = Number(parts.ts) * (parts.ts.length === 10 ? 1000 : 1);
           if (Math.abs(Date.now() - milliseconds) > 300000) return false;
