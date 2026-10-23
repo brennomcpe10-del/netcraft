@@ -30,6 +30,7 @@ test("legacy checkout cannot create unverified orders, and historical orders req
       fetch(base + "/orders"),
       fetch(base + "/orders/ORD-12345"),
       fetch(base + "/player/Player/orders"),
+      fetch(base + "/admin/pix-test-orders"),
     ]);
     // Missing ADMIN_KEYWORD yields 503 (closed), configured admin yields 401.
     for (const response of responses)
