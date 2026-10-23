@@ -12,6 +12,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ setCurrentTab }) => {
   const [activeMenu, setActiveMenu] = useState<'profile' | 'orders' | 'vips' | 'gifts' | 'settings'>('profile');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [historyRestricted, setHistoryRestricted] = useState(false);
 
   useEffect(() => {
     if (player) {
@@ -25,8 +26,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ setCurrentTab }) => {
       setLoadingOrders(true);
       const data = await api.getPlayerOrders(player.nickname);
       setOrders(data);
-    } catch (err) {
-      console.error(err);
+      setHistoryRestricted(false);
+    } catch {
+      // A gamertag is not verified identity; legacy order history is admin-only.
+      setOrders([]);
+      setHistoryRestricted(true);
     } finally {
       setLoadingOrders(false);
     }
@@ -146,7 +150,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ setCurrentTab }) => {
                 </div>
                 <div className="flex justify-between py-2 border-b border-white/[0.04]">
                   <span className="text-zinc-400">Total de compras:</span>
-                  <span className="font-mono text-white">{orders.length} pedidos</span>
+                  <span className="font-mono text-white">{historyRestricted ? 'Histórico protegido' : `${orders.length} pedidos`}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b border-white/[0.04]">
                   <span className="text-zinc-400">Total investido:</span>
@@ -164,7 +168,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ setCurrentTab }) => {
           {activeMenu === 'orders' && (
             <div className="space-y-4">
               <h2 className="text-base font-bold text-white">Histórico de Compras</h2>
-              {loadingOrders ? (
+              {historyRestricted ? (
+                <p role="status" className="text-xs text-zinc-400 py-6 border border-white/[0.06] rounded-xl text-center">
+                  Por segurança, compras antigas só podem ser consultadas pela equipe do servidor.
+                  O acesso apenas por nickname não comprova quem é o comprador.
+                  Para conferir uma compra, entre em contato com o suporte.
+                </p>
+              ) : loadingOrders ? (
                 <p className="text-xs text-zinc-400">Carregando compras...</p>
               ) : myPurchases.length === 0 ? (
                 <p className="text-xs text-zinc-400 py-6 border border-white/[0.06] rounded-xl text-center">
@@ -231,7 +241,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ setCurrentTab }) => {
           {activeMenu === 'gifts' && (
             <div className="space-y-4">
               <h2 className="text-base font-bold text-white">Presentes Enviados</h2>
-              {sentGifts.length === 0 ? (
+              {historyRestricted ? (
+                <p role="status" className="text-xs text-zinc-400 py-6 border border-white/[0.06] rounded-xl text-center">
+                  O histórico de presentes está protegido. Consulte a equipe do servidor.
+                </p>
+              ) : sentGifts.length === 0 ? (
                 <p className="text-xs text-zinc-400 py-6 border border-white/[0.06] rounded-xl text-center">
                   Nenhum presente enviado para outros jogadores.
                 </p>
