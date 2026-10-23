@@ -140,6 +140,24 @@ export function createPixRouter(
             secretHasOuterWhitespace: secret !== secret.trim(),
             trimmedSecretWouldMatch: secret !== secret.trim() &&
               webhookSignature(id, requestId, signature, secret.trim()),
+            // Preview-only comparison: classify possible manifest differences.
+            // Never log manifests/digests or use these probes to authorize requests.
+            manifestVariantMatch: (() => {
+              if (!secret || !/^[a-f0-9]{64}$/i.test(signatureParts.v1 || "") || !ts || !requestId || !id) return "not_tested";
+              const variants: Array<[string, string]> = [
+                ["original_case", `id:${id};request-id:${requestId};ts:${ts};`],
+                ["no_final_semicolon", `id:${id.toLowerCase()};request-id:${requestId};ts:${ts}`],
+                ["id_omitted", `request-id:${requestId};ts:${ts};`],
+                ["request_id_omitted", `id:${id.toLowerCase()};ts:${ts};`],
+                ["timestamp_omitted", `id:${id.toLowerCase()};request-id:${requestId};`],
+              ];
+              const received = Buffer.from(signatureParts.v1, "hex");
+              const matched = variants.filter(([, manifest]) => {
+                const digest = crypto.createHmac("sha256", secret).update(manifest).digest();
+                return crypto.timingSafeEqual(digest, received);
+              }).map(([name]) => name);
+              return matched.length === 1 ? matched[0] : matched.length > 1 ? "multiple" : "none";
+            })(),
           });
         }
         return res.status(401).json({ error: "Notificação não autenticada." });
