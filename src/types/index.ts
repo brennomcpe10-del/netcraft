@@ -73,6 +73,7 @@ export interface PixTestOrderSummary {
   approvedAt: string | null;
   approvalObservedAt: string | null;
   providerOrderId: string | null;
+  expiresAt: string | null;
 }
 
 export interface Order {
