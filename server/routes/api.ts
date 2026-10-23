@@ -4,6 +4,7 @@ import {paymentStatusPatch} from '../../src/lib/paymentStatus.ts';
 import {revenueReport,brasiliaPeriod} from '../../src/lib/revenue.ts';
 import { adminAuthRouter, requireAdmin, isValidAdminToken } from '../auth/admin.ts';
 import {productCatalog,ProductCatalogError} from '../services/productCatalog.ts';
+import { editorialRepository, EditorialError } from '../services/editorialCatalog.ts';
 import {firestoreProducts} from '../services/firestoreProducts.ts';
 import {quoteCart,validateCartRequest} from '../../src/lib/cartQuote.ts';
 import {validateCategories} from '../../src/lib/storeCategories.ts';
@@ -609,139 +610,80 @@ apiRouter.delete('/admin/orders/:id',requireAdmin,async(req,res)=>{
 });
 
 // -------------------------------------------------------------
-// EVENTS
-// -------------------------------------------------------------
-apiRouter.get('/events', (req, res) => {
-  const includeAll = req.query.all === 'true';
-  res.json(dbStore.getEvents(includeAll));
+// EVENTS, NEWS AND COMMUNITY CONTENT
+// All writes use the authenticated Firebase Admin backend. No browser fallback.
+function editorialFailure(res: express.Response,error:unknown) {
+ return res.status(error instanceof EditorialError ? error.status : 503)
+  .json({error:error instanceof EditorialError ? error.message : 'Não foi possível salvar os dados no servidor.'});
+}
+function editorialAdmin(req:express.Request) {
+ const header=String(req.headers.authorization||'');
+ return header.startsWith('Bearer ') && isValidAdminToken(header.slice(7));
+}
+apiRouter.get('/events',async(req,res)=>{
+ try {
+  const all=req.query.all==='true' && editorialAdmin(req);
+  const items=await editorialRepository('events').publicEntries(all);
+  res.setHeader('Cache-Control','no-store');
+  return res.json(items);
+ }catch{return res.status(503).json({error:'Não foi possível consultar eventos.'});}
+});
+apiRouter.post('/admin/events',requireAdmin,async(req,res)=>{
+ try{return res.status(201).json(await editorialRepository('events').save(req.body));}
+ catch(error){return editorialFailure(res,error);}
+});
+apiRouter.put('/admin/events/:id',requireAdmin,async(req,res)=>{
+ try{return res.json(await editorialRepository('events').save(req.body,req.params.id));}
+ catch(error){return editorialFailure(res,error);}
+});
+apiRouter.delete('/admin/events/:id',requireAdmin,async(req,res)=>{
+ try{return res.json(await editorialRepository('events').remove(req.params.id));}
+ catch(error){return editorialFailure(res,error);}
 });
 
-apiRouter.post('/admin/events', requireAdmin, (req, res) => {
-  const { name, description, date, time, status, image, rewards, published, location } = req.body;
-  if (!name || !description || !date) {
-    return res.status(400).json({ error: 'Dados do evento incompletos.' });
-  }
-
-  const newEv = dbStore.createEvent({
-    name,
-    description,
-    date,
-    time: time || '19:00',
-    status: status || 'Próximo',
-    image: image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80',
-    rewards: Array.isArray(rewards) ? rewards : [],
-    published: published !== false,
-    location: location || '/warp eventos'
-  });
-
-  res.status(201).json(newEv);
+apiRouter.get('/news',async(req,res)=>{
+ try {
+  const all=req.query.all==='true' && editorialAdmin(req);
+  const items=await editorialRepository('news').publicEntries(all);
+  res.setHeader('Cache-Control','no-store');
+  return res.json(items);
+ }catch{return res.status(503).json({error:'Não foi possível consultar notícias.'});}
+});
+apiRouter.post('/admin/news',requireAdmin,async(req,res)=>{
+ try{return res.status(201).json(await editorialRepository('news').save(req.body));}
+ catch(error){return editorialFailure(res,error);}
+});
+apiRouter.put('/admin/news/:id',requireAdmin,async(req,res)=>{
+ try{return res.json(await editorialRepository('news').save(req.body,req.params.id));}
+ catch(error){return editorialFailure(res,error);}
+});
+apiRouter.delete('/admin/news/:id',requireAdmin,async(req,res)=>{
+ try{return res.json(await editorialRepository('news').remove(req.params.id));}
+ catch(error){return editorialFailure(res,error);}
 });
 
-apiRouter.put('/admin/events/:id', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  const updated = dbStore.updateEvent(id, req.body);
-  if (!updated) {
-    return res.status(404).json({ error: 'Evento não encontrado.' });
-  }
-  res.json(updated);
+apiRouter.get('/community',async(_req,res)=>{
+ try {
+  const items=await editorialRepository('community').publicEntries(false);
+  res.setHeader('Cache-Control','no-store');
+  return res.json(items);
+ }catch{return res.status(503).json({error:'Não foi possível consultar a comunidade.'});}
 });
-
-apiRouter.delete('/admin/events/:id', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  const name = typeof req.query.name === 'string' ? req.query.name : req.body?.name;
-  const deleted = dbStore.deleteEvent(id, name);
-  res.json({ success: true, message: 'Evento excluído com sucesso.', removed: deleted });
+apiRouter.post('/admin/community',requireAdmin,async(req,res)=>{
+ try{return res.status(201).json(await editorialRepository('community').save(req.body));}
+ catch(error){return editorialFailure(res,error);}
 });
-
-// -------------------------------------------------------------
-// NEWS
-// -------------------------------------------------------------
-apiRouter.get('/news', (req, res) => {
-  const includeAll = req.query.all === 'true';
-  res.json(dbStore.getNews(includeAll));
+apiRouter.put('/admin/community/:id',requireAdmin,async(req,res)=>{
+ try{return res.json(await editorialRepository('community').save(req.body,req.params.id));}
+ catch(error){return editorialFailure(res,error);}
 });
-
-apiRouter.post('/admin/news', requireAdmin, (req, res) => {
-  const { title, content, summary, image, author, category, published } = req.body;
-  if (!title || !content) {
-    return res.status(400).json({ error: 'Título e conteúdo são obrigatórios.' });
-  }
-
-  const article = dbStore.createNews({
-    title,
-    content,
-    summary: summary || title,
-    image: image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80',
-    date: new Date().toISOString().split('T')[0],
-    author: author || 'Equipe NetCraftBR',
-    published: published !== false,
-    category: category || 'Atualização'
-  });
-
-  res.status(201).json(article);
-});
-
-apiRouter.put('/admin/news/:id', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  const updated = dbStore.updateNews(id, req.body);
-  if (!updated) {
-    return res.status(404).json({ error: 'Notícia não encontrada.' });
-  }
-  res.json(updated);
-});
-
-apiRouter.delete('/admin/news/:id', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  const name = typeof req.query.name === 'string' ? req.query.name : (typeof req.query.title === 'string' ? req.query.title : req.body?.title || req.body?.name);
-  const deleted = dbStore.deleteNews(id, name);
-  res.json({ success: true, message: 'Notícia excluída com sucesso.', removed: deleted });
+apiRouter.delete('/admin/community/:id',requireAdmin,async(req,res)=>{
+ try{return res.json(await editorialRepository('community').remove(req.params.id));}
+ catch(error){return editorialFailure(res,error);}
 });
 
 // -------------------------------------------------------------
-// COMMUNITY & SOCIAL LINKS
-// -------------------------------------------------------------
-apiRouter.get('/community', (_req, res) => {
-  res.json(dbStore.getSocialLinks());
-});
-
-apiRouter.post('/admin/community', requireAdmin, (req, res) => {
-  const { name, platform, url, icon, active, description, memberCount, order } = req.body;
-  if (!name || !url) {
-    return res.status(400).json({ error: 'Nome e URL são obrigatórios.' });
-  }
-
-  const newLink = dbStore.createSocialLink({
-    name,
-    platform: platform || 'discord',
-    url,
-    icon: icon || 'message-square',
-    active: active !== false,
-    description: description || '',
-    memberCount: memberCount || '',
-    order: Number(order) || 1
-  });
-
-  res.status(201).json(newLink);
-});
-
-apiRouter.put('/admin/community/:id', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  const updated = dbStore.updateSocialLink(id, req.body);
-  if (!updated) {
-    return res.status(404).json({ error: 'Rede social não encontrada.' });
-  }
-  res.json(updated);
-});
-
-apiRouter.delete('/admin/community/:id', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  const name = typeof req.query.name === 'string' ? req.query.name : req.body?.name;
-  const deleted = dbStore.deleteSocialLink(id, name);
-  res.json({ success: true, message: 'Rede social excluída com sucesso.', removed: deleted });
-});
-
-// -------------------------------------------------------------
-// SUPPORT TICKETS
+// // SUPPORT TICKETS
 // -------------------------------------------------------------
 apiRouter.get('/tickets', (req, res) => {
   const authHeader = req.headers.authorization;
