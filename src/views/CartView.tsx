@@ -52,7 +52,7 @@ export function CartView({
         if (!abort.signal.aborted) setChecking(false);
       });
     return () => abort.abort();
-  }, [signature, products, vips]);
+  }, [signature]);
   const resolved = resolveCart(lines, products, vips);
   const subtotal = resolved.reduce(
     (sum, line) =>
