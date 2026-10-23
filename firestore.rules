@@ -111,8 +111,8 @@ service cloud.firestore {
     }
 
     match /coupons/{couponId} {
-      allow read: if true;
-      allow write: if isValidId(couponId);
+      // Coupon rules are private; only the authenticated server can read/write.
+      allow read, write: if false;
     }
 
     match /test/{testId} {
