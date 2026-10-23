@@ -112,6 +112,19 @@ export class MercadoPago {
           ]);
           const code = typeof record.code === "string" && knownCode.has(record.code)
             ? record.code : "unclassified";
+          // Render a flat, allowlisted structural summary: Vercel collapses nested arrays.
+          const firstError = Array.isArray(record.errors) ? record.errors[0] : null;
+          const errorEntry = firstError && typeof firstError === "object" && !Array.isArray(firstError)
+            ? firstError as Record<string, unknown> : {};
+          const firstDetail = Array.isArray(errorEntry.details) ? errorEntry.details[0] : null;
+          const detailEntry = firstDetail && typeof firstDetail === "object" && !Array.isArray(firstDetail)
+            ? firstDetail as Record<string, unknown> : {};
+          const safeFields = ["code", "message", "details", "type", "status", "title", "property", "field", "path", "description"];
+          console.warn("[MercadoPago order rejection fields]", {
+            errorFields: safeFields.filter(k => Object.prototype.hasOwnProperty.call(errorEntry, k)).join(",") || "none",
+            detailFields: safeFields.filter(k => Object.prototype.hasOwnProperty.call(detailEntry, k)).join(",") || "none",
+            // Codes and messages are intentionally not logged.
+          });
           console.warn("[MercadoPago order rejection]", {
             httpStatus: response.status,
             code,
