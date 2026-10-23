@@ -77,7 +77,9 @@ export function orderRequest(
     total_amount: amountString(order.totalCents),
     payer: {
       email: payer.email,
-      first_name: "APRO",
+      ...(payer.first_name ? { first_name: payer.first_name } : {}),
+      ...(payer.last_name ? { last_name: payer.last_name } : {}),
+      ...(payer.identification ? { identification: payer.identification } : {}),
     },
     transactions: {
       payments: [
