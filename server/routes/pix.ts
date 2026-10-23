@@ -136,6 +136,10 @@ export function createPixRouter(
             signatureTimestampUnit: ts.length === 10 ? "seconds" : ts.length === 13 ? "milliseconds" : "other",
             signaturePartsPresent: Boolean(signatureParts.ts && signatureParts.v1),
             requestIdPresent: Boolean(requestId),
+            // Diagnostic only: never accept a request using the trimmed secret.
+            secretHasOuterWhitespace: secret !== secret.trim(),
+            trimmedSecretWouldMatch: secret !== secret.trim() &&
+              webhookSignature(id, requestId, signature, secret.trim()),
           });
         }
         return res.status(401).json({ error: "Notificação não autenticada." });
