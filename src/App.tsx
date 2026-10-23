@@ -266,6 +266,10 @@ function MainAppContent() {
           <EventsView events={events} loading={loading} />
         )}
 
+        {currentTab === "news" && (
+          <NewsView news={news} loading={loading} />
+        )}
+
         {currentTab === "community" && (
           <CommunityView socialLinks={socialLinks} />
         )}
