@@ -17,8 +17,9 @@ export function testOrderSummary(
     environment: "test",
     state: typeof state === "string" && states.has(state) ? state as PixTestOrderSummary["state"] : "unknown",
     gamertag: stringOrNull(data.gamertag, 32) ?? "Jogador desconhecido",
-    totalCents: Number.isSafeInteger(data.totalCents) && Number(data.totalCents) >= 0
-      ? Number(data.totalCents) : 0,
+    totalCents: typeof data.totalCents === "number" &&
+      Number.isSafeInteger(data.totalCents) && data.totalCents >= 0
+      ? data.totalCents : 0,
     linesCount: Array.isArray(data.lines) ? data.lines.length : 0,
     createdAt: stringOrNull(data.createdAt, 60),
     approvedAt: stringOrNull(data.approvedAt, 60),
