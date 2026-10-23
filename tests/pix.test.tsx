@@ -75,6 +75,30 @@ function setup() {
     gets: () => gets,
   };
 }
+test("Preview Pix sends sandbox fixture but keeps checkout total", async () => {
+  const old = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = "preview";
+  try {
+    const s = setup();
+    let payer: any;
+    let amount: any;
+    const create = s.gateway.create;
+    s.gateway.create = async (body: any, key: string) => {
+      payer = body.payer;
+      amount = body.total_amount;
+      return create(body, key);
+    };
+    const result = await s.api.create(input, "sandbox-regression-1234567890");
+    assert.deepEqual(payer, { email: "test_payer@example.com", first_name: "APRO" });
+    assert.equal(amount, "25.00");
+    assert.equal(result.state, "pending");
+    assert.equal(s.db.records.has("pixTestDeliveries/" + result.id + "-0"), false);
+  } finally {
+    if (old === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = old;
+  }
+});
+
 test("credentials reject production and real APP_USR accounts before a POST", async () => {
   assert.throws(() =>
     testToken({
