@@ -219,19 +219,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         pixUrl: editingVip.pixUrl ? String(editingVip.pixUrl).trim() : ''
       };
 
-      // 1. Direct write to Firestore FIRST (Official Source of Truth)
-      await saveVipToFirestore(savedVip);
-
-      // 2. Sync with backend API
-      if (isEditing) {
-        await api.updateVip(vipId, savedVip, adminToken).catch(() => {});
-        showSuccess('VIP atualizado com sucesso');
-        setVips(prev => prev.map(v => v.id === vipId ? savedVip : v));
-      } else {
-        await api.createVip(savedVip, adminToken).catch(() => {});
-        showSuccess('VIP criado com sucesso');
-        setVips(prev => [...prev.filter(v => v.id !== vipId), savedVip]);
-      }
+      // The authenticated backend owns VIP catalogue mutations and prices.
+      const persisted = isEditing
+        ? await api.updateVip(vipId, savedVip, adminToken)
+        : await api.createVip(savedVip, adminToken);
+      setVips(prev => [...prev.filter(v => v.id !== persisted.id), persisted]);
+      showSuccess(isEditing ? 'VIP atualizado com sucesso' : 'VIP criado com sucesso');
 
       setEditingVip(null);
       await loadData();
