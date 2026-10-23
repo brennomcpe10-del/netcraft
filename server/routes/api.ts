@@ -310,6 +310,23 @@ apiRouter.delete('/admin/products/:id',requireAdmin,async(req,res)=>{try{const r
 // ORDERS & CHECKOUT & GATEWAY WEBHOOK
 // -------------------------------------------------------------
 // Historical legacy orders stay intact; only authenticated admins may access them.
+// Sandbox orders are read-only and are NEVER merged into sales/revenue or fulfillment.
+// This endpoint is restricted to the authenticated Preview admin panel.
+apiRouter.get('/admin/pix-test-orders', requireAdmin, async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (process.env.VERCEL_ENV !== 'preview' && !process.env.FIRESTORE_EMULATOR_HOST)
+    return res.status(404).json({error:'Esta consulta existe apenas na Preview.'});
+  try {
+    const {paymentDatabase}=await import('../payments/database.ts');
+    const {testOrderSummary}=await import('../payments/adminTestOrders.ts');
+    const snapshot=await paymentDatabase().collection('pixTestOrders')
+      .orderBy('createdAt','desc').limit(50).get();
+    return res.json(snapshot.docs.map(d=>testOrderSummary(d.id,d.data())));
+  } catch {
+    return res.status(503).json({error:'Não foi possível consultar os Pix de teste.'});
+  }
+});
+
 apiRouter.get('/orders', requireAdmin, async (_req, res) => {
   try {
     const {paymentDatabase}=await import('../payments/database.ts');
