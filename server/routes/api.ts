@@ -243,11 +243,17 @@ apiRouter.post('/cart/quote', async (req,res)=>{
  try {
   validateCartRequest(req.body.lines);
   if(req.body.couponCode) return res.status(409).json({error:'Cupons indisponíveis para cobranças fixas.'});
-  const {db}=await import('../../src/lib/firebase.ts');
-  const {doc,getDoc}=await import('firebase/firestore');
-  const items=await Promise.all(req.body.lines.map(async(line:any)=>{const snap=await getDoc(doc(db,line.productType==='vip'?'vips':'products',line.productId));return snap.exists()?{...snap.data(),id:snap.id}:null;}));
+  // The cart quote must use the same server-side Firestore Admin connection as Pix.
+  // The browser Firebase SDK cannot reliably access Firestore from Vercel functions.
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const db=paymentDatabase();
+  const items=await Promise.all(req.body.lines.map(async(line:any)=>{const snap=await db.collection(line.productType==='vip'?'vips':'products').doc(line.productId).get();return snap.exists?{...snap.data(),id:snap.id}:null;}));
+  res.setHeader('Cache-Control','no-store');
   return res.json(quoteCart(req.body.lines,items as any));
- }catch(error){return res.status(400).json({error:error instanceof Error?error.message:'Não foi possível conferir o carrinho.'});}
+ }catch(error){
+  if(error instanceof Error && (error.name==='PixError'||error.name==='CartQuoteError')) return res.status(400).json({error:error.message});
+  return res.status(503).json({error:'Não foi possível consultar o catálogo no servidor. Tente novamente.'});
+ }
 });
 apiRouter.put('/admin/store-categories',requireAdmin,async(req,res)=>{
  try {validateCategories(req.body.categories);const {db}=await import('../../src/lib/firebase.ts');const {doc,setDoc}=await import('firebase/firestore');await setDoc(doc(db,'settings','storeCategories'),{categories:req.body.categories},{merge:true});return res.json({success:true});}catch(error){return res.status(400).json({error:error instanceof Error?error.message:'Falha ao salvar categorias.'});}
