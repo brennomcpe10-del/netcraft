@@ -102,7 +102,7 @@ export function createPixRouter(
             signature.split(",").map(part => part.trim().split("=")),
           );
           const ts = signatureParts.ts || "";
-          const timestamp = /^\\d{10,13}$/.test(ts)
+          const timestamp = /^[0-9]{10,13}$/.test(ts)
             ? Number(ts) * (ts.length === 10 ? 1000 : 1)
             : NaN;
           const reason = !secret ? "secret_missing"
