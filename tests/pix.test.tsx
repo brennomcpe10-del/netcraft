@@ -498,6 +498,54 @@ test("HTTP webhook verifies signature and re-queries Orders API instead of trust
   }
 });
 
+test("webhook rejects invalid signatures and mismatched order IDs without querying provider", async () => {
+  const s = setup();
+  const app = express();
+  app.use(express.json());
+  app.use(createPixRouter({
+    database: () => s.db as any,
+    gateway: () => s.gateway,
+    assertEnvironment: () => {},
+    webhookSecret: () => "fixture",
+  }));
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${(server.address() as any).port}/pix/webhook`;
+  const ts = String(Date.now());
+  const sign = (id: string, secret = "fixture") => crypto
+    .createHmac("sha256", secret)
+    .update(`id:${id.toLowerCase()};request-id:req;ts:${ts};`)
+    .digest("hex");
+  const headers = (id: string, secret = "fixture") => ({
+    "content-type": "application/json",
+    "x-request-id": "req",
+    "x-signature": `ts=${ts},v1=${sign(id, secret)}`,
+  });
+  try {
+    const url = `${base}?data.id=${ORD}&type=order`;
+    const forged = await fetch(url, {
+      method: "POST", headers: headers(ORD, "wrong-secret"),
+      body: JSON.stringify({ type: "order", data: { id: ORD, status: "processed" } }),
+    });
+    assert.equal(forged.status, 401);
+    const mismatch = await fetch(url, {
+      method: "POST", headers: headers(ORD),
+      body: JSON.stringify({ type: "order", data: { id: "different-id", status: "processed" } }),
+    });
+    assert.equal(mismatch.status, 400);
+    const simulator = await fetch(`${base}?data.id=123456&type=order`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "order", data: { id: "123456" } }),
+    });
+    assert.equal(simulator.status, 401);
+    assert.equal(s.gets(), 0);
+    assert.equal([...s.db.records.keys()].filter(k => k.startsWith("pixTestDeliveries/")).length, 0);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
+});
+
 test("a processed POST cannot approve the local order when the authenticated GET remains pending",async()=>{
  const s=setup();
  s.gateway.create=async(body:any)=>{s.setResource(ordersFixture(body.external_reference,body.total_amount));return ordersFixture(body.external_reference,body.total_amount,"approved");};
