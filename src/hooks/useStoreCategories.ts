@@ -35,10 +35,21 @@ export function useStoreCategoryState() {
           }
         },
         () => {
-          setLoading(false);
-          setError(
-            "Não foi possível carregar as categorias do Firebase. Recarregue antes de editar.",
-          );
+          // Browser subscriptions sometimes fail on Preview. Recover with the
+          // authenticated server database's read-only storefront snapshot.
+          fetch("/api/storefront/catalog", { cache: "no-store" })
+            .then(async response => {
+              if (!response.ok) throw new Error("Catálogo indisponível.");
+              const result = await response.json();
+              const value = result.categories ?? defaultStoreCategories;
+              validateCategories(value);
+              setCategories(value);
+              setError("");
+            })
+            .catch(() => setError(
+              "Não foi possível carregar as categorias. Recarregue antes de editar.",
+            ))
+            .finally(() => setLoading(false));
         },
       ),
     [],
