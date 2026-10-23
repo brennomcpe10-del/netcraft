@@ -186,8 +186,18 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
         )
           payer[field] = input[field].trim();
       }
+      // Preview sandbox Orders must use the provider's known-good APRO payer
+      // fixture. Never send a shopper's CPF/email to a sandbox transaction.
+      // This does not change stored order ownership or the amount.
+      // Refuse the fixture unless the provider confirms a test receiver.
+      const previewSandbox = process.env.VERCEL_ENV === "preview";
+      if (previewSandbox && receiver.netcraftTestAccount !== true)
+        throw new PixError("Recebedor não identificado como conta de teste.", 503);
+      const providerPayer = previewSandbox
+        ? { email: "test_payer@example.com", first_name: "APRO" }
+        : payer;
       const resource = await gateway.create(
-        orderRequest(order, payer),
+        orderRequest(order, providerPayer),
         order.providerIdempotencyKey,
       );
       const payment = verifyOrder(resource, order, collector);
