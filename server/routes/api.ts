@@ -665,9 +665,10 @@ apiRouter.delete('/admin/news/:id',requireAdmin,async(req,res)=>{
  catch(error){return editorialFailure(res,error);}
 });
 
-apiRouter.get('/community',async(_req,res)=>{
+apiRouter.get('/community',async(req,res)=>{
  try {
-  const items=await editorialRepository('community').publicEntries(false);
+  const all=req.query.all==='true' && editorialAdmin(req);
+  const items=await editorialRepository('community').publicEntries(all);
   res.setHeader('Cache-Control','no-store');
   return res.json(items);
  }catch{return res.status(503).json({error:'Não foi possível consultar a comunidade.'});}
