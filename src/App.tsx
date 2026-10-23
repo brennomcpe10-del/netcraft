@@ -35,21 +35,7 @@ import {
   ServerSettings,
   SocialLink,
 } from "./types/index.ts";
-import {
-  seedFirestoreIfEmpty,
-  subscribeToVips,
-  subscribeToProducts,
-  subscribeToServerSettings,
-  subscribeToEvents,
-  subscribeToNews,
-  subscribeToSocialLinks,
-  getVipsFromFirestore,
-  getProductsFromFirestore,
-  getEventsFromFirestore,
-  getNewsFromFirestore,
-  getSettingsFromFirestore,
-  getCommunityFromFirestore,
-} from "./lib/firestoreSync.ts";
+
 
 function MainAppContent() {
   const categories = useStoreCategories();
@@ -67,82 +53,69 @@ function MainAppContent() {
 
   const { isAdminLoggedIn, isAdminChecking, openAdminModal } = useAdmin();
 
-  // 1. Initial Firestore data fetch (Official Source of Truth)
+  const [catalogError, setCatalogError] = useState("");
+
+  // Product prices and availability must come from the same backend used by Pix.
+  // Firestore browser listeners can race with an authoritative catalog response.
   const fetchGlobalData = useCallback(async () => {
-    try {
-      const [st, v, p, ev, nw, soc] = await Promise.all([
-        getSettingsFromFirestore(),
-        getVipsFromFirestore(),
-        getProductsFromFirestore(),
-        getEventsFromFirestore(),
-        getNewsFromFirestore(),
-        getCommunityFromFirestore(),
-      ]);
-      if (st) setSettings(st);
-      if (v) setVips(v);
-      if (p) setProducts(p);
-      if (ev) setEvents(ev);
-      if (nw) setNews(nw);
-      if (soc) setSocialLinks(soc);
-      // Pix calculates charges from Admin Firestore; display the same authoritative
-      // catalogue whenever the API is available, even if browser sync is offline.
-      try {
-        const response = await fetch("/api/storefront/catalog", { cache: "no-store" });
-        if (response.ok) {
-          const catalog = await response.json();
-          if (Array.isArray(catalog.products)) setProducts(catalog.products);
-          if (Array.isArray(catalog.vips)) setVips(catalog.vips);
-        }
-      } catch {
-        // Keep the browser Firestore snapshot as an offline fallback.
-      }
-    } catch (err) {
-      console.warn("Firestore initial fetch notice:", err);
-    } finally {
-      setLoading(false);
+    async function readJson(path: string): Promise<unknown> {
+      const res = await fetch(path, { cache: "no-store" });
+      if (!res.ok) throw new Error(`API indisponível: ${path}`);
+      return res.json();
     }
+    const [catalog, config, eventsResult, newsResult, communityResult] =
+      await Promise.allSettled([
+        readJson("/api/storefront/catalog"),
+        readJson("/api/settings"),
+        readJson("/api/events"),
+        readJson("/api/news"),
+        readJson("/api/community"),
+      ]);
+    if (catalog.status === "fulfilled" && catalog.value &&
+        typeof catalog.value === "object") {
+      const data = catalog.value as {products?: unknown; vips?: unknown};
+      if (Array.isArray(data.products) && Array.isArray(data.vips)) {
+        setProducts(data.products as Product[]);
+        setVips(data.vips as VIP[]);
+        setCatalogError("");
+      } else {
+        setProducts([]);
+        setVips([]);
+        setCatalogError("Não foi possível validar o catálogo oficial da loja.");
+      }
+    } else {
+      // Fail closed: never show stale prices from an unauthenticated client snapshot.
+      setProducts([]);
+      setVips([]);
+      setCatalogError("Catálogo temporariamente indisponível. Não é possível realizar compras.");
+    }
+    if (config.status === "fulfilled" && config.value &&
+        typeof config.value === "object") {
+      setSettings(config.value as ServerSettings);
+    }
+    if (eventsResult.status === "fulfilled" && Array.isArray(eventsResult.value))
+      setEvents(eventsResult.value as ServerEvent[]);
+    if (newsResult.status === "fulfilled" && Array.isArray(newsResult.value))
+      setNews(newsResult.value as NewsArticle[]);
+    if (communityResult.status === "fulfilled" && Array.isArray(communityResult.value))
+      setSocialLinks(communityResult.value as SocialLink[]);
+    setLoading(false);
   }, []);
 
-  // 2. Real-time Firestore synchronization across all devices
   useEffect(() => {
-    // Seed Firestore if collections are empty
-    seedFirestoreIfEmpty().catch(() => {});
-
-    // Fallback load
-    fetchGlobalData();
-
-    // Attach real-time listeners for live updates across all devices
-    const unsubVips = subscribeToVips((liveVips) => {
-      setVips(liveVips);
-    });
-
-    const unsubProds = subscribeToProducts((liveProds) => {
-      setProducts(liveProds);
-    });
-
-    const unsubSettings = subscribeToServerSettings((liveSettings) => {
-      if (liveSettings) setSettings(liveSettings);
-    });
-
-    const unsubEvents = subscribeToEvents((liveEvents) => {
-      setEvents(liveEvents);
-    });
-
-    const unsubNews = subscribeToNews((liveNews) => {
-      setNews(liveNews);
-    });
-
-    const unsubSocial = subscribeToSocialLinks((liveSocial) => {
-      setSocialLinks(liveSocial);
-    });
-
+    void fetchGlobalData();
+    // Cross-device changes are fetched through the server rather than
+    // subscriptions to collections whose writes must be protected.
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void fetchGlobalData();
+    }, 60000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void fetchGlobalData();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
-      unsubVips();
-      unsubProds();
-      unsubSettings();
-      unsubEvents();
-      unsubNews();
-      unsubSocial();
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [fetchGlobalData]);
 
@@ -230,6 +203,11 @@ function MainAppContent() {
         id="main-content"
         className="flex-1 relative w-full overflow-x-hidden"
       >
+        {catalogError && (currentTab === "store" || currentTab === "vip" || currentTab === "cart") && (
+          <p role="alert" className="mx-auto max-w-5xl my-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+            {catalogError}
+          </p>
+        )}
         {currentTab === "home" && (
           <HomeView
             setCurrentTab={setCurrentTab}
