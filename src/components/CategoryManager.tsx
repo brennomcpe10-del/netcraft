@@ -10,7 +10,7 @@ export function CategoryManager({
 }: {
   onManageProducts?: (category: string) => void;
 }) {
-  const { categories, loading, error: loadError } = useStoreCategoryState();
+  const { categories, loading, error: loadError, refresh } = useStoreCategoryState();
   const { adminToken } = useAdmin();
   const { showSuccess, showError } = useToast();
   const [editing, setEditing] = useState<StoreCategory | null>(null),
@@ -54,6 +54,7 @@ export function CategoryManager({
       setError("");
       if (!adminToken) throw new Error("Entre no painel novamente.");
       await api.saveStoreCategories(next, adminToken);
+      await refresh();
       setDeleting(null);
       setEditing(null);
       showSuccess("Categorias atualizadas.");
