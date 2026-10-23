@@ -163,7 +163,7 @@ function vipDraft(body:any, id:string) {
  const duration = typeof body?.duration === 'string' ? body.duration.trim() : '';
  if (!/^[a-zA-Z0-9_-]{2,128}$/.test(id) || !name || name.length > 120 ||
      !duration || duration.length > 80 || !Number.isFinite(price) ||
-     price < 0 || price > 10000 || Math.round(price*100) !== price*100)
+     price < 0 || price > 10000 || Math.abs(price*100-Math.round(price*100)) > 0.000001)
   throw new ProductCatalogError('Confira o nome, duração, identificador e preço do VIP.',400);
  return {
   id, name, price, duration,
