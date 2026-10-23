@@ -503,3 +503,53 @@ test("a processed POST cannot approve the local order when the authenticated GET
  s.gateway.create=async(body:any)=>{s.setResource(ordersFixture(body.external_reference,body.total_amount));return ordersFixture(body.external_reference,body.total_amount,"approved");};
  const result=await s.api.create(input,"post-not-approval-12345678");assert.equal(result.state,"pending");assert.equal([...s.db.records.keys()].filter(k=>k.startsWith("pixTestDeliveries/")).length,0);
 });
+
+
+test("end-to-end checkout polling confirms only provider-approved Pix, without Minecraft dispatch", async () => {
+  const s = setup();
+  const checkoutKey = "end-to-end-pix-confirmation-12345";
+  const first = await s.api.create(input, checkoutKey);
+  assert.equal(first.state, "pending");
+  const app = express();
+  app.use(express.json());
+  app.use(createPixRouter({
+    database: () => s.db as any,
+    gateway: () => s.gateway,
+    assertEnvironment: () => {},
+    webhookSecret: () => "fixture",
+  }));
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const url = `http://127.0.0.1:${(server.address() as any).port}/pix/orders/${first.id}`;
+  const getStatus = async () => {
+    const response = await fetch(url, { headers: { "x-checkout-key": checkoutKey } });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  try {
+    assert.equal((await getStatus()).state, "pending");
+    assert.equal([...s.db.records.keys()].filter(k => k.startsWith("pixTestDeliveries/")).length, 0);
+    // The same authenticated Orders GET transitions the checkout into approved.
+    s.setResource(ordersFixture(first.id, "25.00", "approved"));
+    const approved = await getStatus();
+    assert.equal(approved.state, "approved");
+    assert.equal(approved.totalCents, 2500);
+    assert.equal(approved.delivery, "Integração Minecraft desativada no ambiente de teste.");
+    assert.equal(approved.requiresApprovalTimestamp, true);
+    assert.equal((await getStatus()).state, "approved");
+    const jobs = [...s.db.records.entries()].filter(([k]) => k.startsWith("pixTestDeliveries/"));
+    assert.equal(jobs.length, 1);
+    assert.equal(jobs[0][1].dispatchEnabled, false);
+    assert.equal(jobs[0][1].environment, "test");
+    // A chargeback observed later blocks the already queued test-only job.
+    s.setResource(ordersFixture(first.id, "25.00", "refunded"));
+    assert.equal((await getStatus()).state, "refunded");
+    assert.equal(s.db.records.get(jobs[0][0]).state, "blocked");
+    assert.equal([...s.db.records.keys()].filter(k => k.startsWith("pixTestDeliveries/")).length, 1);
+    const unauthorized = await fetch(url, { headers: { "x-checkout-key": "another-buyer" } });
+    assert.equal(unauthorized.status, 401);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
+});
