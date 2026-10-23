@@ -257,6 +257,31 @@ apiRouter.put('/admin/store-categories',requireAdmin,async(req,res)=>{
  }
 });
 
+// Public catalogue is served from the same authoritative database as Pix checkout.
+// Never rely on the in-memory snapshot or a browser Firestore connection for prices.
+apiRouter.get('/storefront/catalog', async (_req,res)=>{
+ try {
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const db=paymentDatabase();
+  const [products,vips,settings]=await Promise.all([
+   db.collection('products').get(),
+   db.collection('vips').get(),
+   db.collection('settings').doc('storeCategories').get()
+  ]);
+  const categories=settings.exists?settings.data()?.categories:undefined;
+  if(categories!==undefined)validateCategories(categories);
+  res.setHeader('Cache-Control','no-store');
+  return res.json({
+   products:products.docs.map(d=>({...d.data(),id:d.id})).filter((p:any)=>p.active===true),
+   vips:vips.docs.map(d=>({...d.data(),id:d.id})).filter((v:any)=>v.active===true),
+   categories:categories||null,
+   environment:'test'
+  });
+ }catch{
+  return res.status(503).json({error:'Não foi possível carregar o catálogo oficial.'});
+ }
+});
+
 apiRouter.get('/products', async (req, res) => {
   const includeInactive = req.query.all === 'true';
   const category = typeof req.query.category === 'string' ? req.query.category : undefined;
