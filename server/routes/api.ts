@@ -19,8 +19,9 @@ apiRouter.use(identityRouter);
 apiRouter.use(pixRouter);
 apiRouter.get('/admin/revenue',requireAdmin,async(req,res)=>{
  try{const period=typeof req.query.period==='string'?req.query.period:brasiliaPeriod(new Date())!;if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(period))return res.status(400).json({error:'Selecione mês e ano válidos.'});
- const {db}=await import('../../src/lib/firebase.ts');const {collection,getDocs}=await import('firebase/firestore');const snapshot=await getDocs(collection(db,'orders'));
- return res.json(revenueReport(snapshot.docs.map(d=>({...d.data(),sourceOrderId:d.data().id||d.id,id:d.id})),period));
+ const {paymentDatabase}=await import('../payments/database.ts');
+ const snapshot=await paymentDatabase().collection('orders').get();
+ return res.json(revenueReport(snapshot.docs.map(d=>({...d.data(),sourceOrderId:d.data()?.id||d.id,id:d.id})),period));
  }catch{return res.status(503).json({error:'Não foi possível consultar os pedidos no Firebase. Nenhum valor foi estimado.'});}
 });
 
