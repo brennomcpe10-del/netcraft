@@ -101,6 +101,8 @@ try {
     api: "orders-v1",
     result: "valid_authenticated_response",
     state,
+    // Test order identifier only; no credentials or Pix QR contents.
+    testOrderId: resource.id,
     qrCodeReturned: !!verified?.payment_method?.qr_code,
     qrImageReturned: !!verified?.payment_method?.qr_code_base64,
     operations: statuses,
