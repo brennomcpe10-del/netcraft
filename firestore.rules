@@ -22,13 +22,15 @@ service cloud.firestore {
     }
 
     match /vips/{vipId} {
+      // Public storefront may read, but pricing and availability are server-admin only.
       allow read: if true;
-      allow write: if isValidId(vipId);
+      allow write: if false;
     }
 
     match /products/{productId} {
+      // Public storefront may read, but pricing and availability are server-admin only.
       allow read: if true;
-      allow write: if isValidId(productId);
+      allow write: if false;
     }
 
     match /orders/{orderId} {
@@ -53,7 +55,9 @@ service cloud.firestore {
 
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isValidId(settingId);
+      // Store categories are edited through the authenticated admin API.
+      // Other legacy setting writes require migration before locking them down.
+      allow write: if isValidId(settingId) && settingId != 'storeCategories';
     }
 
     match /tickets/{ticketId} {
