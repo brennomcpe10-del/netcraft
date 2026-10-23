@@ -187,7 +187,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         api.getProducts(true, undefined, adminToken),
         api.getAllOrders(adminToken),
         api.getCoupons(adminToken),
-        getPlayersFromFirestore(),
+        api.getAdminPlayers(adminToken),
         api.getTickets(adminToken),
         api.getEvents(true, adminToken),
         api.getNews(true, adminToken),
@@ -581,10 +581,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           showSuccess(`Pedido #${id} excluído com sucesso`);
           break;
         case 'player':
-          await Promise.allSettled([
-            api.deletePlayer(id, adminToken, extraNickname || name),
-            deleteUserFromFirestore(id, extraNickname || name)
-          ]);
+          await api.deletePlayer(id, adminToken, extraNickname || name);
           showSuccess(`Jogador ${name} removido do sistema`);
           break;
         case 'event':
