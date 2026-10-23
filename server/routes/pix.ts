@@ -202,12 +202,18 @@ export function createPixRouter(
           ? await gateway.get(id)
           : await gateway.getLegacyPayment(id);
       const orderId = String(payment.external_reference || "");
-      if (!/^[a-f0-9]{64}$/.test(orderId)) return res.sendStatus(204);
+      if (!/^[a-f0-9]{64}$/.test(orderId)) {
+        if (process.env.VERCEL_ENV === "preview") console.info("[Pix webhook reconciliation]", { outcome: "ignored_unlinked_external_reference" });
+        return res.sendStatus(204);
+      }
       const db = dependencies.database(),
         order = (
           await db.collection("pixTestOrders").doc(orderId).get()
         ).data();
-      if (!order) return res.sendStatus(204);
+      if (!order) {
+        if (process.env.VERCEL_ENV === "preview") console.info("[Pix webhook reconciliation]", { outcome: "ignored_order_not_found" });
+        return res.sendStatus(204);
+      }
       if (
         isOrder
           ? order.apiVersion !== "orders-v1" || order.providerOrderId !== id
@@ -215,6 +221,7 @@ export function createPixRouter(
       )
         throw new PixError("Pagamento não vinculado ao pedido.", 409);
       await pixService(db, gateway).reconcile(orderId);
+      if (process.env.VERCEL_ENV === "preview") console.info("[Pix webhook reconciliation]", { outcome: "reconciled_test_order" });
       return res.sendStatus(204);
     } catch (e) {
       return failure(res, e);
