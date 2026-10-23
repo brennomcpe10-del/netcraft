@@ -504,7 +504,7 @@ export const api = {
     return res.json();
   },
 
-  async createTicket(ticketData: { nickname: string; category: string; subject: string; message: string }): Promise<SupportTicket> {
+  async createTicket(ticketData: { nickname: string; category: string; subject: string; message: string }): Promise<Pick<SupportTicket,'id'|'status'|'createdAt'>> {
     const res = await fetch(`${API_BASE}/tickets`, {
       method: 'POST',
       headers: getHeaders(),
