@@ -22,6 +22,7 @@ import {
   NewsCategory,
   ServerSettings,
   SocialLink,
+  SupportTicket,
   Coupon
 } from '../types/index.ts';
 import { Plus, Edit2, Trash2, ArrowLeft, Search, ExternalLink, Check, Upload, Image as ImageIcon, Ticket, Tag, Percent, Copy, ToggleLeft, ToggleRight } from 'lucide-react';
@@ -90,7 +91,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const { showSuccess, showError } = useToast();
 
   const [activeTab, setActiveTab] = useState<
-    'identity' | 'categories' | 'dashboard' | 'vips' | 'orders' | 'coupons' | 'players' | 'store' | 'events' | 'news' | 'community' | 'server' | 'settings'
+    'identity' | 'categories' | 'dashboard' | 'vips' | 'orders' | 'coupons' | 'tickets' | 'players' | 'store' | 'events' | 'news' | 'community' | 'server' | 'settings'
   >('dashboard');
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -102,6 +103,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const [pixTestError, setPixTestError] = useState('');
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [ticketReplies, setTicketReplies] = useState<Record<string,string>>({});
+  const [savingTicketId, setSavingTicketId] = useState<string | null>(null);
   const [events, setEvents] = useState<ServerEvent[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
@@ -173,6 +177,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         ordersResult,
         couponsResult,
         playersResult,
+        ticketsResult,
         eventsResult,
         newsResult,
         socialResult,
@@ -183,6 +188,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         api.getAllOrders(adminToken),
         api.getCoupons(adminToken),
         getPlayersFromFirestore(),
+        api.getTickets(adminToken),
         api.getEvents(true, adminToken),
         api.getNews(true, adminToken),
         api.getCommunity(true, adminToken),
@@ -199,6 +205,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       if (ordersResult.status === 'fulfilled') setOrders(loadedOrders);
       setCoupons(loadedCoupons);
       if (playersResult.status === 'fulfilled') setPlayers(loadedPlayers);
+      if (ticketsResult.status === 'fulfilled') setTickets(ticketsResult.value);
       if (eventsResult.status === 'fulfilled') setEvents(eventsResult.value);
       if (newsResult.status === 'fulfilled') setNews(newsResult.value);
       if (socialResult.status === 'fulfilled') setSocialLinks(socialResult.value);
@@ -498,6 +505,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     }
   };
 
+  const saveTicket = async (id:string, update:Pick<Partial<SupportTicket>,'status'|'reply'>) => {
+    if (!adminToken || savingTicketId) return;
+    setSavingTicketId(id);
+    try {
+      const persisted = await api.updateTicket(id, update, adminToken);
+      setTickets(previous => previous.map(t => t.id === persisted.id ? persisted : t));
+      showSuccess('Chamado atualizado com sucesso.');
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Não foi possível atualizar o chamado.');
+    } finally {
+      setSavingTicketId(null);
+    }
+  };
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!serverSettings || !adminToken) return;
@@ -602,6 +623,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     { id: 'orders', label: 'Pedidos' },
     { id: 'coupons', label: 'Cupons' },
     { id: 'players', label: 'Jogadores' },
+    { id: 'tickets', label: 'Chamados' },
     { id: 'store', label: 'Loja' },
     { id: 'categories', label: 'Categorias' },
     { id: 'identity', label: 'Identidade Visual' },
@@ -1280,6 +1302,63 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
               )}
             </div>
           </div>
+        )}
+
+        {/* CHAMADOS PRIVADOS - ACESSO EXCLUSIVO DO ADMINISTRADOR */}
+        {activeTab === 'tickets' && (
+          <section className="space-y-5">
+            <div>
+              <h2 className="font-bold text-base text-white">Chamados de suporte</h2>
+              <p className="text-zinc-400 mt-1 text-xs">
+                Mensagens privadas, consultadas pelo backend. Não compartilhe conteúdo de chamados publicamente.
+              </p>
+            </div>
+            {tickets.length === 0 ? (
+              <p className="text-zinc-400 py-5">Nenhum chamado registrado.</p>
+            ) : (
+              <div className="space-y-4">
+                {tickets.map(ticket => (
+                  <article key={ticket.id} className="rounded-xl border border-white/10 p-4 bg-white/[0.02] space-y-3">
+                    <div className="flex flex-wrap gap-3 items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-white">{ticket.subject}</h3>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          {ticket.nickname} · {ticket.category} · #{ticket.id}
+                          {' · '}{new Date(ticket.createdAt).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                      <select aria-label={`Status do chamado ${ticket.id}`}
+                        value={ticket.status}
+                        disabled={savingTicketId === ticket.id}
+                        onChange={e=>void saveTicket(ticket.id,{status:e.target.value as SupportTicket['status']})}
+                        className="bg-zinc-900 border border-white/20 text-zinc-100 rounded-lg p-2 text-xs">
+                        <option value="Aberto">Aberto</option>
+                        <option value="Em andamento">Em andamento</option>
+                        <option value="Resolvido">Resolvido</option>
+                        <option value="Fechado">Fechado</option>
+                      </select>
+                    </div>
+                    <p className="text-sm whitespace-pre-wrap break-words text-zinc-200">{ticket.message}</p>
+                    <label className="block text-xs text-zinc-400">
+                      Resposta da equipe
+                      <textarea className="w-full mt-2 p-3 rounded-lg bg-zinc-900 border border-white/10 text-zinc-100"
+                        rows={3} maxLength={8000} value={ticketReplies[ticket.id] ?? ticket.reply ?? ''}
+                        onChange={e=>setTicketReplies(prev=>({...prev,[ticket.id]:e.target.value}))}/>
+                    </label>
+                    <button type="button"
+                      disabled={savingTicketId === ticket.id || (ticketReplies[ticket.id] ?? ticket.reply ?? '') === (ticket.reply ?? '')}
+                      onClick={()=>void saveTicket(ticket.id,{reply:ticketReplies[ticket.id] ?? ticket.reply ?? ''})}
+                      className="border border-emerald-500/40 px-3 py-2 rounded-lg text-emerald-300 disabled:opacity-40">
+                      {savingTicketId === ticket.id ? 'Salvando…' : 'Salvar resposta'}
+                    </button>
+                    <p className="text-[11px] text-zinc-500">
+                      Resposta registrada para a equipe. Não há envio automático ao jogador por nickname.
+                    </p>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
         )}
 
         {/* ============================================================== */}
