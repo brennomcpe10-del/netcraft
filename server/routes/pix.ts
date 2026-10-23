@@ -94,7 +94,28 @@ export function createPixRouter(
       const requestId = String(req.headers["x-request-id"] || "");
       const signature = String(req.headers["x-signature"] || "");
       const secret = dependencies.webhookSecret();
-      if (!webhookSignature(id, requestId, signature, secret)) {
+      // Mercado Pago test simulator has been observed signing Orders using
+      // original-case data.id. Allow this only for Preview test Orders; keep
+      // the documented lowercase verification as the default everywhere.
+      const documentedSignatureValid = webhookSignature(id, requestId, signature, secret);
+      const previewOriginalCaseSignatureValid =
+        !documentedSignatureValid &&
+        process.env.VERCEL_ENV === "preview" &&
+        /^ORDTST[A-Z0-9]{20,40}$/.test(id) &&
+        (() => {
+          const parts = Object.fromEntries(
+            signature.split(",").map(part => part.trim().split("=")),
+          );
+          if (!secret || !requestId || !/^\\d{10,13}$/.test(parts.ts || "") ||
+              !/^[a-f0-9]{64}$/i.test(parts.v1 || "")) return false;
+          const milliseconds = Number(parts.ts) * (parts.ts.length === 10 ? 1000 : 1);
+          if (Math.abs(Date.now() - milliseconds) > 300000) return false;
+          const expected = crypto.createHmac("sha256", secret)
+            .update(`id:${id};request-id:${requestId};ts:${parts.ts};`)
+            .digest();
+          return crypto.timingSafeEqual(expected, Buffer.from(parts.v1, "hex"));
+        })();
+      if (!documentedSignatureValid && !previewOriginalCaseSignatureValid) {
         // Preview-only diagnostics: never log header values, secrets, request
         // bodies, identifiers or arbitrary provider-supplied text.
         if (process.env.VERCEL_ENV === "preview") {
