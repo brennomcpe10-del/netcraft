@@ -2,6 +2,7 @@ import {
   VIP,
   Product,
   Order,
+  PixTestOrderSummary,
   ServerEvent,
   NewsArticle,
   ServerSettings,
@@ -245,6 +246,14 @@ export const api = {
     const res = await fetch(`${API_BASE}/orders/${id}`);
     if (!res.ok) throw new Error('Pedido não encontrado.');
     return res.json();
+  },
+
+  async getPixTestOrders(adminToken: string): Promise<PixTestOrderSummary[]> {
+    const res = await fetch(`${API_BASE}/admin/pix-test-orders`, {
+      headers: getHeaders(adminToken),
+      cache: 'no-store'
+    });
+    return handleAdminFetch<PixTestOrderSummary[]>(res, 'Não foi possível consultar os Pix de teste.');
   },
 
   async getAllOrders(adminToken: string): Promise<Order[]> {
