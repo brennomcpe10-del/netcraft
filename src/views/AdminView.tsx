@@ -405,7 +405,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     try {
       setIsBulkDeleting(true);
       const res = await api.deleteOrdersBulk(bulkOrderFilter, adminToken);
-      await deleteOrdersBulkFromFirestore(bulkOrderFilter).catch(() => {});
+      // The admin API is responsible for all Firestore order changes.
 
       if (bulkOrderFilter === 'all') {
         setOrders([]);
@@ -518,10 +518,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           showSuccess(`VIP ${name} excluído com sucesso`);
           break;
         case 'order':
-          await Promise.allSettled([
-            api.deleteOrder(id, adminToken),
-            deleteOrderFromFirestore(id)
-          ]);
+          await api.deleteOrder(id, adminToken);
           showSuccess(`Pedido #${id} excluído com sucesso`);
           break;
         case 'player':
