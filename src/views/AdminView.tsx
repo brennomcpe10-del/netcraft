@@ -126,7 +126,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     if (!adminToken) return;
     try {
       const [
-        dashResult,
         vipsResult,
         prodsResult,
         ordersResult,
@@ -137,10 +136,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         socialResult,
         settingsResult
       ] = await Promise.allSettled([
-        getStatsFromFirestore(),
         getVipsFromFirestore(),
         getProductsFromFirestore(),
-        getOrdersFromFirestore(),
+        api.getAllOrders(adminToken),
         api.getCoupons(adminToken),
         getPlayersFromFirestore(),
         getEventsFromFirestore(),
@@ -164,12 +162,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       if (socialResult.status === 'fulfilled') setSocialLinks(socialResult.value);
       if (settingsResult.status === 'fulfilled' && settingsResult.value) setServerSettings(settingsResult.value);
 
-      if (dashResult.status === 'fulfilled') {
-        setStats(dashResult.value);
-      } else {
-        // Fallback: calculate stats from orders & players so dashboard never crashes
+      // All order history is retrieved via the authenticated Admin API.
+      // Never use public Firestore order reads or fabricated zero revenue.
+      if (ordersResult.status === 'fulfilled') {
         const paid = loadedOrders.filter(o => o.status === 'Pago' || o.status === 'Entregue');
-        const rev = revenueReport(loadedOrders,brasiliaPeriod(new Date())!).totalCents/100;
+        const rev = revenueReport(loadedOrders,brasiliaPeriod(new Date())!).totalCents / 100;
         setStats({
           playersCount: loadedPlayers.length,
           ordersCount: loadedOrders.length,
@@ -177,9 +174,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           paidOrdersCount: paid.length,
           vipsSoldCount: paid.filter(o => o.productType === 'vip').length,
           totalRevenue: Number(rev.toFixed(2)),
-          recentOrders: loadedOrders.slice(-10).reverse(),
+          recentOrders: loadedOrders.slice(0,10),
           recentPlayers: loadedPlayers.slice(-10).reverse()
         });
+      } else {
+        showError('Não foi possível consultar o histórico de pedidos no servidor.');
       }
     } catch (err: unknown) {
       showError(err instanceof Error ? err.message : 'Erro ao carregar dados do painel');
