@@ -552,46 +552,60 @@ apiRouter.post('/coupons/validate', async (req, res) => {
   });
 });
 
-apiRouter.post('/admin/orders/bulk-delete', requireAdmin, async (req, res) => {
-  const { filter } = req.body;
-  const validFilters = ['all', 'concluidos', 'pendentes', 'cancelados'];
-  if (!filter || !validFilters.includes(filter)) {
-    return res.status(400).json({ error: 'Filtro de exclusão inválido. Escolha: all, concluidos, pendentes ou cancelados.' });
+// Explicit authenticated legacy administration; provider-controlled orders are
+// never deleted or marked paid through these routes.
+function isProviderManagedLegacyOrder(value:any) {
+ return value?.paymentProvider === 'mercadopago' ||
+  (Boolean(value?.paymentId) && value?.environment === 'test');
+}
+apiRouter.post('/admin/orders/bulk-delete',requireAdmin,async(req,res)=>{
+ const filter=req.body?.filter;
+ if(!['all','concluidos','pendentes','cancelados'].includes(filter))
+  return res.status(400).json({error:'Filtro de exclusão inválido.'});
+ try{
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const db=paymentDatabase(),snap=await db.collection('orders').get();
+  const shouldDelete=(o:any)=>filter==='all' ||
+    (filter==='concluidos'&&['Entregue','Pago'].includes(o.status)) ||
+    (filter==='pendentes'&&o.status==='Pendente') ||
+    (filter==='cancelados'&&o.status==='Cancelado');
+  const selected=snap.docs.filter(d=>!isProviderManagedLegacyOrder(d.data())&&shouldDelete(d.data()));
+  // Batch limit: Firestore allows up to 500 writes per commit.
+  for(let i=0;i<selected.length;i+=400){
+   const batch=db.batch();
+   for(const d of selected.slice(i,i+400))batch.delete(d.ref);
+   await batch.commit();
   }
-
-  const result = dbStore.deleteOrdersBulk(filter as 'all' | 'concluidos' | 'pendentes' | 'cancelados');
-
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, deleteDoc, getDocs, collection } = await import('firebase/firestore');
-
-    if (filter === 'all') {
-      const snap = await getDocs(collection(db, 'orders'));
-      const delPromises = snap.docs.map(d => deleteDoc(doc(db, 'orders', d.id)).catch(() => {}));
-      await Promise.all(delPromises);
-    } else {
-      for (const id of result.deletedIds) {
-        await deleteDoc(doc(db, 'orders', id)).catch(() => {});
-        await deleteDoc(doc(db, 'orders', id.replace(/^#/, ''))).catch(() => {});
-      }
-    }
-  } catch (err) {
-    console.warn('Firestore bulk delete notice:', err);
-  }
-
-  res.json({
-    success: true,
-    message: `${result.deletedCount} pedidos excluídos com sucesso.`,
-    deletedCount: result.deletedCount,
-    deletedIds: result.deletedIds,
-    orders: result.orders
+  // No test Pix documents are touched: they are held in pixTestOrders.
+  const deletedIds=selected.map(d=>d.id);
+  const deleted=new Set(deletedIds);
+  const remaining=snap.docs.filter(d=>!deleted.has(d.id)).map(d=>({...d.data(),id:d.id}));
+  res.setHeader('Cache-Control','no-store');
+  return res.json({
+   success:true,message:`${deletedIds.length} pedidos legados excluídos.`,
+   deletedCount:deletedIds.length,deletedIds,orders:remaining
   });
+ }catch{return res.status(503).json({error:'Não foi possível concluir a exclusão no banco.'});}
 });
-
-apiRouter.delete('/admin/orders/:id', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  const deleted = dbStore.deleteOrder(id);
-  res.json({ success: true, message: 'Pedido excluído com sucesso.', removed: deleted });
+apiRouter.delete('/admin/orders/:id',requireAdmin,async(req,res)=>{
+ try{
+  const id=String(req.params.id||'').trim();
+  if(!id||id.includes('/'))return res.status(400).json({error:'Identificador inválido.'});
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const db=paymentDatabase(),col=db.collection('orders');
+  let ref=col.doc(id), snap=await ref.get();
+  if(!snap.exists){
+   const all=await col.get(),normalized=id.replace(/^#/,'').toLowerCase();
+   const matches=all.docs.filter(d=>[d.id,d.data().id,d.data().orderNumber]
+    .some(v=>String(v||'').replace(/^#/,'').toLowerCase()===normalized));
+   if(matches.length!==1)return res.status(matches.length?409:404).json({error:'Pedido não encontrado de forma única.'});
+   ref=matches[0].ref;snap=matches[0];
+  }
+  if(isProviderManagedLegacyOrder(snap.data()))
+   return res.status(409).json({error:'Pedido vinculado ao provedor. Não pode ser excluído.'});
+  await ref.delete();
+  return res.json({success:true,message:'Pedido legado excluído.',removed:true});
+ }catch{return res.status(503).json({error:'Falha na exclusão do pedido.'});}
 });
 
 // -------------------------------------------------------------
