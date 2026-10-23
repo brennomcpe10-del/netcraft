@@ -75,10 +75,19 @@ apiRouter.get('/player/:nickname', (req, res) => {
   return res.json(player);
 });
 
-apiRouter.get('/player/:nickname/orders', (req, res) => {
-  const { nickname } = req.params;
-  const orders = dbStore.getOrdersByNickname(nickname);
-  return res.json(orders);
+// Nickname-only login is not identity verification. Order history is private.
+apiRouter.get('/player/:nickname/orders', requireAdmin, async (req, res) => {
+  try {
+    const nickname = req.params.nickname.trim().toLowerCase();
+    const { paymentDatabase } = await import('../payments/database.ts');
+    const docs = await paymentDatabase().collection('orders').get();
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json(docs.docs.map(d => ({...d.data(), id:d.id}))
+      .filter((o:any) => String(o.buyerNickname||'').toLowerCase() === nickname
+        || String(o.recipientNickname||'').toLowerCase() === nickname));
+  } catch {
+    return res.status(503).json({error:'Não foi possível consultar o histórico privado.'});
+  }
 });
 
 // -------------------------------------------------------------
@@ -313,267 +322,40 @@ apiRouter.delete('/admin/products/:id',requireAdmin,async(req,res)=>{try{const r
 // -------------------------------------------------------------
 // ORDERS & CHECKOUT & GATEWAY WEBHOOK
 // -------------------------------------------------------------
-apiRouter.get('/orders', (req, res) => {
-  const nickname = typeof req.query.nickname === 'string' ? req.query.nickname : null;
-  if (nickname) {
-    return res.json(dbStore.getOrdersByNickname(nickname));
-  }
-  // All orders requires admin
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !isValidAdminToken(authHeader.replace('Bearer ', '').trim())) {
-    return res.status(401).json({ error: 'Acesso restrito ao administrador.' });
-  }
-  res.json(dbStore.getOrders());
-});
-
-apiRouter.get('/orders/:id', (req, res) => {
-  const { id } = req.params;
-  const order = dbStore.getOrderById(id);
-  if (!order) {
-    return res.status(404).json({ error: 'Pedido não encontrado.' });
-  }
-  res.json(order);
-});
-
-apiRouter.post('/orders', async (req, res) => {
-  const { buyerNickname, recipientNickname, productId, productType, paymentMethod, couponCode } = req.body;
-
-  if (!buyerNickname || !recipientNickname || !productId || !productType) {
-    return res.status(400).json({ error: 'Dados do pedido incompletos.' });
-  }
-
+// Historical legacy orders stay intact; only authenticated admins may access them.
+apiRouter.get('/orders', requireAdmin, async (_req, res) => {
   try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, getDoc, collection, getDocs, setDoc, updateDoc } = await import('firebase/firestore');
-
-    const cleanProductId = String(productId).trim();
-    const cleanLowerId = cleanProductId.toLowerCase();
-    const targetType: 'vip' | 'product' = productType === 'vip' ? 'vip' : 'product';
-
-    let itemData: any = null;
-    let foundType: 'vip' | 'product' = targetType;
-
-    // 1. Primary lookup in the specified collection in Firestore
-    const primaryCollection = targetType === 'vip' ? 'vips' : 'products';
-    const primaryDocRef = doc(db, primaryCollection, cleanProductId);
-    const primarySnap = await getDoc(primaryDocRef).catch(() => null);
-
-    if (primarySnap && primarySnap.exists()) {
-      itemData = { ...primarySnap.data(), id: primarySnap.id };
-    } else {
-      // 1b. Fallback lookup in primary collection (case-insensitive or by data.id)
-      const colSnap = await getDocs(collection(db, primaryCollection)).catch(() => null);
-      if (colSnap && !colSnap.empty) {
-        for (const d of colSnap.docs) {
-          const data = d.data();
-          if (
-            d.id === cleanProductId ||
-            d.id.toLowerCase() === cleanLowerId ||
-            data.id === cleanProductId ||
-            (data.id && String(data.id).toLowerCase() === cleanLowerId)
-          ) {
-            itemData = { ...data, id: d.id };
-            break;
-          }
-        }
-      }
-    }
-
-    // 2. If not found in primary collection, check alternate collection (handles kit/vip categorization)
-    if (!itemData) {
-      const altCollection = targetType === 'vip' ? 'products' : 'vips';
-      const altDocRef = doc(db, altCollection, cleanProductId);
-      const altSnap = await getDoc(altDocRef).catch(() => null);
-
-      if (altSnap && altSnap.exists()) {
-        itemData = { ...altSnap.data(), id: altSnap.id };
-        foundType = targetType === 'vip' ? 'product' : 'vip';
-      } else {
-        const altColSnap = await getDocs(collection(db, altCollection)).catch(() => null);
-        if (altColSnap && !altColSnap.empty) {
-          for (const d of altColSnap.docs) {
-            const data = d.data();
-            if (
-              d.id === cleanProductId ||
-              d.id.toLowerCase() === cleanLowerId ||
-              data.id === cleanProductId ||
-              (data.id && String(data.id).toLowerCase() === cleanLowerId)
-            ) {
-              itemData = { ...data, id: d.id };
-              foundType = targetType === 'vip' ? 'product' : 'vip';
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // 3. Fallback to dbStore RAM cache if Firestore lookup was somehow empty
-    if (!itemData) {
-      if (targetType === 'vip') {
-        const memoryVip = dbStore.getVipById(cleanProductId);
-        if (memoryVip) itemData = memoryVip;
-      } else {
-        const memoryProd = dbStore.getProductById(cleanProductId);
-        if (memoryProd) itemData = memoryProd;
-      }
-    }
-
-    // 4. If item really does not exist, return explicit descriptive error
-    if (!itemData) {
-      const typeLabel = targetType === 'vip' ? 'VIP' : 'Produto';
-      console.warn(`CHECKOUT AVISO: ${typeLabel} não localizado no Firestore:`, {
-        targetCollection: primaryCollection,
-        searchedId: cleanProductId,
-        type: targetType
-      });
-      return res.status(404).json({
-        error: `${typeLabel} selecionado não foi encontrado no sistema (ID: ${cleanProductId}).`,
-        code: 'NOT_FOUND',
-        collection: primaryCollection,
-        productId: cleanProductId
-      });
-    }
-
-    // 5. Check if item is available / active
-    if (itemData.active === false) {
-      const typeLabel = foundType === 'vip' ? 'VIP' : 'Produto';
-      const safeName = String(itemData.name || 'Item').trim();
-      return res.status(400).json({
-        error: `O ${typeLabel} "${safeName}" está temporariamente desativado para novas compras.`,
-        code: 'ITEM_INACTIVE',
-        collection: foundType === 'vip' ? 'vips' : 'products',
-        productId: cleanProductId
-      });
-    }
-
-    // 6. Security: Fetch actual price and name from verified database document safely
-    const originalPrice = Number(itemData.price) || 0;
-    const rawName = String(itemData.name || itemData.title || (foundType === 'vip' ? 'VIP' : 'Produto')).trim();
-    const productName = foundType === 'vip'
-      ? (rawName.toLowerCase().startsWith('vip') ? rawName : `VIP ${rawName}`)
-      : rawName;
-
-    // 7. Validate and apply coupon if provided
-    let appliedCouponCode: string | undefined = undefined;
-    let discountAmount = 0;
-    let finalAmount = originalPrice;
-
-    if (couponCode && typeof couponCode === 'string' && couponCode.trim().length > 0) {
-      const cleanCode = couponCode.trim().toUpperCase();
-      let coupon = dbStore.getCouponByCode(cleanCode);
-
-      if (!coupon) {
-        try {
-          const snap = await getDocs(collection(db, 'coupons'));
-          for (const d of snap.docs) {
-            const data = d.data();
-            if (data.code && String(data.code).trim().toUpperCase() === cleanCode) {
-              coupon = { ...data, id: d.id } as any;
-              break;
-            }
-          }
-        } catch {}
-      }
-
-      if (coupon && coupon.active !== false) {
-        const isNotExpired = !coupon.expiresAt || new Date(coupon.expiresAt).getTime() > Date.now();
-        const hasUses = !coupon.maxUses || (Number(coupon.usedCount) || 0) < Number(coupon.maxUses);
-        const meetsMin = !coupon.minOrderValue || originalPrice >= Number(coupon.minOrderValue);
-
-        if (isNotExpired && hasUses && meetsMin) {
-          appliedCouponCode = coupon.code;
-          if (coupon.discountType === 'percentage') {
-            discountAmount = Number(((originalPrice * coupon.discountValue) / 100).toFixed(2));
-          } else {
-            discountAmount = Math.min(originalPrice, Number(coupon.discountValue));
-          }
-          finalAmount = Math.max(0, Number((originalPrice - discountAmount).toFixed(2)));
-
-          // Increment coupon usage
-          dbStore.incrementCouponUsage(coupon.code);
-          try {
-            await updateDoc(doc(db, 'coupons', coupon.id), {
-              usedCount: (Number(coupon.usedCount) || 0) + 1,
-              lastUsedAt: new Date().toISOString()
-            }).catch(() => {});
-          } catch {}
-        }
-      }
-    }
-
-    // Extract payment URLs
-    const livepixUrl = itemData.livepixUrl ? String(itemData.livepixUrl).trim() : '';
-    const pixUrl = itemData.pixUrl ? String(itemData.pixUrl).trim() : '';
-
-    console.log('CHECKOUT SUCESSO: Documento Firestore validado:', {
-      collection: foundType === 'vip' ? 'vips' : 'products',
-      id: itemData.id,
-      productName,
-      originalPrice,
-      finalAmount,
-      appliedCouponCode,
-      discountAmount,
-      buyerNickname,
-      recipientNickname
-    });
-
-    // 8. Create the order
-    const order = dbStore.createOrder({
-      buyerNickname,
-      recipientNickname,
-      productId: String(itemData.id || cleanProductId),
-      productName,
-      productType: foundType,
-      amount: finalAmount,
-      originalAmount: originalPrice,
-      couponCode: appliedCouponCode,
-      discountAmount: discountAmount > 0 ? discountAmount : undefined,
-      paymentMethod: (paymentMethod === 'LIVEPIX' ? 'PIX' : (paymentMethod || 'PIX')) as any
-    });
-
-    // 9. Register players in dbStore and Firestore players collection
-    const buyerPlayer = dbStore.getOrCreatePlayer(buyerNickname);
-    const recipientPlayer = dbStore.getOrCreatePlayer(recipientNickname);
-
-    // Save directly to Firestore orders and players collections
-    await Promise.all([
-      setDoc(doc(db, 'orders', order.id), order, { merge: true }),
-      setDoc(doc(db, 'players', buyerPlayer.id), buyerPlayer, { merge: true }),
-      setDoc(doc(db, 'players', recipientPlayer.id), recipientPlayer, { merge: true })
-    ]).catch(err => {
-      console.warn('Firestore order persistence notice:', err);
-    });
-
-    // Keep RAM memory synced
-    if (foundType === 'vip') {
-      dbStore.updateVip(itemData.id, itemData);
-    } else {
-      dbStore.updateProduct(itemData.id, itemData);
-    }
-
-    return res.status(201).json({
-      ...order,
-      livepixUrl,
-      pixUrl
-    });
-  } catch (err: unknown) {
-    const errorObj = err instanceof Error ? err : new Error(String(err));
-    const errorCode = (err as any)?.code || 'INTERNAL_ERROR';
-    console.error('DIAGNÓSTICO ERRO FIRESTORE CHECKOUT:', {
-      code: errorCode,
-      message: errorObj.message,
-      name: errorObj.name,
-      searchedId: productId,
-      productType,
-      stack: errorObj.stack
-    });
-    return res.status(500).json({
-      error: `Erro ao consultar dados no Firestore: ${errorObj.message}`,
-      code: errorCode,
-      productId: String(productId || '')
-    });
+    const {paymentDatabase}=await import('../payments/database.ts');
+    const docs=await paymentDatabase().collection('orders').get();
+    res.setHeader('Cache-Control','no-store');
+    return res.json(docs.docs.map(d=>({...d.data(),id:d.id}))
+      .sort((a:any,b:any)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))));
+  } catch {
+    return res.status(503).json({error:'Não foi possível consultar os pedidos.'});
   }
+});
+
+apiRouter.get('/orders/:id', requireAdmin, async (req,res) => {
+  try {
+    const id=req.params.id;
+    if(!id || id.includes('/'))return res.status(400).json({error:'ID inválido.'});
+    const {paymentDatabase}=await import('../payments/database.ts');
+    const doc=await paymentDatabase().collection('orders').doc(id).get();
+    if(!doc.exists)return res.status(404).json({error:'Pedido não encontrado.'});
+    res.setHeader('Cache-Control','no-store');
+    return res.json({...doc.data(),id:doc.id});
+  } catch {
+    return res.status(503).json({error:'Não foi possível consultar o pedido.'});
+  }
+});
+
+// Old checkout generated unverified payment links and untrusted local orders.
+// The only available checkout is authenticated Mercado Pago Orders Pix Preview.
+apiRouter.post('/orders', (_req,res) => {
+  res.setHeader('Cache-Control','no-store');
+  return res.status(410).json({
+    error:'Checkout anterior desativado. Utilize o Pix de teste no carrinho.'
+  });
 });
 
 // Webhook / Simulated Payment Confirmation
