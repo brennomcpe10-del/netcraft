@@ -461,7 +461,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     if (!serverSettings || !adminToken) return;
     try {
       await api.updateSettings(serverSettings, adminToken);
-      await saveSettingsToFirestore(serverSettings).catch(() => {});
       showSuccess('Configurações atualizadas');
       await loadData();
       await onRefreshGlobalData();
@@ -1764,7 +1763,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                       try {
                         const clean = (serverSettings.livePixUrl || '').trim();
                         await api.updateLivePixUrl(clean, adminToken);
-                        await saveSettingsToFirestore({ ...serverSettings, livePixUrl: clean }).catch(() => {});
                         showSuccess('Link do LivePix salvo com sucesso!');
                         await onRefreshGlobalData();
                       } catch (err: unknown) {
@@ -1805,7 +1803,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                       try {
                         const clean = (serverSettings.pixUrl || '').trim();
                         await api.updatePixUrl(clean, adminToken);
-                        await saveSettingsToFirestore({ ...serverSettings, pixUrl: clean }).catch(() => {});
                         showSuccess('Link de cobrança PIX padrão salvo com sucesso!');
                         await onRefreshGlobalData();
                       } catch (err: unknown) {
