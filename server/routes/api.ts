@@ -94,68 +94,54 @@ apiRouter.get('/player/:nickname/orders', requireAdmin, async (req, res) => {
 // -------------------------------------------------------------
 // SERVER SETTINGS & INFRASTRUCTURE
 // -------------------------------------------------------------
-apiRouter.get('/settings', async (_req, res) => {
-  await dbStore.syncFromFirestore().catch(() => {});
-  res.json(dbStore.getSettings());
+// Storefront and admin settings share a single backend-persisted source.
+async function storeSettings(patch?:Record<string,unknown>){
+ const {paymentDatabase}=await import('../payments/database.ts');
+ const db=paymentDatabase(),general=db.collection('settings').doc('general'),
+  legacy=db.collection('serverSettings').doc('default');
+ const [primary,alternate]=await Promise.all([general.get(),legacy.get()]);
+ const current=primary.exists ? primary.data()! : alternate.exists ? alternate.data()! : dbStore.getSettings();
+ if(!patch)return current;
+ const next={...current,...patch};
+ const batch=db.batch();
+ batch.set(general,next);
+ batch.set(legacy,next);
+ await batch.commit();
+ dbStore.updateSettings(next);
+ return next;
+}
+apiRouter.get('/settings',async(_req,res)=>{
+ try{res.setHeader('Cache-Control','no-store');return res.json(await storeSettings());}
+ catch{return res.status(503).json({error:'Não foi possível consultar as configurações.'});}
 });
-
-apiRouter.put('/admin/settings', requireAdmin, async (req, res) => {
-  const updated = dbStore.updateSettings(req.body);
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, setDoc } = await import('firebase/firestore');
-    await setDoc(doc(db, 'serverSettings', 'default'), updated);
-  } catch (err) {
-    console.warn('Firestore settings update notice:', err);
-  }
-  res.json(updated);
+apiRouter.put('/admin/settings',requireAdmin,async(req,res)=>{
+ try{
+  if(!req.body||typeof req.body!=='object'||Array.isArray(req.body))
+   return res.status(400).json({error:'Configurações inválidas.'});
+  return res.json(await storeSettings(req.body));
+ }catch{return res.status(503).json({error:'Não foi possível salvar as configurações.'});}
 });
-
-apiRouter.put('/admin/settings/livepix', requireAdmin, async (req, res) => {
-  const { livePixUrl } = req.body;
-  if (typeof livePixUrl !== 'string') {
-    return res.status(400).json({ error: 'URL do LivePix inválida.' });
-  }
-  const clean = livePixUrl.trim();
-  if (clean && !clean.startsWith('http://') && !clean.startsWith('https://')) {
-    return res.status(400).json({ error: 'O link deve começar com http:// ou https://' });
-  }
-  const updated = dbStore.updateSettings({ livePixUrl: clean });
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, setDoc } = await import('firebase/firestore');
-    await setDoc(doc(db, 'serverSettings', 'default'), updated);
-  } catch (err) {
-    console.warn('Firestore livepix update notice:', err);
-  }
-  res.json({
-    success: true,
-    message: 'Link do LivePix atualizado com sucesso.',
-    livePixUrl: updated.livePixUrl,
-    settings: updated
-  });
+apiRouter.put('/admin/settings/livepix',requireAdmin,async(req,res)=>{
+ const livePixUrl=req.body?.livePixUrl;
+ if(typeof livePixUrl!=='string'||livePixUrl.length>2048)
+  return res.status(400).json({error:'URL do LivePix inválida.'});
+ const clean=livePixUrl.trim();
+ if(clean&&!/^https?:\/\//i.test(clean))
+  return res.status(400).json({error:'O link deve começar com http:// ou https://.'});
+ try{
+  const settings=await storeSettings({livePixUrl:clean});
+  return res.json({success:true,message:'Link do LivePix salvo.',livePixUrl:clean,settings});
+ }catch{return res.status(503).json({error:'Não foi possível salvar o link.'});}
 });
-
-apiRouter.put('/admin/settings/pix', requireAdmin, async (req, res) => {
-  const { pixUrl } = req.body;
-  if (typeof pixUrl !== 'string') {
-    return res.status(400).json({ error: 'Link ou chave PIX inválido.' });
-  }
-  const clean = pixUrl.trim();
-  const updated = dbStore.updateSettings({ pixUrl: clean });
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, setDoc } = await import('firebase/firestore');
-    await setDoc(doc(db, 'serverSettings', 'default'), updated);
-  } catch (err) {
-    console.warn('Firestore pix update notice:', err);
-  }
-  res.json({
-    success: true,
-    message: 'Link de cobrança PIX atualizado com sucesso.',
-    pixUrl: updated.pixUrl,
-    settings: updated
-  });
+apiRouter.put('/admin/settings/pix',requireAdmin,async(req,res)=>{
+ const pixUrl=req.body?.pixUrl;
+ if(typeof pixUrl!=='string'||pixUrl.length>2048)
+  return res.status(400).json({error:'Link ou chave PIX inválido.'});
+ const clean=pixUrl.trim();
+ try{
+  const settings=await storeSettings({pixUrl:clean});
+  return res.json({success:true,message:'Link PIX salvo.',pixUrl:clean,settings});
+ }catch{return res.status(503).json({error:'Não foi possível salvar o link.'});}
 });
 
 // -------------------------------------------------------------
