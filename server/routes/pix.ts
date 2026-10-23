@@ -113,7 +113,30 @@ export function createPixRouter(
             : Math.abs(Date.now() - timestamp) > 300000 ? "timestamp_outside_window"
             : !/^[a-f0-9]{64}$/i.test(signatureParts.v1 || "") ? "digest_invalid"
             : "signature_mismatch";
-          console.warn("[Pix webhook authentication]", { reason });
+          // Log only categorical, non-sensitive properties. Never log IDs, signatures,
+          // secrets, request headers, payloads or HMAC material.
+          const queryIdShape = /^ORD[A-Z0-9]{20,40}$/.test(id)
+            ? "order"
+            : /^\\d+$/.test(id)
+              ? "numeric"
+              : id
+                ? "other"
+                : "missing";
+          const bodyId = req.body?.data?.id;
+          const bodyIdRelation = bodyId == null
+            ? "absent"
+            : String(bodyId) === id
+              ? "match"
+              : "mismatch";
+          console.warn("[Pix webhook authentication]", {
+            reason,
+            queryIdShape,
+            queryIdContainsUppercase: /[A-Z]/.test(id),
+            bodyIdRelation,
+            signatureTimestampUnit: ts.length === 10 ? "seconds" : ts.length === 13 ? "milliseconds" : "other",
+            signaturePartsPresent: Boolean(signatureParts.ts && signatureParts.v1),
+            requestIdPresent: Boolean(requestId),
+          });
         }
         return res.status(401).json({ error: "Notificação não autenticada." });
       }
