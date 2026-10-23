@@ -141,7 +141,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         getVipsFromFirestore(),
         getProductsFromFirestore(),
         getOrdersFromFirestore(),
-        getCouponsFromFirestore(),
+        api.getCoupons(adminToken),
         getPlayersFromFirestore(),
         getEventsFromFirestore(),
         getNewsFromFirestore(),
@@ -153,14 +153,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       const loadedPlayers = playersResult.status === 'fulfilled' ? playersResult.value : [];
       let loadedCoupons = couponsResult.status === 'fulfilled' ? couponsResult.value : [];
 
-      // Also try API for freshest coupons
-      try {
-        const apiCoupons = await api.getCoupons(adminToken);
-        if (apiCoupons && apiCoupons.length > 0) {
-          loadedCoupons = apiCoupons;
-        }
-      } catch {}
-
+      // Coupon data is private. The authenticated API is its sole read source.
       if (vipsResult.status === 'fulfilled') setVips(vipsResult.value);
       if (prodsResult.status === 'fulfilled') setProducts(prodsResult.value);
       if (ordersResult.status === 'fulfilled') setOrders(loadedOrders);
