@@ -120,6 +120,16 @@ export class MercadoPago {
           const detailEntry = firstDetail && typeof firstDetail === "object" && !Array.isArray(firstDetail)
             ? firstDetail as Record<string, unknown> : {};
           const safeFields = ["code", "message", "details", "type", "status", "title", "property", "field", "path", "description"];
+          const safeProviderCode = (value: unknown) =>
+            typeof value === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(value)
+              ? value : "unavailable";
+          console.warn("[MercadoPago order rejection classification]", {
+            errorCode: safeProviderCode(errorEntry.code),
+            detailsType: Array.isArray(errorEntry.details) ? "array"
+              : errorEntry.details === null ? "null" : typeof errorEntry.details,
+            firstDetailType: firstDetail === null ? "null" : typeof firstDetail,
+            // Never print error.message or details content: they are untrusted.
+          });
           console.warn("[MercadoPago order rejection fields]", {
             errorFields: safeFields.filter(k => Object.prototype.hasOwnProperty.call(errorEntry, k)).join(",") || "none",
             detailFields: safeFields.filter(k => Object.prototype.hasOwnProperty.call(detailEntry, k)).join(",") || "none",
