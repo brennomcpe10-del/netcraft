@@ -100,7 +100,10 @@ async function storeSettings(patch?:Record<string,unknown>){
  const db=paymentDatabase(),general=db.collection('settings').doc('general'),
   legacy=db.collection('serverSettings').doc('default');
  const [primary,alternate]=await Promise.all([general.get(),legacy.get()]);
- const current=primary.exists ? primary.data()! : alternate.exists ? alternate.data()! : dbStore.getSettings();
+ // Legacy deployments wrote these two documents independently. Merge them
+ // with defaults so a partial general document never hides IP, port or rules.
+ const current={...dbStore.getSettings(),...(alternate.exists ? alternate.data() : {}),
+  ...(primary.exists ? primary.data() : {})};
  if(!patch)return current;
  const next={...current,...patch};
  const batch=db.batch();
