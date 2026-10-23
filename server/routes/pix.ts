@@ -91,15 +91,32 @@ export function createPixRouter(
     try {
       dependencies.assertEnvironment();
       const id = String(req.query["data.id"] || "");
-      if (
-        !webhookSignature(
-          id,
-          String(req.headers["x-request-id"] || ""),
-          String(req.headers["x-signature"] || ""),
-          dependencies.webhookSecret(),
-        )
-      )
+      const requestId = String(req.headers["x-request-id"] || "");
+      const signature = String(req.headers["x-signature"] || "");
+      const secret = dependencies.webhookSecret();
+      if (!webhookSignature(id, requestId, signature, secret)) {
+        // Preview-only diagnostics: never log header values, secrets, request
+        // bodies, identifiers or arbitrary provider-supplied text.
+        if (process.env.VERCEL_ENV === "preview") {
+          const signatureParts = Object.fromEntries(
+            signature.split(",").map(part => part.trim().split("=")),
+          );
+          const ts = signatureParts.ts || "";
+          const timestamp = /^\\d{10,13}$/.test(ts)
+            ? Number(ts) * (ts.length === 10 ? 1000 : 1)
+            : NaN;
+          const reason = !secret ? "secret_missing"
+            : !id ? "data_id_missing"
+            : !requestId ? "request_id_missing"
+            : !signature ? "signature_missing"
+            : !Number.isFinite(timestamp) ? "timestamp_invalid"
+            : Math.abs(Date.now() - timestamp) > 300000 ? "timestamp_outside_window"
+            : !/^[a-f0-9]{64}$/i.test(signatureParts.v1 || "") ? "digest_invalid"
+            : "signature_mismatch";
+          console.warn("[Pix webhook authentication]", { reason });
+        }
         return res.status(401).json({ error: "Notificação não autenticada." });
+      }
       const topic = String(req.query.type || req.body?.type || "");
       const isOrder = ["order", "orders"].includes(topic);
       if (!isOrder && topic !== "payment")
