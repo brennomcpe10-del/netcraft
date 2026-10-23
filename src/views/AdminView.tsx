@@ -178,15 +178,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         socialResult,
         settingsResult
       ] = await Promise.allSettled([
-        getVipsFromFirestore(),
-        getProductsFromFirestore(),
+        api.getVips(true, adminToken),
+        api.getProducts(true, undefined, adminToken),
         api.getAllOrders(adminToken),
         api.getCoupons(adminToken),
         getPlayersFromFirestore(),
-        getEventsFromFirestore(),
-        getNewsFromFirestore(),
-        getCommunityFromFirestore(),
-        getSettingsFromFirestore()
+        api.getEvents(true, adminToken),
+        api.getNews(true, adminToken),
+        api.getCommunity(true, adminToken),
+        api.getSettings()
       ]);
 
       const loadedOrders = ordersResult.status === 'fulfilled' ? ordersResult.value : [];
