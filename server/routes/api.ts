@@ -636,7 +636,16 @@ apiRouter.post('/coupons/validate', async (req, res) => {
   const cleanCode = code.trim().toUpperCase();
   const numAmount = Number(amount) || 0;
 
-  let coupon = dbStore.getCouponByCode(cleanCode);
+  let coupon: any = null;
+  try {
+    const {paymentDatabase}=await import('../payments/database.ts');
+    const docs=await paymentDatabase().collection('coupons').where('code','==',cleanCode).limit(2).get();
+    if(docs.size > 1) return res.status(409).json({valid:false,error:'Cupom duplicado. Contate o suporte.'});
+    if(docs.size === 1) coupon={...docs.docs[0].data(),id:docs.docs[0].id};
+  }catch{
+    return res.status(503).json({valid:false,error:'Não foi possível validar o cupom no servidor.'});
+  }
+
   if (!coupon) {
     try {
       const { db } = await import('../../src/lib/firebase.ts');
