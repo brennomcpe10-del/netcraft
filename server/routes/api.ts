@@ -156,83 +156,68 @@ apiRouter.get('/vips', async (req, res) => {
   res.json(dbStore.getVips(includeInactive));
 });
 
-apiRouter.post('/admin/vips', requireAdmin, async (req, res) => {
-  const { id, name, price, duration, description, benefits, color, image, order, active, livepixUrl, pixUrl } = req.body;
-  if (!name || price == null || !duration) {
-    return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
-  }
-
-  const newVip = dbStore.createVip({
-    ...(id ? { id: String(id).trim() } : {}),
-    name,
-    price: Number(price),
-    duration,
-    description: description || '',
-    benefits: Array.isArray(benefits) ? benefits : [],
-    color: color || 'emerald',
-    image: image || 'crown',
-    order: Number(order) || 1,
-    active: active !== false,
-    categoryId: typeof req.body.categoryId === "string" ? req.body.categoryId : "vips",
-    isPopular: !!req.body.isPopular,
-    livepixUrl: livepixUrl ? String(livepixUrl).trim() : '',
-    pixUrl: pixUrl ? String(pixUrl).trim() : ''
+// VIP pricing must be persisted through the authenticated server, never a browser write.
+function vipDraft(body:any, id:string) {
+ const price = Number(body?.price);
+ const name = typeof body?.name === 'string' ? body.name.trim() : '';
+ const duration = typeof body?.duration === 'string' ? body.duration.trim() : '';
+ if (!/^[a-zA-Z0-9_-]{2,128}$/.test(id) || !name || name.length > 120 ||
+     !duration || duration.length > 80 || !Number.isFinite(price) ||
+     price < 0 || price > 10000 || Math.round(price*100) !== price*100)
+  throw new ProductCatalogError('Confira o nome, duração, identificador e preço do VIP.',400);
+ return {
+  id, name, price, duration,
+  description: String(body.description || '').slice(0,10000),
+  benefits: Array.isArray(body.benefits) ? body.benefits.filter((x:unknown)=>typeof x==='string').slice(0,100) : [],
+  color: ['emerald','cyan','blue','purple','amber'].includes(body.color) ? body.color : 'emerald',
+  image: typeof body.image === 'string' ? body.image.slice(0,850000) : 'crown',
+  order: Number.isInteger(Number(body.order)) ? Math.max(0,Math.min(1000000,Number(body.order))) : 1,
+  active: body.active !== false,
+  categoryId: typeof body.categoryId === 'string' ? body.categoryId.slice(0,128) : 'vips',
+  isPopular: body.isPopular === true,
+  livepixUrl: typeof body.livepixUrl === 'string' ? body.livepixUrl.slice(0,2048) : '',
+  pixUrl: typeof body.pixUrl === 'string' ? body.pixUrl.slice(0,2048) : ''
+ };
+}
+apiRouter.post('/admin/vips', requireAdmin, async (req,res)=>{
+ try {
+  const id = typeof req.body?.id==='string' && req.body.id.trim() ? req.body.id.trim() : `vip-${crypto.randomUUID()}`;
+  const vip = vipDraft(req.body,id);
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const db=paymentDatabase(),ref=db.collection('vips').doc(id);
+  await db.runTransaction(async tx=>{
+   if((await tx.get(ref)).exists) throw new ProductCatalogError('Este VIP já existe. Atualize o catálogo.',409);
+   tx.create(ref,vip);
   });
-
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, setDoc } = await import('firebase/firestore');
-    await setDoc(doc(db, 'vips', newVip.id), newVip);
-  } catch (err) {
-    console.warn('Firestore VIP create notice:', err);
-  }
-
-  res.status(201).json(newVip);
+  dbStore.createVip(vip);
+  return res.status(201).json(vip);
+ } catch(error){return productError(res,error);}
 });
-
-apiRouter.put('/admin/vips/:id', requireAdmin, async (req, res) => {
-  const { id } = req.params;
-  const updated = dbStore.updateVip(id, req.body);
-  if (!updated) {
-    return res.status(404).json({ error: 'VIP não encontrado.' });
-  }
-
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, setDoc } = await import('firebase/firestore');
-    await setDoc(doc(db, 'vips', updated.id), updated);
-  } catch (err) {
-    console.warn('Firestore VIP update notice:', err);
-  }
-
-  res.json(updated);
+apiRouter.put('/admin/vips/:id', requireAdmin, async(req,res)=>{
+ try {
+  const id=req.params.id;
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const db=paymentDatabase(),ref=db.collection('vips').doc(id);
+  let vip:any;
+  await db.runTransaction(async tx=>{
+   const snap=await tx.get(ref);
+   if(!snap.exists) throw new ProductCatalogError('VIP não encontrado.',404);
+   vip=vipDraft({...snap.data(),...req.body},id);
+   tx.set(ref,vip);
+  });
+  dbStore.updateVip(id,vip);
+  return res.json(vip);
+ } catch(error){return productError(res,error);}
 });
-
-apiRouter.delete('/admin/vips/:id', requireAdmin, async (req, res) => {
-  const { id } = req.params;
-  const name = typeof req.query.name === 'string' ? req.query.name : req.body?.name;
-  const deleted = dbStore.deleteVip(id, name);
-
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, deleteDoc, collection, getDocs } = await import('firebase/firestore');
-    await deleteDoc(doc(db, 'vips', id)).catch(() => {});
-    const cleanId = id.trim().toLowerCase();
-    const cleanName = (name || '').trim().toLowerCase();
-    const snap = await getDocs(collection(db, 'vips'));
-    for (const d of snap.docs) {
-      const data = d.data();
-      const matchId = d.id === id || d.id.toLowerCase() === cleanId || data.id === id;
-      const matchName = cleanName && data.name && String(data.name).trim().toLowerCase() === cleanName;
-      if (matchId || matchName) {
-        await deleteDoc(doc(db, 'vips', d.id)).catch(() => {});
-      }
-    }
-  } catch (err) {
-    console.warn('Firestore VIP delete notice:', err);
-  }
-
-  res.json({ success: true, message: 'VIP excluído com sucesso.', removed: deleted });
+apiRouter.delete('/admin/vips/:id', requireAdmin, async(req,res)=>{
+ try {
+  const id=req.params.id;
+  if(!/^[a-zA-Z0-9_-]{2,128}$/.test(id)) return res.status(400).json({error:'Identificador inválido.'});
+  const {paymentDatabase}=await import('../payments/database.ts');
+  await paymentDatabase().collection('vips').doc(id).delete();
+  dbStore.deleteVip(id);
+  return res.json({success:true,message:'VIP excluído com sucesso.',removed:true});
+ }catch(error){return productError(res,error);}
 });
 
 // -------------------------------------------------------------
