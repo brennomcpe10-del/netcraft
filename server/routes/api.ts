@@ -30,50 +30,32 @@ apiRouter.get('/admin/revenue',requireAdmin,async(req,res)=>{
 // -------------------------------------------------------------
 // PLAYER / ACCOUNT IDENTIFICATION
 // -------------------------------------------------------------
-apiRouter.post('/player/login', async (req, res) => {
-  const { nickname } = req.body;
-  if (!nickname || typeof nickname !== 'string') {
-    return res.status(400).json({ error: 'Nickname é obrigatório.' });
-  }
-
-  const clean = nickname.trim();
-  if (clean.length < 3 || clean.length > 32) {
-    return res.status(400).json({ error: 'O nickname deve conter entre 3 e 32 caracteres.' });
-  }
-
-  const player = dbStore.getOrCreatePlayer(clean);
-
-  // Sync to Firestore users collection
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, setDoc } = await import('firebase/firestore');
-    await setDoc(doc(db, 'users', player.id), player);
-  } catch (err) {
-    console.warn('Firestore player sync notice:', err);
-  }
-
-  return res.json({
-    success: true,
-    player
-  });
+// A nickname identifies a player record; it is not an authenticated identity.
+apiRouter.post('/player/login', async (req,res)=>{
+ try {
+  const {publicPlayer}=await import('../services/players.ts');
+  const player=await publicPlayer(req.body?.nickname,true);
+  if(!player)throw Error('Registro não disponível.');
+  res.setHeader('Cache-Control','no-store');
+  return res.json({success:true,player:{...player,totalSpent:0,ordersCount:0}});
+ } catch(error) {
+  const {PlayerError}=await import('../services/players.ts');
+  return res.status(error instanceof PlayerError?error.statusCode:503)
+   .json({error:error instanceof PlayerError?error.message:'Não foi possível identificar o jogador no servidor.'});
+ }
 });
-
-apiRouter.get('/player/:nickname', (req, res) => {
-  const { nickname } = req.params;
-  const clean = decodeURIComponent(nickname).trim();
-
-  if (clean.length < 3 || clean.length > 32) {
-    return res.status(400).json({
-      error: 'O nickname deve conter entre 3 e 32 caracteres.'
-    });
-  }
-
-  const player = dbStore.getPlayerByNickname(clean);
-  if (!player) {
-    return res.status(404).json({ error: 'Jogador não encontrado.' });
-  }
-
-  return res.json(player);
+apiRouter.get('/player/:nickname',async(req,res)=>{
+ try {
+  const {publicPlayer}=await import('../services/players.ts');
+  const player=await publicPlayer(req.params.nickname);
+  if(!player)return res.status(404).json({error:'Jogador não encontrado.'});
+  res.setHeader('Cache-Control','no-store');
+  return res.json({...player,totalSpent:0,ordersCount:0});
+ } catch(error) {
+  const {PlayerError}=await import('../services/players.ts');
+  return res.status(error instanceof PlayerError?error.statusCode:503)
+   .json({error:error instanceof PlayerError?error.message:'Não foi possível consultar o perfil.'});
+ }
 });
 
 // Nickname-only login is not identity verification. Order history is private.
@@ -731,82 +713,34 @@ apiRouter.get('/admin/stats', requireAdmin, (_req, res) => {
   res.json(dbStore.getDashboardStats());
 });
 
-apiRouter.get('/admin/players', requireAdmin, async (req, res) => {
-  const search = typeof req.query.search === 'string' ? req.query.search.toLowerCase() : '';
-
-  // Synchronize any Firestore users so no registration is ever missed
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { collection, getDocs } = await import('firebase/firestore');
-    const snap = await getDocs(collection(db, 'users'));
-    snap.forEach(d => {
-      const u = d.data() as Player;
-      if (u.nickname) {
-        dbStore.getOrCreatePlayer(u.nickname);
-      }
-    });
-  } catch {
-    // ignore
-  }
-
-  let players = dbStore.getPlayers();
-  if (search) {
-    players = players.filter(p => p.nickname.toLowerCase().includes(search));
-  }
-  res.json(players);
+apiRouter.get('/admin/players',requireAdmin,async(req,res)=>{
+ try {
+  const {listAdminPlayers}=await import('../services/players.ts');
+  res.setHeader('Cache-Control','no-store');
+  return res.json(await listAdminPlayers(req.query.search));
+ }catch{return res.status(503).json({error:'Não foi possível consultar os jogadores.'});}
+});
+apiRouter.post('/admin/players',requireAdmin,async(req,res)=>{
+ try {
+  const {adminCreatePlayer}=await import('../services/players.ts');
+  const player=await adminCreatePlayer(req.body?.nickname,req.body?.vipId);
+  return res.status(201).json(player);
+ }catch(error){
+  const {PlayerError}=await import('../services/players.ts');
+  return res.status(error instanceof PlayerError?error.statusCode:503)
+   .json({error:error instanceof PlayerError?error.message:'Não foi possível cadastrar o jogador.'});
+ }
+});
+apiRouter.delete('/admin/players/:id',requireAdmin,async(req,res)=>{
+ try {
+  const {adminDeletePlayer}=await import('../services/players.ts');
+  const removed=await adminDeletePlayer(req.params.id);
+  if(!removed)return res.status(404).json({error:'Jogador não encontrado.'});
+  return res.json({success:true,removed:true});
+ }catch(error){
+  const {PlayerError}=await import('../services/players.ts');
+  return res.status(error instanceof PlayerError?error.statusCode:503)
+   .json({error:error instanceof PlayerError?error.message:'Não foi possível remover o jogador.'});
+ }
 });
 
-apiRouter.post('/admin/players', requireAdmin, async (req, res) => {
-  const { nickname, vipId } = req.body;
-  if (!nickname || typeof nickname !== 'string') {
-    return res.status(400).json({ error: 'Nickname é obrigatório.' });
-  }
-
-  const clean = nickname.trim();
-  if (clean.length < 3 || clean.length > 32) {
-    return res.status(400).json({ error: 'O nickname deve conter entre 3 e 32 caracteres.' });
-  }
-
-  let player = dbStore.getOrCreatePlayer(clean);
-
-  if (vipId) {
-    const vip = dbStore.getVipById(vipId);
-    if (vip) {
-      const isLifetime = vip.duration.toLowerCase().includes('vitalício');
-      const now = new Date();
-      const expiresAt = isLifetime ? null : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      const activeVips = [...player.activeVips];
-      const existingIdx = activeVips.findIndex(v => v.vipId === vip.id);
-      if (existingIdx >= 0) {
-        activeVips[existingIdx].expiresAt = expiresAt;
-      } else {
-        activeVips.push({
-          vipId: vip.id,
-          vipName: `VIP ${vip.name}`,
-          activatedAt: now.toISOString(),
-          expiresAt
-        });
-      }
-      const updated = dbStore.updatePlayer(player.id, { activeVips });
-      if (updated) player = updated;
-    }
-  }
-
-  // Sync to Firestore
-  try {
-    const { db } = await import('../../src/lib/firebase.ts');
-    const { doc, setDoc } = await import('firebase/firestore');
-    await setDoc(doc(db, 'users', player.id), player);
-  } catch {
-    // ignore
-  }
-
-  res.status(201).json(player);
-});
-
-apiRouter.delete('/admin/players/:id', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  const nickname = typeof req.query.nickname === 'string' ? req.query.nickname : (typeof req.query.name === 'string' ? req.query.name : req.body?.nickname);
-  const deleted = dbStore.deletePlayer(id, nickname);
-  res.json({ success: true, message: 'Jogador excluído com sucesso.', removed: deleted });
-});
