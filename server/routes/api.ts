@@ -692,40 +692,36 @@ apiRouter.delete('/admin/community/:id',requireAdmin,async(req,res)=>{
 // -------------------------------------------------------------
 // // SUPPORT TICKETS
 // -------------------------------------------------------------
-apiRouter.get('/tickets', (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader && isValidAdminToken(authHeader.replace('Bearer ', '').trim())) {
-    return res.json(dbStore.getTickets());
-  }
-  const nickname = typeof req.query.nickname === 'string' ? req.query.nickname.toLowerCase() : null;
-  if (nickname) {
-    return res.json(dbStore.getTickets().filter(t => t.nickname.toLowerCase() === nickname));
-  }
-  res.json([]);
+// Ticket contents are private. Nickname alone is NOT user authentication.
+apiRouter.get('/tickets', requireAdmin, async (_req, res) => {
+ try {
+  const {listAdminTickets}=await import('../services/supportTickets.ts');
+  res.setHeader('Cache-Control','no-store');
+  return res.json(await listAdminTickets());
+ }catch{return res.status(503).json({error:'Não foi possível consultar os chamados.'});}
 });
-
-apiRouter.post('/tickets', (req, res) => {
-  const { nickname, category, subject, message } = req.body;
-  if (!nickname || !category || !subject || !message) {
-    return res.status(400).json({ error: 'Preencha todos os campos do chamado.' });
-  }
-
-  const ticket = dbStore.createTicket({
-    nickname,
-    category,
-    subject,
-    message
-  });
-  res.status(201).json(ticket);
+apiRouter.post('/tickets', async (req, res) => {
+ try {
+  const {createSupportTicket,TicketError}=await import('../services/supportTickets.ts');
+  const ticket=await createSupportTicket(req.body);
+  res.setHeader('Cache-Control','no-store');
+  // Public senders only receive an opaque receipt. Never expose internal replies.
+  return res.status(201).json({id:ticket.id,status:ticket.status,createdAt:ticket.createdAt});
+ }catch(error){
+  const {TicketError}=await import('../services/supportTickets.ts');
+  return res.status(error instanceof TicketError?error.statusCode:503)
+   .json({error:error instanceof TicketError?error.message:'Não foi possível registrar o chamado.'});
+ }
 });
-
-apiRouter.put('/admin/tickets/:id', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  const updated = dbStore.updateTicket(id, req.body);
-  if (!updated) {
-    return res.status(404).json({ error: 'Chamado não encontrado.' });
-  }
-  res.json(updated);
+apiRouter.put('/admin/tickets/:id', requireAdmin, async (req, res) => {
+ try {
+  const {updateSupportTicket}=await import('../services/supportTickets.ts');
+  return res.json(await updateSupportTicket(req.params.id,req.body));
+ }catch(error){
+  const {TicketError}=await import('../services/supportTickets.ts');
+  return res.status(error instanceof TicketError?error.statusCode:503)
+   .json({error:error instanceof TicketError?error.message:'Não foi possível atualizar o chamado.'});
+ }
 });
 
 // -------------------------------------------------------------
