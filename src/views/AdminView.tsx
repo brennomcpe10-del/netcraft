@@ -370,14 +370,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         updatedAt: new Date().toISOString()
       };
 
-      // 1. Direct Firestore write
-      await saveCouponToFirestore(payload);
-
-      // 2. Server API update
+      // Coupon rules and usage are persisted by the authenticated backend.
       if (isEditing) {
-        await api.updateCoupon(couponId, payload, adminToken).catch(() => {});
+        await api.updateCoupon(couponId, payload, adminToken);
       } else {
-        await api.createCoupon(payload, adminToken).catch(() => {});
+        await api.createCoupon(payload, adminToken);
       }
 
       showSuccess(isEditing ? `Cupom "${rawCode}" atualizado com sucesso!` : `Cupom "${rawCode}" criado com sucesso!`);
@@ -400,8 +397,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       };
       setCoupons(prev => prev.map(c => c.id === coupon.id ? updated : c));
 
-      await saveCouponToFirestore(updated);
-      await api.updateCoupon(coupon.id, { active: nextActive }, adminToken).catch(() => {});
+      await api.updateCoupon(coupon.id, { active: nextActive }, adminToken);
 
       showSuccess(`Cupom "${coupon.code}" ${nextActive ? 'ativado' : 'desativado'} com sucesso!`);
       await loadData();
@@ -526,10 +522,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       // 2. Perform deletions concurrently on server & Firestore
       switch (type) {
         case 'vip':
-          await Promise.allSettled([
-            api.deleteVip(id, adminToken, name),
-            deleteVipFromFirestore(id, name)
-          ]);
+          await api.deleteVip(id, adminToken, name);
           showSuccess(`VIP ${name} excluído com sucesso`);
           break;
         case 'order':
@@ -568,10 +561,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           showSuccess(`Comunidade ${name} excluída com sucesso`);
           break;
         case 'coupon':
-          await Promise.allSettled([
-            api.deleteCoupon(id, adminToken),
-            deleteCouponFromFirestore(id)
-          ]);
+          await api.deleteCoupon(id, adminToken);
           showSuccess(`Cupom "${name}" excluído com sucesso`);
           break;
       }
