@@ -363,14 +363,35 @@ apiRouter.post('/orders/:id/simulate-payment', (_req,res) => res.status(410).jso
 
 // Handler for Order Status Update with comprehensive Firestore sync and flexible ID parsing
 const handleOrderStatusUpdate = async(req:express.Request,res:express.Response)=>{
- const id=String(req.params.id||req.body.id||'').trim(),status=req.body.status;
- if(!id||id.includes('/')||!['Pendente','Pago','Entregue','Cancelado','Reembolsado','Estornado'].includes(status))return res.status(400).json({error:'Pedido ou status inválido.'});
- try{const {db}=await import('../../src/lib/firebase.ts');const {doc,getDoc,getDocs,collection,runTransaction}=await import('firebase/firestore');let ref=doc(db,'orders',id);
- if(!(await getDoc(ref)).exists()){const snapshot=await getDocs(collection(db,'orders'));const normalized=id.replace(/^#/,'').toLowerCase();const matches=snapshot.docs.filter(d=>[d.id,d.data().id,d.data().orderNumber].some(value=>String(value||'').replace(/^#/,'').toLowerCase()===normalized));if(matches.length!==1)return res.status(matches.length?409:404).json({error:'Pedido não encontrado de forma única. Use o identificador do documento.'});ref=matches[0].ref;}
- const updated=await runTransaction(db,async tx=>{const snapshot=await tx.get(ref);if(!snapshot.exists())throw new Error('Pedido não encontrado.');const current=snapshot.data();if(current.paymentProvider==='mercadopago'||current.paymentId&&current.environment==='test')throw new Error('Pagamento gerenciado exclusivamente pelo provedor.');const patch=paymentStatusPatch(current,status,new Date().toISOString());tx.update(ref,patch);return {...current,...patch,id:snapshot.id};});await dbStore.syncFromFirestore().catch(()=>{});return res.json(updated);
- }catch{return res.status(503).json({error:'Não foi possível confirmar a alteração do pedido no Firebase.'});}
+ const id=String(req.params.id||req.body?.id||'').trim(), status=req.body?.status;
+ if(!id || id.includes('/') || !['Pendente','Pago','Entregue','Cancelado','Reembolsado','Estornado'].includes(status))
+  return res.status(400).json({error:'Pedido ou status inválido.'});
+ try {
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const db=paymentDatabase(),collection=db.collection('orders');
+  let ref=collection.doc(id);
+  if(!(await ref.get()).exists){
+   const docs=await collection.get(), normalized=id.replace(/^#/,'').toLowerCase();
+   const matches=docs.docs.filter(d=>[d.id,d.data().id,d.data().orderNumber]
+    .some(v=>String(v||'').replace(/^#/,'').toLowerCase()===normalized));
+   if(matches.length!==1)return res.status(matches.length?409:404)
+    .json({error:'Pedido não encontrado de forma única. Informe o ID do documento.'});
+   ref=matches[0].ref;
+  }
+  const updated=await db.runTransaction(async tx=>{
+   const doc=await tx.get(ref);
+   if(!doc.exists)throw new ProductCatalogError('Pedido não encontrado.',404);
+   const current=doc.data()!;
+   if(current.paymentProvider==='mercadopago' || (current.paymentId && current.environment==='test'))
+    throw new ProductCatalogError('Pagamento controlado pelo provedor.',409);
+   const patch=paymentStatusPatch(current,status,new Date().toISOString());
+   tx.update(ref,patch);
+   return {...current,...patch,id:doc.id};
+  });
+  res.setHeader('Cache-Control','no-store');
+  return res.json(updated);
+ }catch(error){return productError(res,error);}
 };
-
 apiRouter.put('/admin/orders/:id/status', requireAdmin, handleOrderStatusUpdate);
 apiRouter.put('/admin/orders/status', requireAdmin, handleOrderStatusUpdate);
 
