@@ -40,6 +40,7 @@ export function Header({
     ["vip", "VIPs"],
     ["server", "Servidor"],
     ["events", "Eventos"],
+    ["news", "Notícias"],
     ["community", "Comunidade"],
     ["support", "Suporte"],
     ["profile", "Meu perfil"],
