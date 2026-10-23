@@ -91,6 +91,18 @@ function MainAppContent() {
       if (ev) setEvents(ev);
       if (nw) setNews(nw);
       if (soc) setSocialLinks(soc);
+      // Pix calculates charges from Admin Firestore; display the same authoritative
+      // catalogue whenever the API is available, even if browser sync is offline.
+      try {
+        const response = await fetch("/api/storefront/catalog", { cache: "no-store" });
+        if (response.ok) {
+          const catalog = await response.json();
+          if (Array.isArray(catalog.products)) setProducts(catalog.products);
+          if (Array.isArray(catalog.vips)) setVips(catalog.vips);
+        }
+      } catch {
+        // Keep the browser Firestore snapshot as an offline fallback.
+      }
     } catch (err) {
       console.warn("Firestore initial fetch notice:", err);
     } finally {
