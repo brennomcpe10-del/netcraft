@@ -114,6 +114,17 @@ test("isolated Preview single-item read merges partial overrides and hides tombs
     const visible = await readCatalogItem("products", "item", tx, db as any);
     assert.deepEqual(visible, { id: "item", name: "Original", price: 5, active: true });
     assert.equal(documents.get("products/item")?.price, 19.9);
+    documents.delete("previewProducts/item");
+    assert.deepEqual(
+      await readCatalogItem("products", "item", tx, db as any),
+      { id: "item", name: "Original", price: 19.9, active: true },
+    );
+    documents.set("previewVips/new-vip", { name: "VIP isolado", price: 12, active: true });
+    assert.deepEqual(
+      await readCatalogItem("vips", "new-vip", tx, db as any),
+      { id: "new-vip", name: "VIP isolado", price: 12, active: true },
+    );
+    assert.equal(documents.has("vips/new-vip"), false);
     documents.set("previewProducts/item", { __previewDeleted: true });
     assert.equal(await readCatalogItem("products", "item", tx, db as any), null);
   } finally {
