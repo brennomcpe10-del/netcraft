@@ -23,8 +23,10 @@ jobs:
           node-version: '22'
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
-      - name: Install locked dependencies
-        run: bun install --frozen-lockfile
+      - name: Install dependencies for isolated CI runner
+        # bun.lock predates esbuild dependency update. Update only the
+        # temporary runner lockfile; never commit dependency changes here.
+        run: bun install
       - name: TypeScript typecheck
         run: npm run lint
       - name: Automated tests
