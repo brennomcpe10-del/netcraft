@@ -100,7 +100,7 @@ export function visibleCategories(
     .filter(
       (c) => c.active && (c.showWhenEmpty !== false || populated.has(c.id)),
     )
-    .sort((a, b) => a.order - b.order);
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 }
 export function validateCategories(
   value: unknown,
