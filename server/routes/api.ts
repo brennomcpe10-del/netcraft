@@ -178,6 +178,8 @@ function vipDraft(body:any, id:string) {
   throw new ProductCatalogError('Informe até 100 benefícios com até 500 caracteres cada.',400);
  if(typeof body?.price !== 'number')
   throw new ProductCatalogError('Informe o preço do VIP como número.',400);
+ if(body?.order !== undefined && (typeof body.order !== 'number' || !Number.isSafeInteger(body.order) || body.order < 0 || body.order > 1000000))
+  throw new ProductCatalogError('Informe uma ordem inteira de 0 a 1000000 para o VIP.',400);
  const price = body.price;
  const name = typeof body?.name === 'string' ? body.name.trim() : '';
  const duration = typeof body?.duration === 'string' ? body.duration.trim() : '';
@@ -192,7 +194,7 @@ function vipDraft(body:any, id:string) {
   benefits: body.benefits || [],
   color: ['emerald','cyan','blue','purple','amber'].includes(body.color) ? body.color : 'emerald',
   image: typeof body.image === 'string' && body.image.length <= 850000 && (['crown','cube'].includes(body.image) || /^(https:\/\/|\/(?!\/)|data:image\/(png|jpeg|webp|gif);base64,)/.test(body.image)) ? body.image : 'crown',
-  order: Number.isInteger(Number(body.order)) ? Math.max(0,Math.min(1000000,Number(body.order))) : 1,
+  order: body.order ?? 1,
   active: body.active !== false,
   categoryId: typeof body.categoryId === 'string' ? body.categoryId.slice(0,128) : 'vips',
   isPopular: body.isPopular === true,
