@@ -32,13 +32,18 @@ function safeProfile(value:any, id:string): Player {
 }
 async function findExisting(nickname:string) {
  const db=paymentDatabase(),lower=nickname.toLowerCase();
+ const canonical=await db.collection("users").doc(stableId(nickname)).get();
+ if(canonical.exists && String(canonical.data()?.nickname||"").trim().toLowerCase()===lower)
+  return canonical;
+ const indexed=await db.collection("users").where("nicknameLower","==",lower).limit(1).get();
+ if(!indexed.empty)return indexed.docs[0];
+ // Legacy records do not have nicknameLower. Scan only for backward compatibility;
+ // preserve their IDs and existing VIP records rather than duplicate them.
  const [users,players]=await Promise.all([
   db.collection("users").get(),db.collection("players").get(),
  ]);
- // Canonical users collection wins; never trust arbitrary client-provided IDs.
- const found=users.docs.find(d=>String(d.data().nickname||"").trim().toLowerCase()===lower)||
-  players.docs.find(d=>String(d.data().nickname||"").trim().toLowerCase()===lower);
- return found||null;
+ return users.docs.find(d=>String(d.data().nickname||"").trim().toLowerCase()===lower)||
+  players.docs.find(d=>String(d.data().nickname||"").trim().toLowerCase()===lower)||null;
 }
 export async function publicPlayer(nicknameValue:unknown, create=false):Promise<Player|null> {
  const nickname=normalizeNickname(nicknameValue),db=paymentDatabase();
