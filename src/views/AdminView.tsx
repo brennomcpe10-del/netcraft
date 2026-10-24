@@ -109,6 +109,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     environment: 'preview' | 'production' | 'development';
     isolatedPlayerAndSupportData: boolean;
     sharedStoreData: boolean;
+    storeWritesBlocked: boolean;
   } | null>(null);
   const [previewSafetyUnknown, setPreviewSafetyUnknown] = useState(false);
   const [ticketReplies, setTicketReplies] = useState<Record<string,string>>({});
@@ -718,8 +719,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         {previewSafety?.sharedStoreData && (
           <div role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-xs text-amber-200 leading-relaxed">
             <strong>Preview com isolamento parcial.</strong> Os jogadores e chamados de teste são mantidos separados.
-            Produtos, VIPs, cupons, categorias e configurações ainda compartilham o banco de dados usado pela Production.
-            Alterar esses registros aqui também pode afetar a loja principal. Não edite esses dados até a separação completa.
+            Produtos, VIPs, cupons, categorias e configurações ainda consultam dados compartilhados com a Production.
+            <strong> {previewSafety.storeWritesBlocked ? 'As gravações e exclusões dessas áreas estão bloqueadas no servidor.' : 'Não altere esses registros até a separação completa.'}</strong>
+            O Pix de teste e os registros isolados de jogadores/chamados continuam disponíveis.
           </div>
         )}
         {previewSafetyUnknown && (
