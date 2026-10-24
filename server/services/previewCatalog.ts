@@ -71,5 +71,5 @@ export async function readStoreCategories():Promise<StoreCategory[]|null> {
     if(override.exists)return (override.data()?.categories??null) as StoreCategory[]|null;
   }
   const baseline=await db.collection("settings").doc("storeCategories").get();
-  return baseline.exists?(baseline.data()?.categories??null) as StoreCategory[]|null;
+  return baseline.exists ? (baseline.data()?.categories??null) as StoreCategory[]|null : null;
 }
