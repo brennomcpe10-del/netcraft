@@ -2,47 +2,49 @@ import type { Product } from "../../src/types/index.ts";
 import { defaultStoreCategories, validateCategories } from "../../src/lib/storeCategories.ts";
 import { paymentDatabase } from "../payments/database.ts";
 import { ProductCatalogError, type ProductRepository } from "./productCatalog.ts";
+import {
+  catalogWriteReference,
+  readCatalogItem,
+  readStoreCategories,
+} from "./previewCatalog.ts";
+import { isPreviewEnvironment } from "./previewIsolation.ts";
 
-// The admin API uses the server's authenticated Firebase Admin connection.
-// Browser Firebase credentials must never authorize catalogue writes.
+// Production is unchanged. Preview edits are stored in previewProducts only.
+// The public catalog, checkout quote and Pix all resolve the same overrides.
 export const firestoreProducts: ProductRepository = {
   async get(id) {
-    const snapshot = await paymentDatabase().collection("products").doc(id).get();
-    return snapshot.exists
-      ? ({ ...snapshot.data(), id: snapshot.id } as Product)
-      : null;
+    return await readCatalogItem("products",id) as Product|null;
   },
   async categories() {
-    const snapshot = await paymentDatabase().collection("settings").doc("storeCategories").get();
-    if (!snapshot.exists) return defaultStoreCategories;
-    const categories = snapshot.data()?.categories;
+    const categories=await readStoreCategories();
+    if(categories === null)return defaultStoreCategories;
     validateCategories(categories);
     return categories;
   },
   async create(product) {
-    const db = paymentDatabase();
-    const ref = db.collection("products").doc(product.id);
-    await db.runTransaction(async (tx) => {
-      if ((await tx.get(ref)).exists)
-        throw new ProductCatalogError("Este produto já existe. Atualize a lista.", 409);
-      tx.create(ref, product);
+    const db=paymentDatabase(),ref=catalogWriteReference("products",product.id);
+    await db.runTransaction(async tx=>{
+      const existing=await readCatalogItem("products",product.id,tx);
+      if(existing)throw new ProductCatalogError("Este produto já existe. Atualize a lista.",409);
+      // A previously hidden item can be re-created without touching the base.
+      tx.set(ref,product);
     });
   },
   async update(product) {
-    const db = paymentDatabase();
-    const ref = db.collection("products").doc(product.id);
-    await db.runTransaction(async (tx) => {
-      if (!(await tx.get(ref)).exists)
-        throw new ProductCatalogError("O produto foi excluído. Atualize a lista.", 404);
-      tx.set(ref, product, { merge: true });
+    const db=paymentDatabase(),ref=catalogWriteReference("products",product.id);
+    await db.runTransaction(async tx=>{
+      const existing=await readCatalogItem("products",product.id,tx);
+      if(!existing)throw new ProductCatalogError("O produto foi excluído. Atualize a lista.",404);
+      tx.set(ref,product);
     });
   },
   async remove(id) {
-    const db = paymentDatabase();
-    const ref = db.collection("products").doc(id);
-    await db.runTransaction(async (tx) => {
-      await tx.get(ref);
-      tx.delete(ref);
+    const db=paymentDatabase(),ref=catalogWriteReference("products",id);
+    await db.runTransaction(async tx=>{
+      const existing=await readCatalogItem("products",id,tx);
+      if(!existing)throw new ProductCatalogError("Produto não encontrado.",404);
+      if(isPreviewEnvironment())tx.set(ref,{__previewDeleted:true,id});
+      else tx.delete(ref);
     });
   },
 };
