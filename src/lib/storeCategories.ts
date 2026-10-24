@@ -129,7 +129,7 @@ export function validateCategories(
       c.description.length > 500 ||
       typeof c.image !== "string" ||
       c.image.length > 170000 ||
-      !Number.isFinite(c.order) ||
+      (!Number.isFinite(c.order) || c.order < 0 || c.order > 1000000) ||
       typeof c.active !== "boolean"
     )
       throw new Error("Dados da categoria inválidos.");
