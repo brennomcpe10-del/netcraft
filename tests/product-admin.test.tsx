@@ -172,7 +172,7 @@ test("product document identifiers reject unsafe paths and hidden whitespace", a
     "../orders", "folder/kit", " kit", "kit ", "kit\\nother",
     ".", "..", "__proto__.test", "kit?foo=bar", "áudio", "x",
   ]) {
-    await assert.rejects(service.save({ ...product, id }), undefined, id);
+    await assert.rejects(service.save({ ...product, id }), /Identificador de produto inválido/, id);
   }
   assert.equal(data.size, 0);
   const saved = await service.save({ ...product, id: "kit_PVP-001" });
