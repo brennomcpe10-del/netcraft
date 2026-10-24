@@ -162,6 +162,9 @@ apiRouter.get('/vips', async (req,res)=>{
 
 // VIP pricing must be persisted through the authenticated server, never a browser write.
 function vipDraft(body:any, id:string) {
+ if ((body?.active !== undefined && typeof body.active !== 'boolean') ||
+     (body?.isPopular !== undefined && typeof body.isPopular !== 'boolean'))
+  throw new ProductCatalogError('Disponibilidade e destaque do VIP devem ser valores booleanos.',400);
  const price = Number(body?.price);
  const name = typeof body?.name === 'string' ? body.name.trim() : '';
  const duration = typeof body?.duration === 'string' ? body.duration.trim() : '';
