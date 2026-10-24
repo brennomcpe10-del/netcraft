@@ -222,3 +222,15 @@ test("admin rejects unsafe product LivePix links and oversized payment fields", 
   const saved = await service.save({ livepixUrl: "https://livepix.gg/netcraft" }, product.id);
   assert.equal(saved.livepixUrl, "https://livepix.gg/netcraft");
 });
+
+test("existing single-character product IDs remain editable and removable without allowing new short IDs", async () => {
+  const original = { ...product, id: "x" };
+  const { data, repository } = memoryRepository([original]);
+  const service = productCatalog(repository);
+  await assert.rejects(service.save({ ...product, id: "y" }), /Identificador de produto inválido/);
+  const updated = await service.save({ name: "Produto legado" }, "x");
+  assert.equal(updated.id, "x");
+  assert.equal(data.get("x")?.name, "Produto legado");
+  await service.remove("x");
+  assert.equal(data.has("x"), false);
+});
