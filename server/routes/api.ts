@@ -5,6 +5,7 @@ import {revenueReport,brasiliaPeriod} from '../../src/lib/revenue.ts';
 import { adminAuthRouter, requireAdmin, isValidAdminToken } from '../auth/admin.ts';
 import {productCatalog,ProductCatalogError} from '../services/productCatalog.ts';
 import { editorialRepository, EditorialError } from '../services/editorialCatalog.ts';
+import { protectSharedPreviewWrite } from '../services/previewWriteGuard.ts';
 import {firestoreProducts} from '../services/firestoreProducts.ts';
 import {quoteCart,validateCartRequest} from '../../src/lib/cartQuote.ts';
 import {validateCategories} from '../../src/lib/storeCategories.ts';
@@ -111,14 +112,14 @@ apiRouter.get('/settings',async(_req,res)=>{
  try{res.setHeader('Cache-Control','no-store');return res.json(await storeSettings());}
  catch{return res.status(503).json({error:'Não foi possível consultar as configurações.'});}
 });
-apiRouter.put('/admin/settings',requireAdmin,async(req,res)=>{
+apiRouter.put('/admin/settings',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{
   if(!req.body||typeof req.body!=='object'||Array.isArray(req.body))
    return res.status(400).json({error:'Configurações inválidas.'});
   return res.json(await storeSettings(req.body));
  }catch{return res.status(503).json({error:'Não foi possível salvar as configurações.'});}
 });
-apiRouter.put('/admin/settings/livepix',requireAdmin,async(req,res)=>{
+apiRouter.put('/admin/settings/livepix',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  const livePixUrl=req.body?.livePixUrl;
  if(typeof livePixUrl!=='string'||livePixUrl.length>2048)
   return res.status(400).json({error:'URL do LivePix inválida.'});
@@ -130,7 +131,7 @@ apiRouter.put('/admin/settings/livepix',requireAdmin,async(req,res)=>{
   return res.json({success:true,message:'Link do LivePix salvo.',livePixUrl:clean,settings});
  }catch{return res.status(503).json({error:'Não foi possível salvar o link.'});}
 });
-apiRouter.put('/admin/settings/pix',requireAdmin,async(req,res)=>{
+apiRouter.put('/admin/settings/pix',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  const pixUrl=req.body?.pixUrl;
  if(typeof pixUrl!=='string'||pixUrl.length>2048)
   return res.status(400).json({error:'Link ou chave PIX inválido.'});
@@ -180,7 +181,7 @@ function vipDraft(body:any, id:string) {
   pixUrl: typeof body.pixUrl === 'string' ? body.pixUrl.slice(0,2048) : ''
  };
 }
-apiRouter.post('/admin/vips', requireAdmin, async (req,res)=>{
+apiRouter.post('/admin/vips', requireAdmin, protectSharedPreviewWrite, async (req,res)=>{
  try {
   const id = typeof req.body?.id==='string' && req.body.id.trim() ? req.body.id.trim() : `vip-${crypto.randomUUID()}`;
   const vip = vipDraft(req.body,id);
@@ -194,7 +195,7 @@ apiRouter.post('/admin/vips', requireAdmin, async (req,res)=>{
   return res.status(201).json(vip);
  } catch(error){return productError(res,error);}
 });
-apiRouter.put('/admin/vips/:id', requireAdmin, async(req,res)=>{
+apiRouter.put('/admin/vips/:id', requireAdmin, protectSharedPreviewWrite, async(req,res)=>{
  try {
   const id=req.params.id;
   const {paymentDatabase}=await import('../payments/database.ts');
@@ -210,7 +211,7 @@ apiRouter.put('/admin/vips/:id', requireAdmin, async(req,res)=>{
   return res.json(vip);
  } catch(error){return productError(res,error);}
 });
-apiRouter.delete('/admin/vips/:id', requireAdmin, async(req,res)=>{
+apiRouter.delete('/admin/vips/:id', requireAdmin, protectSharedPreviewWrite, async(req,res)=>{
  try {
   const id=req.params.id;
   if(!/^[a-zA-Z0-9_-]{2,128}$/.test(id)) return res.status(400).json({error:'Identificador inválido.'});
@@ -241,7 +242,7 @@ apiRouter.post('/cart/quote', async (req,res)=>{
   return res.status(503).json({error:'Não foi possível consultar o catálogo no servidor. Tente novamente.'});
  }
 });
-apiRouter.put('/admin/store-categories',requireAdmin,async(req,res)=>{
+apiRouter.put('/admin/store-categories',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try {
   validateCategories(req.body?.categories);
   const { paymentDatabase } = await import('../payments/database.ts');
@@ -299,9 +300,9 @@ apiRouter.get('/products', async (req, res) => {
 
 const productsAdmin=productCatalog(firestoreProducts);
 function productError(res:express.Response,error:unknown){return res.status(error instanceof ProductCatalogError?error.status:503).json({error:error instanceof ProductCatalogError?error.message:'Não foi possível confirmar a alteração no Firebase. Tente novamente.'});}
-apiRouter.post('/admin/products',requireAdmin,async(req,res)=>{try{const product=await productsAdmin.save({...req.body,id:req.body.id||`prod-${crypto.randomUUID()}`});dbStore.createProduct(product);return res.status(201).json(product);}catch(error){return productError(res,error);}});
-apiRouter.put('/admin/products/:id',requireAdmin,async(req,res)=>{try{const product=await productsAdmin.save(req.body,req.params.id);dbStore.updateProduct(product.id,product);return res.json(product);}catch(error){return productError(res,error);}});
-apiRouter.delete('/admin/products/:id',requireAdmin,async(req,res)=>{try{const result=await productsAdmin.remove(req.params.id);await dbStore.syncFromFirestore().catch(()=>{});return res.json(result);}catch(error){return productError(res,error);}});
+apiRouter.post('/admin/products',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{try{const product=await productsAdmin.save({...req.body,id:req.body.id||`prod-${crypto.randomUUID()}`});dbStore.createProduct(product);return res.status(201).json(product);}catch(error){return productError(res,error);}});
+apiRouter.put('/admin/products/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{try{const product=await productsAdmin.save(req.body,req.params.id);dbStore.updateProduct(product.id,product);return res.json(product);}catch(error){return productError(res,error);}});
+apiRouter.delete('/admin/products/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{try{const result=await productsAdmin.remove(req.params.id);await dbStore.syncFromFirestore().catch(()=>{});return res.json(result);}catch(error){return productError(res,error);}});
 
 // -------------------------------------------------------------
 // ORDERS & CHECKOUT & GATEWAY WEBHOOK
@@ -393,8 +394,8 @@ const handleOrderStatusUpdate = async(req:express.Request,res:express.Response)=
   return res.json(updated);
  }catch(error){return productError(res,error);}
 };
-apiRouter.put('/admin/orders/:id/status', requireAdmin, handleOrderStatusUpdate);
-apiRouter.put('/admin/orders/status', requireAdmin, handleOrderStatusUpdate);
+apiRouter.put('/admin/orders/:id/status', requireAdmin, protectSharedPreviewWrite, handleOrderStatusUpdate);
+apiRouter.put('/admin/orders/status', requireAdmin, protectSharedPreviewWrite, handleOrderStatusUpdate);
 
 // --- COUPONS MANAGEMENT ROUTES ---
 
@@ -431,7 +432,7 @@ apiRouter.get('/admin/coupons',requireAdmin,async (_req,res)=>{
   return res.json(snap.docs.map(d=>({...d.data(),id:d.id})));
  }catch{return res.status(503).json({error:'Não foi possível consultar os cupons.'});}
 });
-apiRouter.post('/admin/coupons',requireAdmin,async(req,res)=>{
+apiRouter.post('/admin/coupons',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{
   const id=typeof req.body?.id==='string'&&req.body.id.trim()?req.body.id.trim():`cupom-${crypto.randomUUID()}`;
   const coupon=couponDraft(req.body,id);
@@ -444,7 +445,7 @@ apiRouter.post('/admin/coupons',requireAdmin,async(req,res)=>{
   return res.status(201).json(coupon);
  }catch(error){return productError(res,error);}
 });
-apiRouter.put('/admin/coupons/:id',requireAdmin,async(req,res)=>{
+apiRouter.put('/admin/coupons/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{
   const id=req.params.id;
   const {paymentDatabase}=await import('../payments/database.ts');
@@ -460,7 +461,7 @@ apiRouter.put('/admin/coupons/:id',requireAdmin,async(req,res)=>{
   return res.json(coupon);
  }catch(error){return productError(res,error);}
 });
-apiRouter.delete('/admin/coupons/:id',requireAdmin,async(req,res)=>{
+apiRouter.delete('/admin/coupons/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{
   const id=req.params.id;
   if(!/^[a-zA-Z0-9_-]{2,128}$/.test(id))return res.status(400).json({error:'Identificador inválido.'});
@@ -488,21 +489,6 @@ apiRouter.post('/coupons/validate', async (req, res) => {
     if(docs.size === 1) coupon={...docs.docs[0].data(),id:docs.docs[0].id};
   }catch{
     return res.status(503).json({valid:false,error:'Não foi possível validar o cupom no servidor.'});
-  }
-
-  if (!coupon) {
-    try {
-      const { db } = await import('../../src/lib/firebase.ts');
-      const { getDocs, collection } = await import('firebase/firestore');
-      const snap = await getDocs(collection(db, 'coupons'));
-      for (const d of snap.docs) {
-        const data = d.data();
-        if (data.code && String(data.code).trim().toUpperCase() === cleanCode) {
-          coupon = { ...data, id: d.id } as any;
-          break;
-        }
-      }
-    } catch {}
   }
 
   if (!coupon) {
@@ -559,7 +545,7 @@ function isProviderManagedLegacyOrder(value:any) {
  return value?.paymentProvider === 'mercadopago' ||
   (Boolean(value?.paymentId) && value?.environment === 'test');
 }
-apiRouter.post('/admin/orders/bulk-delete',requireAdmin,async(req,res)=>{
+apiRouter.post('/admin/orders/bulk-delete',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  const filter=req.body?.filter;
  if(!['all','concluidos','pendentes','cancelados'].includes(filter))
   return res.status(400).json({error:'Filtro de exclusão inválido.'});
@@ -588,7 +574,7 @@ apiRouter.post('/admin/orders/bulk-delete',requireAdmin,async(req,res)=>{
   });
  }catch{return res.status(503).json({error:'Não foi possível concluir a exclusão no banco.'});}
 });
-apiRouter.delete('/admin/orders/:id',requireAdmin,async(req,res)=>{
+apiRouter.delete('/admin/orders/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{
   const id=String(req.params.id||'').trim();
   if(!id||id.includes('/'))return res.status(400).json({error:'Identificador inválido.'});
@@ -628,15 +614,15 @@ apiRouter.get('/events',async(req,res)=>{
   return res.json(items);
  }catch{return res.status(503).json({error:'Não foi possível consultar eventos.'});}
 });
-apiRouter.post('/admin/events',requireAdmin,async(req,res)=>{
+apiRouter.post('/admin/events',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{return res.status(201).json(await editorialRepository('events').save(req.body));}
  catch(error){return editorialFailure(res,error);}
 });
-apiRouter.put('/admin/events/:id',requireAdmin,async(req,res)=>{
+apiRouter.put('/admin/events/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{return res.json(await editorialRepository('events').save(req.body,req.params.id));}
  catch(error){return editorialFailure(res,error);}
 });
-apiRouter.delete('/admin/events/:id',requireAdmin,async(req,res)=>{
+apiRouter.delete('/admin/events/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{return res.json(await editorialRepository('events').remove(req.params.id));}
  catch(error){return editorialFailure(res,error);}
 });
@@ -649,15 +635,15 @@ apiRouter.get('/news',async(req,res)=>{
   return res.json(items);
  }catch{return res.status(503).json({error:'Não foi possível consultar notícias.'});}
 });
-apiRouter.post('/admin/news',requireAdmin,async(req,res)=>{
+apiRouter.post('/admin/news',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{return res.status(201).json(await editorialRepository('news').save(req.body));}
  catch(error){return editorialFailure(res,error);}
 });
-apiRouter.put('/admin/news/:id',requireAdmin,async(req,res)=>{
+apiRouter.put('/admin/news/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{return res.json(await editorialRepository('news').save(req.body,req.params.id));}
  catch(error){return editorialFailure(res,error);}
 });
-apiRouter.delete('/admin/news/:id',requireAdmin,async(req,res)=>{
+apiRouter.delete('/admin/news/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{return res.json(await editorialRepository('news').remove(req.params.id));}
  catch(error){return editorialFailure(res,error);}
 });
@@ -670,15 +656,15 @@ apiRouter.get('/community',async(req,res)=>{
   return res.json(items);
  }catch{return res.status(503).json({error:'Não foi possível consultar a comunidade.'});}
 });
-apiRouter.post('/admin/community',requireAdmin,async(req,res)=>{
+apiRouter.post('/admin/community',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{return res.status(201).json(await editorialRepository('community').save(req.body));}
  catch(error){return editorialFailure(res,error);}
 });
-apiRouter.put('/admin/community/:id',requireAdmin,async(req,res)=>{
+apiRouter.put('/admin/community/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{return res.json(await editorialRepository('community').save(req.body,req.params.id));}
  catch(error){return editorialFailure(res,error);}
 });
-apiRouter.delete('/admin/community/:id',requireAdmin,async(req,res)=>{
+apiRouter.delete('/admin/community/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
  try{return res.json(await editorialRepository('community').remove(req.params.id));}
  catch(error){return editorialFailure(res,error);}
 });
