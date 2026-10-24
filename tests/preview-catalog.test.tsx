@@ -50,3 +50,23 @@ test("Preview backend storefront, pricing and Pix share the overlay resolver", (
     assert.match(rules,new RegExp(`match /${col}/\\{id\\} \\{ allow read, write: if false; \\}`));
   }
 });
+
+test("partial Preview edits preserve fields needed by storefront and checkout", () => {
+  const baseline = [{ id:"kit", name:"Kit original", price:19.9, active:true, rewardDraft:{ kind:"item" } }];
+  const overlays = [{ id:"kit", name:"Kit renomeado" }];
+  const result = mergeCatalogSnapshots(baseline, overlays);
+  assert.deepEqual(result, [{ ...baseline[0], name:"Kit renomeado" }]);
+  assert.deepEqual(baseline, [{ id:"kit", name:"Kit original", price:19.9, active:true, rewardDraft:{ kind:"item" } }]);
+  assert.deepEqual(overlays, [{ id:"kit", name:"Kit renomeado" }]);
+});
+
+test("partial VIP edits retain base duration and benefits", () => {
+  const baseline = [{ id:"vip", name:"VIP", price:10, duration:"30 dias", benefits:["Kit"] }];
+  const result = mergeCatalogSnapshots(baseline, [{ id:"vip", price:12 }]);
+  assert.deepEqual(result, [{ ...baseline[0], price:12 }]);
+});
+
+test("tombstones still hide records even when a base has additional fields", () => {
+  const result = mergeCatalogSnapshots([{ id:"kit", price:10, active:true }], [{ id:"kit", __previewDeleted:true }]);
+  assert.deepEqual(result, []);
+});
