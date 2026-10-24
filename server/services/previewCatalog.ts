@@ -46,7 +46,9 @@ export async function readCatalogItem(
   return source.exists ? {...source.data(),id:source.id} as CatalogRecord : null;
 }
 
-export async function listCatalog(kind: CatalogKind):Promise<CatalogRecord[]> {
+export function listCatalog(kind:"products"):Promise<Product[]>;
+export function listCatalog(kind:"vips"):Promise<VIP[]>;
+export async function listCatalog(kind:CatalogKind):Promise<CatalogRecord[]> {
   const db=paymentDatabase();
   const baseline=await db.collection(kind).get();
   const original=baseline.docs.map(d=>({...d.data(),id:d.id} as CatalogRecord));
