@@ -241,9 +241,8 @@ apiRouter.post('/cart/quote', async (req,res)=>{
   if(req.body.couponCode) return res.status(409).json({error:'Cupons indisponíveis para cobranças fixas.'});
   // The cart quote must use the same server-side Firestore Admin connection as Pix.
   // The browser Firebase SDK cannot reliably access Firestore from Vercel functions.
-  const {paymentDatabase}=await import('../payments/database.ts');
-  const db=paymentDatabase();
-  const items=await Promise.all(req.body.lines.map(async(line:any)=>{const snap=await db.collection(line.productType==='vip'?'vips':'products').doc(line.productId).get();return snap.exists?{...snap.data(),id:snap.id}:null;}));
+  const items=await Promise.all(req.body.lines.map((line:any)=>
+   readCatalogItem(line.productType==='vip'?'vips':'products',line.productId)));
   res.setHeader('Cache-Control','no-store');
   return res.json(quoteCart(req.body.lines,items as any));
  }catch(error){
@@ -251,67 +250,71 @@ apiRouter.post('/cart/quote', async (req,res)=>{
   return res.status(503).json({error:'Não foi possível consultar o catálogo no servidor. Tente novamente.'});
  }
 });
-apiRouter.put('/admin/store-categories',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
+apiRouter.put('/admin/store-categories',requireAdmin,async(req,res)=>{
  try {
   validateCategories(req.body?.categories);
-  const { paymentDatabase } = await import('../payments/database.ts');
-  await paymentDatabase().collection('settings').doc('storeCategories').set(
-   { categories: req.body.categories },
-   { merge: true },
-  );
+  await previewCategoryReference().set({categories:req.body.categories},{merge:true});
   return res.json({success:true});
- } catch (error) {
-  const invalid = error instanceof Error && /categoria|category|categories|duplicad|obrigat|invalid/i.test(error.message);
-  return res.status(invalid ? 400 : 503).json({
-   error: invalid ? 'Confira os dados das categorias.' : 'Não foi possível salvar as categorias no servidor.',
+ }catch(error){
+  const invalid=error instanceof Error&&/categoria|category|categories|duplicad|obrigat|invalid/i.test(error.message);
+  return res.status(invalid?400:503).json({
+   error:invalid?'Confira os dados das categorias.':'Não foi possível salvar as categorias no servidor.'
   });
  }
 });
 
 // Public catalogue is served from the same authoritative database as Pix checkout.
 // Never rely on the in-memory snapshot or a browser Firestore connection for prices.
-apiRouter.get('/storefront/catalog', async (_req,res)=>{
+apiRouter.get('/storefront/catalog',async(_req,res)=>{
  try {
-  const {paymentDatabase}=await import('../payments/database.ts');
-  const db=paymentDatabase();
-  const [products,vips,settings]=await Promise.all([
-   db.collection('products').get(),
-   db.collection('vips').get(),
-   db.collection('settings').doc('storeCategories').get()
+  const [products,vips,categories]=await Promise.all([
+   listCatalog('products'),listCatalog('vips'),readStoreCategories()
   ]);
-  const categories=settings.exists?settings.data()?.categories:undefined;
-  if(categories!==undefined)validateCategories(categories);
+  if(categories!==null)validateCategories(categories);
   res.setHeader('Cache-Control','no-store');
   return res.json({
-   products:products.docs.map(d=>({...d.data(),id:d.id})).filter((p:any)=>p.active===true),
-   vips:vips.docs.map(d=>({...d.data(),id:d.id})).filter((v:any)=>v.active===true),
-   categories:categories||null,
-   environment:'test'
+   products:products.filter(p=>p.active===true),
+   vips:vips.filter(v=>v.active===true),
+   categories:categories||null,environment:'test'
   });
- }catch{
-  return res.status(503).json({error:'Não foi possível carregar o catálogo oficial.'});
- }
+ }catch{return res.status(503).json({error:'Não foi possível carregar o catálogo oficial.'});}
 });
 
-apiRouter.get('/products', async (req, res) => {
+apiRouter.get('/products',async(req,res)=>{
  try {
-  const {paymentDatabase}=await import('../payments/database.ts');
-  const snap=await paymentDatabase().collection('products').get();
-  const token=String(req.headers.authorization || '').replace(/^Bearer /,'');
-  const includeInactive=req.query.all==='true' && isValidAdminToken(token);
+  const items=await listCatalog('products');
+  const token=String(req.headers.authorization||'').replace(/^Bearer /,'');
+  const includeInactive=req.query.all==='true'&&isValidAdminToken(token);
   const category=typeof req.query.category==='string'?req.query.category:null;
   res.setHeader('Cache-Control','no-store');
-  return res.json(snap.docs.map(d=>({...d.data(),id:d.id}))
-   .filter((p:any)=>(includeInactive||p.active===true)&&(!category||category==='all'||p.category===category))
-   .sort((a:any,b:any)=>Number(a.order||0)-Number(b.order||0)));
+  return res.json(items.filter(p=>(includeInactive||p.active===true)&&(!category||category==='all'||p.category===category))
+   .sort((a,b)=>Number(a.order||0)-Number(b.order||0)));
  }catch{return res.status(503).json({error:'Não foi possível consultar os produtos.'});}
 });
 
 const productsAdmin=productCatalog(firestoreProducts);
 function productError(res:express.Response,error:unknown){return res.status(error instanceof ProductCatalogError?error.status:503).json({error:error instanceof ProductCatalogError?error.message:'Não foi possível confirmar a alteração no Firebase. Tente novamente.'});}
-apiRouter.post('/admin/products',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{try{const product=await productsAdmin.save({...req.body,id:req.body.id||`prod-${crypto.randomUUID()}`});dbStore.createProduct(product);return res.status(201).json(product);}catch(error){return productError(res,error);}});
-apiRouter.put('/admin/products/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{try{const product=await productsAdmin.save(req.body,req.params.id);dbStore.updateProduct(product.id,product);return res.json(product);}catch(error){return productError(res,error);}});
-apiRouter.delete('/admin/products/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{try{const result=await productsAdmin.remove(req.params.id);await dbStore.syncFromFirestore().catch(()=>{});return res.json(result);}catch(error){return productError(res,error);}});
+apiRouter.post('/admin/products',requireAdmin,async(req,res)=>{
+ try{
+  const product=await productsAdmin.save({...req.body,id:req.body.id||`prod-${crypto.randomUUID()}`});
+  if(!isPreviewEnvironment())dbStore.createProduct(product);
+  return res.status(201).json(product);
+ }catch(error){return productError(res,error);}
+});
+apiRouter.put('/admin/products/:id',requireAdmin,async(req,res)=>{
+ try{
+  const product=await productsAdmin.save(req.body,req.params.id);
+  if(!isPreviewEnvironment())dbStore.updateProduct(product.id,product);
+  return res.json(product);
+ }catch(error){return productError(res,error);}
+});
+apiRouter.delete('/admin/products/:id',requireAdmin,async(req,res)=>{
+ try{
+  const result=await productsAdmin.remove(req.params.id);
+  if(!isPreviewEnvironment())await dbStore.syncFromFirestore().catch(()=>{});
+  return res.json(result);
+ }catch(error){return productError(res,error);}
+});
 
 // -------------------------------------------------------------
 // ORDERS & CHECKOUT & GATEWAY WEBHOOK
