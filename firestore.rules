@@ -12,13 +12,15 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if true;
-      allow write: if isValidId(userId);
+      // Pending safe rollout to Firebase after Production compatibility review.
+      // Preview uses Firebase Admin SDK; nickname-only access is not verification.
+      allow read, write: if false;
     }
 
     match /players/{playerId} {
-      allow read: if true;
-      allow write: if isValidId(playerId);
+      // Pending safe rollout to Firebase after Production compatibility review.
+      // Preview uses Firebase Admin SDK; nickname-only access is not verification.
+      allow read, write: if false;
     }
 
     match /vips/{vipId} {
@@ -62,8 +64,9 @@ service cloud.firestore {
     }
 
     match /tickets/{ticketId} {
-      allow read: if true;
-      allow write: if isValidId(ticketId);
+      // Pending safe rollout to Firebase after Production compatibility review.
+      // Preview uses Firebase Admin SDK; nickname-only access is not verification.
+      allow read, write: if false;
     }
 
     match /stats/{statId} {
