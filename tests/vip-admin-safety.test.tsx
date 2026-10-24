@@ -43,3 +43,12 @@ test("VIP active and featured settings require actual boolean values", () => {
   assert.match(draft, /body\.active !== false/);
   assert.match(draft, /body\.isPopular === true/);
 });
+
+test("VIP payment fields reject oversized values and unsafe LivePix schemes", () => {
+  const source = readFileSync(new URL("../server/routes/api.ts", import.meta.url), "utf8");
+  const draft = source.slice(source.indexOf("function vipDraft("), source.indexOf("apiRouter.post('/admin/vips'"));
+  assert.match(draft, /\['livepixUrl','pixUrl'\]/);
+  assert.match(draft, /value\.length > 2048/);
+  assert.match(draft, /typeof value !== 'string'/);
+  assert.ok(draft.includes(String.raw`/^https?:\/\//i.test(body.livepixUrl.trim())`));
+});
