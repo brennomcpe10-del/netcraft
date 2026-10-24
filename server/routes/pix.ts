@@ -20,6 +20,11 @@ export function createPixRouter(
   },
 ) {
   const pixRouter = express.Router();
+  // Payment status, errors and webhook responses must never be cached.
+  pixRouter.use((_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
   const idFor = (key: string) =>
     crypto.createHash("sha256").update(key).digest("hex");
   function service() {
