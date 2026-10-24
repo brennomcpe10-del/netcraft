@@ -59,6 +59,7 @@ export const api = {
   async getEnvironmentStatus(adminToken: string): Promise<{
     environment: 'preview' | 'production' | 'development';
     isolatedPlayerAndSupportData: boolean;
+    isolatedPreviewCatalog: boolean;
     sharedStoreData: boolean;
     storeWritesBlocked: boolean;
   }> {
