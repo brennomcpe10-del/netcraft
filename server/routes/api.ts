@@ -165,6 +165,13 @@ function vipDraft(body:any, id:string) {
  if ((body?.active !== undefined && typeof body.active !== 'boolean') ||
      (body?.isPopular !== undefined && typeof body.isPopular !== 'boolean'))
   throw new ProductCatalogError('Disponibilidade e destaque do VIP devem ser valores booleanos.',400);
+ for (const field of ['livepixUrl','pixUrl'] as const) {
+  const value=body?.[field];
+  if(value !== undefined && (typeof value !== 'string' || value.length > 2048))
+   throw new ProductCatalogError('Campo de pagamento do VIP inválido.',400);
+ }
+ if(body?.livepixUrl?.trim() && !/^https?:\/\//i.test(body.livepixUrl.trim()))
+  throw new ProductCatalogError('O link LivePix deve começar com http:// ou https://.',400);
  const price = Number(body?.price);
  const name = typeof body?.name === 'string' ? body.name.trim() : '';
  const duration = typeof body?.duration === 'string' ? body.duration.trim() : '';
