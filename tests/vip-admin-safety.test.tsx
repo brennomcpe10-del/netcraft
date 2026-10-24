@@ -79,3 +79,12 @@ test("VIP price must be numeric and must not silently coerce null or strings", (
   assert.match(draft, /const price = body\.price/);
   assert.match(draft, /Number\.isFinite\(price\)/);
 });
+
+test("VIP sort order rejects non-integers and out-of-range values instead of clamping", () => {
+  const source = readFileSync(new URL("../server/routes/api.ts", import.meta.url), "utf8");
+  const draft = source.slice(source.indexOf("function vipDraft("), source.indexOf("apiRouter.post('/admin/vips'"));
+  assert.match(draft, /typeof body\.order !== 'number'/);
+  assert.match(draft, /!Number\.isSafeInteger\(body\.order\)/);
+  assert.match(draft, /body\.order < 0 \|\| body\.order > 1000000/);
+  assert.match(draft, /order: body\.order \?\? 1/);
+});
