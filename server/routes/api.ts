@@ -174,6 +174,8 @@ function vipDraft(body:any, id:string) {
   throw new ProductCatalogError('O link LivePix deve começar com http:// ou https://.',400);
  if(body?.description !== undefined && typeof body.description !== 'string')
   throw new ProductCatalogError('A descrição do VIP deve ser um texto.',400);
+ if(body?.benefits !== undefined && (!Array.isArray(body.benefits) || body.benefits.length > 100 || body.benefits.some((x:unknown)=>typeof x !== 'string' || x.length > 500)))
+  throw new ProductCatalogError('Informe até 100 benefícios com até 500 caracteres cada.',400);
  const price = Number(body?.price);
  const name = typeof body?.name === 'string' ? body.name.trim() : '';
  const duration = typeof body?.duration === 'string' ? body.duration.trim() : '';
@@ -185,7 +187,7 @@ function vipDraft(body:any, id:string) {
  return {
   id, name, price, duration,
   description: String(body.description || '').slice(0,10000),
-  benefits: Array.isArray(body.benefits) ? body.benefits.filter((x:unknown)=>typeof x==='string').slice(0,100).map((x:string)=>x.slice(0,500)) : [],
+  benefits: body.benefits || [],
   color: ['emerald','cyan','blue','purple','amber'].includes(body.color) ? body.color : 'emerald',
   image: typeof body.image === 'string' && body.image.length <= 850000 && (['crown','cube'].includes(body.image) || /^(https:\/\/|\/(?!\/)|data:image\/(png|jpeg|webp|gif);base64,)/.test(body.image)) ? body.image : 'crown',
   order: Number.isInteger(Number(body.order)) ? Math.max(0,Math.min(1000000,Number(body.order))) : 1,
