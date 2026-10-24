@@ -185,7 +185,7 @@ function vipDraft(body:any, id:string) {
   description: String(body.description || '').slice(0,10000),
   benefits: Array.isArray(body.benefits) ? body.benefits.filter((x:unknown)=>typeof x==='string').slice(0,100).map((x:string)=>x.slice(0,500)) : [],
   color: ['emerald','cyan','blue','purple','amber'].includes(body.color) ? body.color : 'emerald',
-  image: typeof body.image === 'string' ? body.image.slice(0,850000) : 'crown',
+  image: typeof body.image === 'string' && body.image.length <= 850000 && (['crown','cube'].includes(body.image) || /^(https:\/\/|\/(?!\/)|data:image\/(png|jpeg|webp|gif);base64,)/.test(body.image)) ? body.image : 'crown',
   order: Number.isInteger(Number(body.order)) ? Math.max(0,Math.min(1000000,Number(body.order))) : 1,
   active: body.active !== false,
   categoryId: typeof body.categoryId === 'string' ? body.categoryId.slice(0,128) : 'vips',
