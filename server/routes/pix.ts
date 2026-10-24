@@ -143,7 +143,7 @@ export function createPixRouter(
           // secrets, request headers, payloads or HMAC material.
           const queryIdShape = /^ORD[A-Z0-9]{20,40}$/.test(id)
             ? "order"
-            : /^\\d+$/.test(id)
+            : /^\d+$/.test(id)
               ? "numeric"
               : id
                 ? "other"
