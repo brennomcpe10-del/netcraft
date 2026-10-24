@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { Player, VIP, ActiveVip } from "../../src/types/index.ts";
 import { paymentDatabase } from "../payments/database.ts";
+import { managedCollection, isPreviewEnvironment } from "./previewIsolation.ts";
 
 export class PlayerError extends Error {
   constructor(message: string, public readonly statusCode=400) { super(message); }
@@ -32,13 +33,15 @@ function safeProfile(value:any, id:string): Player {
 }
 async function findExisting(nickname:string) {
  const db=paymentDatabase(),lower=nickname.toLowerCase();
- const canonical=await db.collection("users").doc(stableId(nickname)).get();
+ const collection=db.collection(managedCollection("players"));
+ const canonical=await collection.doc(stableId(nickname)).get();
  if(canonical.exists && String(canonical.data()?.nickname||"").trim().toLowerCase()===lower)
   return canonical;
- const indexed=await db.collection("users").where("nicknameLower","==",lower).limit(1).get();
+ const indexed=await collection.where("nicknameLower","==",lower).limit(1).get();
  if(!indexed.empty)return indexed.docs[0];
- // Legacy records do not have nicknameLower. Scan only for backward compatibility;
- // preserve their IDs and existing VIP records rather than duplicate them.
+ if(isPreviewEnvironment())return null;
+ // Existing Production records may predate nicknameLower. Read both legacy
+ // locations there, but NEVER import them into the Preview collection.
  const [users,players]=await Promise.all([
   db.collection("users").get(),db.collection("players").get(),
  ]);
@@ -50,7 +53,7 @@ export async function publicPlayer(nicknameValue:unknown, create=false):Promise<
  const found=await findExisting(nickname);
  if(found) return safeProfile(found.data(),found.id);
  if(!create)return null;
- const ref=db.collection("users").doc(stableId(nickname));
+ const ref=db.collection(managedCollection("players")).doc(stableId(nickname));
  const data=await db.runTransaction(async tx=>{
   const old=await tx.get(ref);
   if(old.exists)return old.data()!;
@@ -64,11 +67,13 @@ export async function publicPlayer(nicknameValue:unknown, create=false):Promise<
 }
 export async function listAdminPlayers(search: unknown):Promise<Player[]> {
  const query=typeof search==="string"?search.trim().toLowerCase().slice(0,64):"";
- const db=paymentDatabase(),[users,players]=await Promise.all([
-  db.collection("users").get(),db.collection("players").get()
- ]);
+ const db=paymentDatabase();
+ const snapshots=isPreviewEnvironment()
+  ? [await db.collection(managedCollection("players")).get()]
+  : await Promise.all([db.collection("users").get(),db.collection("players").get()]);
+ const docs=snapshots.flatMap(snapshot=>snapshot.docs);
  const map=new Map<string,Player>();
- for(const snap of [...users.docs,...players.docs]){
+ for(const snap of docs){
   try{
    const profile=safeProfile(snap.data(),snap.id),key=profile.nickname.toLowerCase();
    if(!map.has(key))map.set(key,profile);
@@ -82,7 +87,7 @@ export async function adminCreatePlayer(nicknameValue:unknown,vipIdValue:unknown
  const existing=await findExisting(nickname);
  const id=existing?.id||stableId(nickname);
  if(!idValid(id))throw new PlayerError("ID antigo do jogador inválido.",409);
- const db=paymentDatabase(),ref=db.collection("users").doc(id);
+ const db=paymentDatabase(),ref=db.collection(managedCollection("players")).doc(id);
  let vip:VIP|null=null;
  if(vipIdValue!==undefined&&vipIdValue!==null&&vipIdValue!==""){
   if(typeof vipIdValue!=="string"||!idValid(vipIdValue))throw new PlayerError("VIP inválido.");
@@ -113,8 +118,15 @@ export async function adminCreatePlayer(nicknameValue:unknown,vipIdValue:unknown
 }
 export async function adminDeletePlayer(id:unknown):Promise<boolean> {
  if(typeof id!=="string"||!idValid(id))throw new PlayerError("ID inválido.");
- const db=paymentDatabase(),users=db.collection("users").doc(id),
-  players=db.collection("players").doc(id);
+ const db=paymentDatabase();
+ if(isPreviewEnvironment()){
+  const ref=db.collection(managedCollection("players")).doc(id);
+  const snap=await ref.get();
+  if(!snap.exists)return false;
+  await ref.delete();
+  return true;
+ }
+ const users=db.collection("users").doc(id),players=db.collection("players").doc(id);
  const [u,p]=await Promise.all([users.get(),players.get()]);
  if(!u.exists&&!p.exists)return false;
  const batch=db.batch();
