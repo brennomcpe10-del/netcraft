@@ -36,3 +36,12 @@ test("player and ticket services use Preview-aware collection paths", () => {
   assert.match(tickets,/paymentDatabase\(\)\.collection\(managedCollection\("supportTickets"\)\)/);
   assert.match(tickets,/db\.collection\(managedCollection\("supportTickets"\)\)/);
 });
+
+test("admin panel warns when the Preview catalog is still shared with Production", () => {
+  const api=readFileSync(new URL("../server/routes/api.ts",import.meta.url),"utf8");
+  const panel=readFileSync(new URL("../src/views/AdminView.tsx",import.meta.url),"utf8");
+  assert.match(api,/get\('\/admin\/environment', requireAdmin/);
+  assert.match(api,/sharedStoreData:stage==='preview'/);
+  assert.match(panel,/api\.getEnvironmentStatus\(adminToken\)/);
+  assert.match(panel,/Produtos, VIPs, cupons, categorias e configurações ainda compartilham/);
+});
