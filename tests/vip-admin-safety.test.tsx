@@ -52,3 +52,13 @@ test("VIP payment fields reject oversized values and unsafe LivePix schemes", ()
   assert.match(draft, /typeof value !== 'string'/);
   assert.ok(draft.includes(String.raw`/^https?:\/\//i.test(body.livepixUrl.trim())`));
 });
+
+test("VIP images are limited to approved URLs, local assets or safe placeholders", () => {
+  const source = readFileSync(new URL("../server/routes/api.ts", import.meta.url), "utf8");
+  const draft = source.slice(source.indexOf("function vipDraft("), source.indexOf("apiRouter.post('/admin/vips'"));
+  assert.match(draft, /body\.image\.length <= 850000/);
+  assert.match(draft, /\['crown','cube'\]\.includes\(body\.image\)/);
+  assert.ok(draft.includes("data:image"));
+  assert.ok(draft.includes("https:"));
+  assert.match(draft, /\? body\.image : 'crown'/);
+});
