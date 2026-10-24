@@ -70,3 +70,12 @@ test("tombstones still hide records even when a base has additional fields", () 
   const result = mergeCatalogSnapshots([{ id:"kit", price:10, active:true }], [{ id:"kit", __previewDeleted:true }]);
   assert.deepEqual(result, []);
 });
+
+test("Preview internal deletion marker is never returned in visible catalog entries", () => {
+  const original = [{ id: "p1", name: "Base", price: 9 }];
+  const override = [{ id: "p1", price: 7, __previewDeleted: false }];
+  const result = mergeCatalogSnapshots(original, override);
+  assert.deepEqual(result, [{ id: "p1", name: "Base", price: 7 }]);
+  assert.equal(override[0].__previewDeleted, false);
+  assert.equal(original[0].price, 9);
+});
