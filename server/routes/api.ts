@@ -18,6 +18,18 @@ export const apiRouter = express.Router();
 apiRouter.use('/admin', adminAuthRouter);
 apiRouter.use(identityRouter);
 apiRouter.use(pixRouter);
+// Warn administrators of the remaining shared database boundary.
+// No credentials, project identifiers or tokens are returned.
+apiRouter.get('/admin/environment', requireAdmin, (_req,res)=>{
+ const stage=process.env.VERCEL_ENV==='preview'?'preview':
+  process.env.VERCEL_ENV==='production'?'production':'development';
+ res.setHeader('Cache-Control','no-store');
+ return res.json({
+  environment:stage,
+  isolatedPlayerAndSupportData:stage==='preview',
+  sharedStoreData:stage==='preview',
+ });
+});
 apiRouter.get('/admin/revenue',requireAdmin,async(req,res)=>{
  try{const period=typeof req.query.period==='string'?req.query.period:brasiliaPeriod(new Date())!;if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(period))return res.status(400).json({error:'Selecione mês e ano válidos.'});
  const {paymentDatabase}=await import('../payments/database.ts');
