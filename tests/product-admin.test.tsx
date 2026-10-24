@@ -192,3 +192,15 @@ test("admin rejects malformed product description and highlights before persisti
   }
   assert.deepEqual(data.get(product.id), product);
 });
+
+test("admin rejects non-string product names and image values", async () => {
+  const { data, repository } = memoryRepository([product]);
+  const service = productCatalog(repository);
+  for (const patch of [
+    { name: 123 }, { name: true }, { name: { toString: () => "Fake" } },
+    { image: false }, { image: 77 },
+  ]) {
+    await assert.rejects(service.save(patch as any, product.id));
+  }
+  assert.deepEqual(data.get(product.id), product);
+});
