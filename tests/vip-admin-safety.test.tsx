@@ -62,3 +62,10 @@ test("VIP images are limited to approved URLs, local assets or safe placeholders
   assert.ok(draft.includes("https:"));
   assert.match(draft, /\? body\.image : 'crown'/);
 });
+
+test("VIP admin rejects non-text descriptions instead of coercing them", () => {
+  const source = readFileSync(new URL("../server/routes/api.ts", import.meta.url), "utf8");
+  const draft = source.slice(source.indexOf("function vipDraft("), source.indexOf("apiRouter.post('/admin/vips'"));
+  assert.match(draft, /body\?\.description !== undefined && typeof body\.description !== 'string'/);
+  assert.match(draft, /A descrição do VIP deve ser um texto/);
+});
