@@ -47,12 +47,11 @@ async function adminRequest<T>(path: string, options: RequestInit): Promise<T> {
   let res: Response;
   try { res = await fetch(`${API_BASE}${path}`, {...options, cache:'no-store', signal:AbortSignal.timeout(15000)}); }
   catch { throw new Error('Não foi possível conectar à API administrativa. Verifique sua conexão e tente novamente.'); }
+  // Auth failures invalidate the admin session even if a proxy returned HTML.
+  if (!res.ok) notifyIfSessionExpired(res.status);
   const data = await res.json().catch(() => null);
   if (!data || typeof data !== 'object') throw new Error('A API administrativa não respondeu em JSON. Verifique o deploy e as rotas /api no Vercel.');
-  if (!res.ok) {
-    notifyIfSessionExpired(res.status);
-    throw new Error(data.error || `Falha no acesso administrativo (HTTP ${res.status}).`);
-  }
+  if (!res.ok) throw new Error(data.error || `Falha no acesso administrativo (HTTP ${res.status}).`);
   return data as T;
 }
 
