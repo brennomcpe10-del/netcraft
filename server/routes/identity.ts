@@ -1,5 +1,6 @@
 import express from "express";
 import { requireAdmin } from "../auth/admin.ts";
+import { protectSharedPreviewWrite } from "../services/previewWriteGuard.ts";
 import { validateLogo } from "../services/logoValidation.ts";
 import {
   readIdentity,
@@ -22,6 +23,7 @@ identityRouter.get("/identity", async (_req, res) => {
 identityRouter.post(
   "/admin/identity/upload",
   requireAdmin,
+  protectSharedPreviewWrite,
   async (req, res) => {
     let validated;
     try {
@@ -61,7 +63,7 @@ identityRouter.post(
     }
   },
 );
-identityRouter.put("/admin/identity", requireAdmin, async (req, res) => {
+identityRouter.put("/admin/identity", requireAdmin, protectSharedPreviewWrite, async (req, res) => {
   try {
     const asset =
       req.body.reset === true
