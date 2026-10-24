@@ -34,3 +34,25 @@ test("visible storefront categories retain stable order when priorities tie", as
   assert.deepEqual(result.map(c => c.id), ["alpha", "zebra"]);
   assert.deepEqual(categories, original);
 });
+
+test("category image validation rejects unsafe schemes and invalid paths", () => {
+  for (const image of ["javascript:alert(1)", "//another-host/image.png", "http://not-https.example/image.png"]) {
+    assert.throws(
+      () => validateCategories([{ ...defaultStoreCategories[0], image }]),
+      /Use imagem HTTPS ou caminho local/,
+      image,
+    );
+  }
+});
+
+test("category admin endpoint distinguishes bad input from storage failures", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../server/routes/api.ts", import.meta.url), "utf8");
+  const start = source.indexOf("apiRouter.put('/admin/store-categories'");
+  const end = source.indexOf("// Public catalogue", start);
+  assert.ok(start >= 0 && end > start);
+  const route = source.slice(start, end);
+  assert.ok(route.indexOf("validateCategories(req.body?.categories)") < route.indexOf("previewCategoryReference().set"));
+  assert.match(route, /catch\s*\{\s*return res\.status\(400\)\.json/);
+  assert.match(route, /catch\s*\{\s*return res\.status\(503\)\.json/);
+});
