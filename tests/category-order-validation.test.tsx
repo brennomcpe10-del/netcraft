@@ -22,3 +22,15 @@ test("category validation rejects duplicate and malformed IDs", () => {
   assert.throws(() => validateCategories([category, { ...category }]), /Identificador/);
   assert.throws(() => validateCategories([{ ...category, id: "../settings" }]), /Identificador/);
 });
+
+test("visible storefront categories retain stable order when priorities tie", async () => {
+  const { visibleCategories } = await import("../src/lib/storeCategories.ts");
+  const categories = [
+    { ...defaultStoreCategories[0], id: "zebra", order: 2 },
+    { ...defaultStoreCategories[1], id: "alpha", order: 2 },
+  ];
+  const original = structuredClone(categories);
+  const result = visibleCategories(categories, [], []);
+  assert.deepEqual(result.map(c => c.id), ["alpha", "zebra"]);
+  assert.deepEqual(categories, original);
+});
