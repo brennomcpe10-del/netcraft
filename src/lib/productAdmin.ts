@@ -4,9 +4,7 @@ import { validateRewardDraft } from "./rewardDraft.ts";
 export function validateProductId(id: unknown): asserts id is string {
   if (
     typeof id !== "string" ||
-    !id.trim() ||
-    id.length > 128 ||
-    id.includes("/")
+    !/^[A-Za-z0-9_-]{2,128}$/.test(id)
   )
     throw new Error("Identificador de produto inválido.");
 }
