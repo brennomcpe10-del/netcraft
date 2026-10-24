@@ -2,6 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Preview-only player and support collections. No browser access.
+    // They avoid writing into Production users and tickets in the shared DB.
+    match /previewPlayers/{id} { allow read, write: if false; }
+    match /previewSupportTickets/{id} { allow read, write: if false; }
+
     // Backend Admin SDK only. Never mirror these records into public orders.
     match /pixTestCouponUsage/{id} { allow read, write: if false; }
     match /pixTestOrders/{id} { allow read, write: if false; }
