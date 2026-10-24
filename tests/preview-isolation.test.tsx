@@ -43,5 +43,6 @@ test("admin panel warns when the Preview catalog is still shared with Production
   assert.match(api,/get\('\/admin\/environment', requireAdmin/);
   assert.match(api,/sharedStoreData:stage==='preview'/);
   assert.match(panel,/api\.getEnvironmentStatus\(adminToken\)/);
-  assert.match(panel,/Produtos, VIPs, cupons, categorias e configurações ainda compartilham/);
+  assert.match(panel,/Produtos, VIPs e categorias podem ser editados na Preview/);
+  assert.match(panel,/Cupons, configurações, identidade visual, eventos, notícias e pedidos históricos continuam bloqueados/);
 });
