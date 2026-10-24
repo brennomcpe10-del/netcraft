@@ -1,10 +1,10 @@
 import { Product } from "../types/index.ts";
 import { StoreCategory } from "./storeCategories.ts";
 import { validateRewardDraft } from "./rewardDraft.ts";
-export function validateProductId(id: unknown): asserts id is string {
+export function validateProductId(id: unknown, allowLegacySingleCharacter = false): asserts id is string {
   if (
     typeof id !== "string" ||
-    !/^[A-Za-z0-9_-]{2,128}$/.test(id)
+    !(allowLegacySingleCharacter ? /^[A-Za-z0-9_-]{1,128}$/ : /^[A-Za-z0-9_-]{2,128}$/).test(id)
   )
     throw new Error("Identificador de produto inválido.");
 }
@@ -37,7 +37,7 @@ export function normalizeProduct(
       Object.entries(input).filter(([key]) => allowed.has(key)),
     ),
   } as Partial<Product>;
-  validateProductId(data.id);
+  validateProductId(data.id, existing !== undefined);
   for (const field of ["active", "featured", "allowQuantity"] as const) {
     if (data[field] !== undefined && typeof data[field] !== "boolean")
       throw new Error(
