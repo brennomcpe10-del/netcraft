@@ -29,6 +29,7 @@ apiRouter.get('/admin/environment', requireAdmin, (_req,res)=>{
   environment:stage,
   isolatedPlayerAndSupportData:stage==='preview',
   sharedStoreData:stage==='preview',
+  storeWritesBlocked:stage==='preview',
  });
 });
 apiRouter.get('/admin/revenue',requireAdmin,async(req,res)=>{
