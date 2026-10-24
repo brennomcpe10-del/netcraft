@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import express from "express";
 import { once } from "node:events";
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { apiRouter } from "../server/routes/api.ts";
 import { previewSharedWriteBlocked } from "../server/services/previewWriteGuard.ts";
 import { generateAdminToken } from "../server/auth/admin.ts";
@@ -70,4 +71,17 @@ test("authenticated Preview cannot write to shared catalog, branding, editorial 
     if(beforeEnv===undefined) delete process.env.VERCEL_ENV;
     else process.env.VERCEL_ENV=beforeEnv;
   }
+});
+
+test("coupon admin updates are transactional and never accept browser Firestore fallbacks", () => {
+  const source=readFileSync(new URL("../server/routes/api.ts",import.meta.url),"utf8");
+  const start=source.indexOf("apiRouter.post('/admin/coupons'");
+  const end=source.indexOf("apiRouter.post('/coupons/validate'");
+  assert.ok(start>=0&&end>start);
+  const adminRoutes=source.slice(start,end);
+  assert.match(adminRoutes,/db\.runTransaction\(async tx=>/);
+  assert.match(adminRoutes,/const next=couponDraft\(req\.body,id,snap\.data\(\)\)/);
+  assert.match(adminRoutes,/tx\.set\(ref,next\)/);
+  const validate=source.slice(end,source.indexOf("function isProviderManagedLegacyOrder",end));
+  assert.doesNotMatch(validate,/import\('firebase\/firestore'\)/);
 });
