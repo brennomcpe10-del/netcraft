@@ -172,6 +172,8 @@ function vipDraft(body:any, id:string) {
  }
  if(body?.livepixUrl?.trim() && !/^https?:\/\//i.test(body.livepixUrl.trim()))
   throw new ProductCatalogError('O link LivePix deve começar com http:// ou https://.',400);
+ if(body?.description !== undefined && typeof body.description !== 'string')
+  throw new ProductCatalogError('A descrição do VIP deve ser um texto.',400);
  const price = Number(body?.price);
  const name = typeof body?.name === 'string' ? body.name.trim() : '';
  const duration = typeof body?.duration === 'string' ? body.duration.trim() : '';
