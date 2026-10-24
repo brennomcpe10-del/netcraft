@@ -79,3 +79,10 @@ test("Preview internal deletion marker is never returned in visible catalog entr
   assert.equal(override[0].__previewDeleted, false);
   assert.equal(original[0].price, 9);
 });
+
+test("single-item Preview reads strip internal tombstone marker as list reads do", () => {
+  const source = readFileSync(new URL("../server/services/previewCatalog.ts", import.meta.url), "utf8");
+  const read = source.slice(source.indexOf("export async function readCatalogItem("), source.indexOf("export function listCatalog("));
+  assert.match(read, /const \{ __previewDeleted: _internalMarker, \.\.\.visibleOverlay \} = overlay\.data\(\) \|\| \{\}/);
+  assert.match(read, /\.\.\.visibleOverlay,id:overlay\.id/);
+});
