@@ -204,3 +204,21 @@ test("admin rejects non-string product names and image values", async () => {
   }
   assert.deepEqual(data.get(product.id), product);
 });
+
+test("admin rejects unsafe product LivePix links and oversized payment fields", async () => {
+  const { data, repository } = memoryRepository([product]);
+  const service = productCatalog(repository);
+  for (const patch of [
+    { livepixUrl: "javascript:alert(1)" },
+    { livepixUrl: "//malicious.example/checkout" },
+    { livepixUrl: "x".repeat(2049) },
+    { pixUrl: "x".repeat(2049) },
+    { livepixUrl: 123 },
+    { pixUrl: false },
+  ]) {
+    await assert.rejects(service.save(patch as any, product.id));
+  }
+  assert.deepEqual(data.get(product.id), product);
+  const saved = await service.save({ livepixUrl: "https://livepix.gg/netcraft" }, product.id);
+  assert.equal(saved.livepixUrl, "https://livepix.gg/netcraft");
+});
