@@ -19,7 +19,10 @@ export function mergeCatalogSnapshots<T extends {id:string}>(
   const merged = new Map(baseline.map(item => [item.id,item]));
   for (const item of overrides) {
     if (item.__previewDeleted === true) merged.delete(item.id);
-    else merged.set(item.id, { ...(merged.get(item.id) || {} as T), ...item } as T);
+    else {
+      const { __previewDeleted: _previewMarker, ...visibleItem } = item;
+      merged.set(item.id, { ...(merged.get(item.id) || {} as T), ...visibleItem } as T);
+    }
   }
   return [...merged.values()];
 }
