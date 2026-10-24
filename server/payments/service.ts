@@ -10,6 +10,7 @@ import crypto from "node:crypto";
 import type { Firestore } from "firebase-admin/firestore";
 import { validateRewardDraft } from "../../src/lib/rewardDraft.ts";
 import { quoteCart, validateCartRequest } from "../../src/lib/cartQuote.ts";
+import { readCatalogItem } from "../services/previewCatalog.ts";
 import {
   MercadoPago,
   PixError,
@@ -98,19 +99,14 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
           );
         return saved;
       }
-      const docs = await Promise.all(
-        input.lines.map((l: any) =>
-          tx.get(
-            db
-              .collection(l.productType === "vip" ? "vips" : "products")
-              .doc(l.productId),
-          ),
-        ),
+      // The Pix quote resolves the EXACT same Preview overrides as storefront.
+      // The transaction only reads from production; any sandbox purchase writes
+      // remain in pixTestOrders and pixTestDeliveries.
+      const items=await Promise.all(
+        input.lines.map((line:any)=>
+          readCatalogItem(line.productType==="vip"?"vips":"products",line.productId,tx)),
       );
-      const items = docs.map((s: any) =>
-          s.exists ? { ...s.data(), id: s.id } : null,
-        ),
-        quote = quoteCart(input.lines, items);
+      const quote=quoteCart(input.lines,items);
       items.forEach((item: any) => validateRewardDraft(item?.rewardDraft));
       let coupon: any = null,
         couponRef: any = null,
