@@ -8,10 +8,10 @@ import { editorialRepository, EditorialError } from '../services/editorialCatalo
 import { protectSharedPreviewWrite } from '../services/previewWriteGuard.ts';
 import { catalogWriteReference, listCatalog, readCatalogItem, readStoreCategories, previewCategoryReference } from '../services/previewCatalog.ts';
 import { isPreviewEnvironment } from '../services/previewIsolation.ts';
-import { validateVipCategoryId } from '../services/vipCategoryId.ts';
+import { validateVipCategoryId, assertVipCategoryExists } from '../services/vipCategoryId.ts';
 import {firestoreProducts} from '../services/firestoreProducts.ts';
 import {quoteCart,validateCartRequest} from '../../src/lib/cartQuote.ts';
-import {validateCategories} from '../../src/lib/storeCategories.ts';
+import {validateCategories, defaultStoreCategories} from '../../src/lib/storeCategories.ts';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import crypto from 'crypto';
 import { dbStore } from '../data/store.ts';
@@ -162,6 +162,12 @@ apiRouter.get('/vips', async (req,res)=>{
 });
 
 // VIP pricing must be persisted through the authenticated server, never a browser write.
+async function vipCategories() {
+ const current = await readStoreCategories();
+ if (current === null) return defaultStoreCategories;
+ validateCategories(current);
+ return current;
+}
 function vipDraft(body:any, id:string, previousCategoryId?:string) {
  if ((body?.active !== undefined && typeof body.active !== 'boolean') ||
      (body?.isPopular !== undefined && typeof body.isPopular !== 'boolean'))
@@ -207,6 +213,7 @@ apiRouter.post('/admin/vips',requireAdmin,async(req,res)=>{
  try {
   const id=typeof req.body?.id==='string'&&req.body.id.trim()?req.body.id.trim():`vip-${crypto.randomUUID()}`;
   const vip=vipDraft(req.body,id);
+  assertVipCategoryExists(vip.categoryId,await vipCategories());
   const {paymentDatabase}=await import('../payments/database.ts');
   const db=paymentDatabase(),ref=catalogWriteReference('vips',id);
   await db.runTransaction(async tx=>{
@@ -221,13 +228,15 @@ apiRouter.post('/admin/vips',requireAdmin,async(req,res)=>{
 apiRouter.put('/admin/vips/:id',requireAdmin,async(req,res)=>{
  try {
   const id=req.params.id;
+  const categories=await vipCategories();
   const {paymentDatabase}=await import('../payments/database.ts');
   const db=paymentDatabase(),ref=catalogWriteReference('vips',id);
   const vip=await db.runTransaction(async tx=>{
    const existing=await readCatalogItem('vips',id,tx);
    if(!existing)throw new ProductCatalogError('VIP não encontrado.',404);
-   const previousCategoryId='categoryId' in existing && typeof existing.categoryId==='string' ? existing.categoryId : undefined;
+   const previousCategoryId='categoryId' in existing && typeof existing.categoryId==='string' ? existing.categoryId : 'vips';
    const next=vipDraft({...existing,...req.body},id,previousCategoryId);
+   assertVipCategoryExists(next.categoryId,categories,previousCategoryId);
    tx.set(ref,next);
    return next;
   });
