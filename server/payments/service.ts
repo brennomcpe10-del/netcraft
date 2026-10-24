@@ -104,7 +104,7 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
       // remain in pixTestOrders and pixTestDeliveries.
       const items=await Promise.all(
         input.lines.map((line:any)=>
-          readCatalogItem(line.productType==="vip"?"vips":"products",line.productId,tx)),
+          readCatalogItem(line.productType==="vip"?"vips":"products",line.productId,tx,db)),
       );
       const quote=quoteCart(input.lines,items);
       items.forEach((item: any) => validateRewardDraft(item?.rewardDraft));
