@@ -8,6 +8,7 @@ import { editorialRepository, EditorialError } from '../services/editorialCatalo
 import { protectSharedPreviewWrite } from '../services/previewWriteGuard.ts';
 import { catalogWriteReference, listCatalog, readCatalogItem, readStoreCategories, previewCategoryReference } from '../services/previewCatalog.ts';
 import { isPreviewEnvironment } from '../services/previewIsolation.ts';
+import { validateVipCategoryId } from '../services/vipCategoryId.ts';
 import {firestoreProducts} from '../services/firestoreProducts.ts';
 import {quoteCart,validateCartRequest} from '../../src/lib/cartQuote.ts';
 import {validateCategories} from '../../src/lib/storeCategories.ts';
@@ -161,7 +162,7 @@ apiRouter.get('/vips', async (req,res)=>{
 });
 
 // VIP pricing must be persisted through the authenticated server, never a browser write.
-function vipDraft(body:any, id:string) {
+function vipDraft(body:any, id:string, previousCategoryId?:string) {
  if ((body?.active !== undefined && typeof body.active !== 'boolean') ||
      (body?.isPopular !== undefined && typeof body.isPopular !== 'boolean'))
   throw new ProductCatalogError('Disponibilidade e destaque do VIP devem ser valores booleanos.',400);
@@ -196,7 +197,7 @@ function vipDraft(body:any, id:string) {
   image: typeof body.image === 'string' && body.image.length <= 850000 && (['crown','cube'].includes(body.image) || /^(https:\/\/|\/(?!\/)|data:image\/(png|jpeg|webp|gif);base64,)/.test(body.image)) ? body.image : 'crown',
   order: body.order ?? 1,
   active: body.active !== false,
-  categoryId: typeof body.categoryId === 'string' ? body.categoryId.slice(0,128) : 'vips',
+  categoryId: validateVipCategoryId(body.categoryId, previousCategoryId),
   isPopular: body.isPopular === true,
   livepixUrl: typeof body.livepixUrl === 'string' ? body.livepixUrl.slice(0,2048) : '',
   pixUrl: typeof body.pixUrl === 'string' ? body.pixUrl.slice(0,2048) : ''
@@ -225,7 +226,7 @@ apiRouter.put('/admin/vips/:id',requireAdmin,async(req,res)=>{
   const vip=await db.runTransaction(async tx=>{
    const existing=await readCatalogItem('vips',id,tx);
    if(!existing)throw new ProductCatalogError('VIP não encontrado.',404);
-   const next=vipDraft({...existing,...req.body},id);
+   const next=vipDraft({...existing,...req.body},id,typeof existing.categoryId==='string'?existing.categoryId:undefined);
    tx.set(ref,next);
    return next;
   });
