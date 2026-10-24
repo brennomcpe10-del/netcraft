@@ -24,7 +24,7 @@ export function productCatalog(repository: ProductRepository) {
     async save(input: Partial<Product>, id?: string) {
       let existing: Product | undefined;
       try {
-        validateProductId(id || input?.id);
+        validateProductId(id || input?.id, Boolean(id));
       } catch (error) {
         throw new ProductCatalogError((error as Error).message, 400);
       }
@@ -55,7 +55,7 @@ export function productCatalog(repository: ProductRepository) {
     },
     async remove(id: string) {
       try {
-        validateProductId(id);
+        validateProductId(id, true);
       } catch (error) {
         throw new ProductCatalogError((error as Error).message, 400);
       }
