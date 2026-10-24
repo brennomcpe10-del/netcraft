@@ -176,7 +176,9 @@ function vipDraft(body:any, id:string) {
   throw new ProductCatalogError('A descrição do VIP deve ser um texto.',400);
  if(body?.benefits !== undefined && (!Array.isArray(body.benefits) || body.benefits.length > 100 || body.benefits.some((x:unknown)=>typeof x !== 'string' || x.length > 500)))
   throw new ProductCatalogError('Informe até 100 benefícios com até 500 caracteres cada.',400);
- const price = Number(body?.price);
+ if(typeof body?.price !== 'number')
+  throw new ProductCatalogError('Informe o preço do VIP como número.',400);
+ const price = body.price;
  const name = typeof body?.name === 'string' ? body.name.trim() : '';
  const duration = typeof body?.duration === 'string' ? body.duration.trim() : '';
  if (!/^[a-zA-Z0-9_-]{2,128}$/.test(id) || !name || name.length > 120 ||
