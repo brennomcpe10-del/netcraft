@@ -164,3 +164,17 @@ test("admin ordering/category filter and cart totals use configured product valu
     ),
   );
 });
+
+test("product document identifiers reject unsafe paths and hidden whitespace", async () => {
+  const { data, repository } = memoryRepository();
+  const service = productCatalog(repository);
+  for (const id of [
+    "../orders", "folder/kit", " kit", "kit ", "kit\\nother",
+    ".", "..", "__proto__.test", "kit?foo=bar", "áudio", "x",
+  ]) {
+    await assert.rejects(service.save({ ...product, id }), undefined, id);
+  }
+  assert.equal(data.size, 0);
+  const saved = await service.save({ ...product, id: "kit_PVP-001" });
+  assert.equal(saved.id, "kit_PVP-001");
+});
