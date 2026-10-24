@@ -31,3 +31,15 @@ test("Preview VIP writes continue through isolated catalog references", () => {
     assert.match(handler, /catalogWriteReference\('vips',id\)/);
   }
 });
+
+test("VIP active and featured settings require actual boolean values", () => {
+  const source = readFileSync(new URL("../server/routes/api.ts", import.meta.url), "utf8");
+  const begin = source.indexOf("function vipDraft(");
+  const end = source.indexOf("apiRouter.post('/admin/vips'", begin);
+  assert.ok(begin >= 0 && end > begin);
+  const draft = source.slice(begin, end);
+  assert.match(draft, /body\?\.active !== undefined && typeof body\.active !== 'boolean'/);
+  assert.match(draft, /body\?\.isPopular !== undefined && typeof body\.isPopular !== 'boolean'/);
+  assert.match(draft, /body\.active !== false/);
+  assert.match(draft, /body\.isPopular === true/);
+});
