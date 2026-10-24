@@ -226,7 +226,8 @@ apiRouter.put('/admin/vips/:id',requireAdmin,async(req,res)=>{
   const vip=await db.runTransaction(async tx=>{
    const existing=await readCatalogItem('vips',id,tx);
    if(!existing)throw new ProductCatalogError('VIP não encontrado.',404);
-   const next=vipDraft({...existing,...req.body},id,typeof existing.categoryId==='string'?existing.categoryId:undefined);
+   const previousCategoryId='categoryId' in existing && typeof existing.categoryId==='string' ? existing.categoryId : undefined;
+   const next=vipDraft({...existing,...req.body},id,previousCategoryId);
    tx.set(ref,next);
    return next;
   });
