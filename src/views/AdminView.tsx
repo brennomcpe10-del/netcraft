@@ -108,6 +108,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const [previewSafety, setPreviewSafety] = useState<{
     environment: 'preview' | 'production' | 'development';
     isolatedPlayerAndSupportData: boolean;
+    isolatedPreviewCatalog: boolean;
     sharedStoreData: boolean;
     storeWritesBlocked: boolean;
   } | null>(null);
@@ -719,9 +720,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         {previewSafety?.sharedStoreData && (
           <div role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-xs text-amber-200 leading-relaxed">
             <strong>Preview com isolamento parcial.</strong> Os jogadores e chamados de teste são mantidos separados.
-            Produtos, VIPs, cupons, categorias e configurações ainda consultam dados compartilhados com a Production.
-            <strong> {previewSafety.storeWritesBlocked ? 'As gravações e exclusões dessas áreas estão bloqueadas no servidor.' : 'Não altere esses registros até a separação completa.'}</strong>
-            O Pix de teste e os registros isolados de jogadores/chamados continuam disponíveis.
+            Produtos, VIPs e categorias podem ser editados na Preview: as alterações são gravadas em cópias separadas,
+            sem alterar os registros originais da Production. O catálogo inicial ainda é consultado em modo leitura.
+            <strong> {previewSafety.storeWritesBlocked ? 'Cupons, configurações, identidade visual, eventos, notícias e pedidos históricos continuam bloqueados para edição.' : 'Confira a separação antes de editar outras áreas.'}</strong>
+            Pix simulado, jogadores e chamados isolados permanecem disponíveis.
           </div>
         )}
         {previewSafetyUnknown && (
