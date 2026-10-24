@@ -104,6 +104,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [ticketsError, setTicketsError] = useState('');
   const [ticketReplies, setTicketReplies] = useState<Record<string,string>>({});
   const [savingTicketId, setSavingTicketId] = useState<string | null>(null);
   const [events, setEvents] = useState<ServerEvent[]>([]);
@@ -205,7 +206,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       if (ordersResult.status === 'fulfilled') setOrders(loadedOrders);
       setCoupons(loadedCoupons);
       if (playersResult.status === 'fulfilled') setPlayers(loadedPlayers);
-      if (ticketsResult.status === 'fulfilled') setTickets(ticketsResult.value);
+      if (ticketsResult.status === 'fulfilled') {
+        setTickets(ticketsResult.value);
+        setTicketsError('');
+      } else {
+        setTicketsError('Não foi possível carregar os chamados do backend. Não foi feita nenhuma alteração.');
+      }
       if (eventsResult.status === 'fulfilled') setEvents(eventsResult.value);
       if (newsResult.status === 'fulfilled') setNews(newsResult.value);
       if (socialResult.status === 'fulfilled') setSocialLinks(socialResult.value);
@@ -1310,7 +1316,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                 Mensagens privadas, consultadas pelo backend. Não compartilhe conteúdo de chamados publicamente.
               </p>
             </div>
-            {tickets.length === 0 ? (
+            {ticketsError ? (
+              <p role="alert" className="text-amber-300 py-5">{ticketsError}</p>
+            ) : tickets.length === 0 ? (
               <p className="text-zinc-400 py-5">Nenhum chamado registrado.</p>
             ) : (
               <div className="space-y-4">
