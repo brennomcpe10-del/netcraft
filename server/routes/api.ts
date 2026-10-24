@@ -273,13 +273,14 @@ apiRouter.post('/cart/quote', async (req,res)=>{
 apiRouter.put('/admin/store-categories',requireAdmin,async(req,res)=>{
  try {
   validateCategories(req.body?.categories);
+ }catch{
+  return res.status(400).json({error:'Confira os dados das categorias.'});
+ }
+ try {
   await previewCategoryReference().set({categories:req.body.categories},{merge:true});
   return res.json({success:true});
- }catch(error){
-  const invalid=error instanceof Error&&/categoria|category|categories|duplicad|obrigat|invalid/i.test(error.message);
-  return res.status(invalid?400:503).json({
-   error:invalid?'Confira os dados das categorias.':'Não foi possível salvar as categorias no servidor.'
-  });
+ }catch{
+  return res.status(503).json({error:'Não foi possível salvar as categorias no servidor.'});
  }
 });
 
