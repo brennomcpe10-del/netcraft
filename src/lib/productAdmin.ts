@@ -44,7 +44,8 @@ export function normalizeProduct(
         "Disponibilidade e opções devem ser verdadeiras ou falsas.",
       );
   }
-  const name = String(data.name || "").trim();
+  if (typeof data.name !== "string") throw new Error("Informe um nome válido.");
+  const name = data.name.trim();
   if (!name || name.length > 120)
     throw new Error("Informe um nome de até 120 caracteres.");
   if (
@@ -69,7 +70,7 @@ export function normalizeProduct(
   const description = data.description ?? "";
   if (typeof description !== "string" || description.length > 10000)
     throw new Error("A descrição pode ter até 10000 caracteres.");
-  const image = data.image || "/categories/items.webp";
+  const image = data.image ?? "/categories/items.webp";
   if (
     typeof image !== "string" ||
     image.length > 850000 ||
