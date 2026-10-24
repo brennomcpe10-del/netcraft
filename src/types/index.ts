@@ -1,8 +1,8 @@
-export type OrderStatus = 'Pendente' | 'Pago' | 'Cancelado' | 'Entregue';
+export type OrderStatus = 'Pendente' | 'Pago' | 'Cancelado' | 'Entregue' | 'Reembolsado' | 'Estornado';
 export type PaymentMethod = 'LIVEPIX' | 'PIX' | 'Cartao' | 'Boleto';
 export type EventStatus = 'Próximo' | 'Em andamento' | 'Encerrado';
 export type NewsCategory = 'Atualização' | 'Evento' | 'Manutenção' | 'Novidade';
-export type ProductCategory = 'vips' | 'kits' | 'itens' | 'cosmeticos' | 'outros';
+export type ProductCategory = 'vips' | 'kits' | 'itens' | 'cosmeticos' | 'pacotes' | 'outros' | (string & {});
 
 export interface ActiveVip {
   vipId: string;
@@ -24,6 +24,7 @@ export interface Player {
 }
 
 export interface VIP {
+  categoryId?: string;
   id: string;
   name: string;
   price: number;
@@ -39,10 +40,17 @@ export interface VIP {
   pixUrl?: string;
 }
 
+/** Editorial configuration only. Never an authorized or executable delivery payload. */
+export interface RewardDraft { version: 1; items: { itemId: string; quantity: number }[]; }
+
 export interface Product {
   id: string;
   name: string;
   category: ProductCategory;
+  rewardDraft?: RewardDraft;
+  featured?: boolean;
+  allowQuantity?: boolean;
+  maxQuantity?: number;
   price: number;
   description: string;
   image: string;
@@ -51,6 +59,21 @@ export interface Product {
   order: number;
   livepixUrl?: string;
   pixUrl?: string;
+}
+
+// Admin-only, read-only inspection of simulated sandbox transactions.
+export interface PixTestOrderSummary {
+  id: string;
+  environment: 'test';
+  state: 'creating' | 'pending' | 'processing' | 'approved' | 'expired' | 'cancelled' | 'refunded' | 'unknown';
+  gamertag: string;
+  totalCents: number;
+  linesCount: number;
+  createdAt: string | null;
+  approvedAt: string | null;
+  approvalObservedAt: string | null;
+  providerOrderId: string | null;
+  expiresAt: string | null;
 }
 
 export interface Order {
@@ -69,6 +92,13 @@ export interface Order {
   transactionId: string;
   paymentMethod: PaymentMethod;
   paidAt?: string;
+  approvedAt?: string;
+  refundedAmount?: number;
+  refundedAt?: string;
+  paymentId?: string;
+  paymentStatus?: string;
+  paymentProvider?: string;
+  refunds?: {id:string;amount:number;status:string}[];
   deliveredAt?: string;
   pixCode?: string;
   pixQrCodeUrl?: string;

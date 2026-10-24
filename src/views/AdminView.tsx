@@ -1,3 +1,10 @@
+import {IdentityManager} from "../components/IdentityManager.tsx";
+import {RevenuePanel} from "../components/RevenuePanel.tsx";
+import {revenueReport,brasiliaPeriod} from "../lib/revenue.ts";
+import {formatStoredMoney} from '../lib/adminDisplay.ts';
+import {ProductManager} from "../components/ProductManager.tsx";
+import {CategoryManager} from "../components/CategoryManager.tsx";
+import {useStoreCategories} from "../hooks/useStoreCategories.ts";
 import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../context/AdminContext.tsx';
 import { useToast } from '../context/ToastContext.tsx';
@@ -6,8 +13,8 @@ import {
   DashboardStats,
   VIP,
   Product,
-  ProductCategory,
   Order,
+  PixTestOrderSummary,
   Player,
   ServerEvent,
   EventStatus,
@@ -15,6 +22,7 @@ import {
   NewsCategory,
   ServerSettings,
   SocialLink,
+  SupportTicket,
   Coupon
 } from '../types/index.ts';
 import { Plus, Edit2, Trash2, ArrowLeft, Search, ExternalLink, Check, Upload, Image as ImageIcon, Ticket, Tag, Percent, Copy, ToggleLeft, ToggleRight } from 'lucide-react';
@@ -23,8 +31,6 @@ import {
   saveVipToFirestore,
   deleteVipFromFirestore,
   getVipsFromFirestore,
-  saveProductToFirestore,
-  deleteProductFromFirestore,
   getProductsFromFirestore,
   saveSettingsToFirestore,
   getSettingsFromFirestore,
@@ -54,25 +60,61 @@ import {
   getStatsFromFirestore
 } from '../lib/firestoreSync.ts';
 
+function pixTestStateLabel(order: PixTestOrderSummary, now = Date.now()): string {
+  // A reservation may be left in "creating" after a sandbox gateway error.
+  // This is display-only: never infer a payment, refund or change Firestore state.
+  if (order.state === 'creating' && !order.providerOrderId &&
+      order.expiresAt && Date.parse(order.expiresAt) <= now)
+    return 'Criação não confirmada (teste)';
+  const labels: Record<PixTestOrderSummary['state'], string> = {
+    creating: 'Criando cobrança (teste)',
+    pending: 'Aguardando teste',
+    processing: 'Processando teste',
+    approved: 'Aprovado (simulado)',
+    expired: 'Expirado (teste)',
+    cancelled: 'Cancelado (teste)',
+    refunded: 'Devolvido (teste)',
+    unknown: 'Status não identificado',
+  };
+  return labels[order.state];
+}
+
 interface AdminViewProps {
   onExit: () => void;
   onRefreshGlobalData: () => Promise<void>;
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalData }) => {
+  const managedCategories=useStoreCategories();
+  const [adminProductCategory,setAdminProductCategory]=useState("all");
   const { adminToken, logoutAdmin } = useAdmin();
   const { showSuccess, showError } = useToast();
 
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'vips' | 'orders' | 'coupons' | 'players' | 'store' | 'events' | 'news' | 'community' | 'server' | 'settings'
+    'identity' | 'categories' | 'dashboard' | 'vips' | 'orders' | 'coupons' | 'tickets' | 'players' | 'store' | 'events' | 'news' | 'community' | 'server' | 'settings'
   >('dashboard');
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [vips, setVips] = useState<VIP[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [pixTestOrders, setPixTestOrders] = useState<PixTestOrderSummary[]>([]);
+  const [pixTestLoading, setPixTestLoading] = useState(false);
+  const [pixTestError, setPixTestError] = useState('');
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [ticketsError, setTicketsError] = useState('');
+  const [previewSafety, setPreviewSafety] = useState<{
+    environment: 'preview' | 'production' | 'development';
+    isolatedPlayerAndSupportData: boolean;
+    isolatedPreviewCatalog: boolean;
+    sharedStoreData: boolean;
+    storeWritesBlocked: boolean;
+  } | null>(null);
+  const [previewSafetyUnknown, setPreviewSafetyUnknown] = useState(false);
+  const [ticketReplies, setTicketReplies] = useState<Record<string,string>>({});
+  const [savingTicketId, setSavingTicketId] = useState<string | null>(null);
   const [events, setEvents] = useState<ServerEvent[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
@@ -85,7 +127,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
 
   // Modals for editing / creating
   const [editingVip, setEditingVip] = useState<Partial<VIP> | null>(null);
-  const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [editingCoupon, setEditingCoupon] = useState<Partial<Coupon> | null>(null);
   const [editingEvent, setEditingEvent] = useState<Partial<ServerEvent> | null>(null);
   const [editingNews, setEditingNews] = useState<Partial<NewsArticle> | null>(null);
@@ -93,7 +134,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
 
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<{
-    type: 'vip' | 'product' | 'order' | 'player' | 'event' | 'news' | 'community' | 'coupon';
+    type: 'vip' | 'order' | 'player' | 'event' | 'news' | 'community' | 'coupon';
     id: string;
     name: string;
     extraNickname?: string;
@@ -111,6 +152,42 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const [newPlayerVipId, setNewPlayerVipId] = useState('');
   const [isSavingPlayer, setIsSavingPlayer] = useState(false);
 
+  const loadPixTestOrders = async () => {
+    if (!adminToken) return;
+    setPixTestLoading(true);
+    setPixTestError('');
+    try {
+      setPixTestOrders(await api.getPixTestOrders(adminToken));
+    } catch (error) {
+      setPixTestError(error instanceof Error ? error.message : 'Não foi possível consultar as simulações.');
+    } finally {
+      setPixTestLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (adminToken && activeTab === 'orders') {
+      void loadPixTestOrders();
+    }
+  }, [adminToken, activeTab]);
+
+  useEffect(() => {
+    if (!adminToken) return;
+    let active = true;
+    api.getEnvironmentStatus(adminToken)
+      .then(status => {
+        if (!active) return;
+        setPreviewSafety(status);
+        setPreviewSafetyUnknown(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setPreviewSafety(null);
+        setPreviewSafetyUnknown(true);
+      });
+    return () => { active = false; };
+  }, [adminToken]);
+
   useEffect(() => {
     if (adminToken) {
       loadData();
@@ -121,57 +198,55 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     if (!adminToken) return;
     try {
       const [
-        dashResult,
         vipsResult,
         prodsResult,
         ordersResult,
         couponsResult,
         playersResult,
+        ticketsResult,
         eventsResult,
         newsResult,
         socialResult,
         settingsResult
       ] = await Promise.allSettled([
-        getStatsFromFirestore(),
-        getVipsFromFirestore(),
-        getProductsFromFirestore(),
-        getOrdersFromFirestore(),
-        getCouponsFromFirestore(),
-        getPlayersFromFirestore(),
-        getEventsFromFirestore(),
-        getNewsFromFirestore(),
-        getCommunityFromFirestore(),
-        getSettingsFromFirestore()
+        api.getVips(true, adminToken),
+        api.getProducts(true, undefined, adminToken),
+        api.getAllOrders(adminToken),
+        api.getCoupons(adminToken),
+        api.getAdminPlayers(adminToken),
+        api.getTickets(adminToken),
+        api.getEvents(true, adminToken),
+        api.getNews(true, adminToken),
+        api.getCommunity(true, adminToken),
+        api.getSettings()
       ]);
 
       const loadedOrders = ordersResult.status === 'fulfilled' ? ordersResult.value : [];
       const loadedPlayers = playersResult.status === 'fulfilled' ? playersResult.value : [];
       let loadedCoupons = couponsResult.status === 'fulfilled' ? couponsResult.value : [];
 
-      // Also try API for freshest coupons
-      try {
-        const apiCoupons = await api.getCoupons(adminToken);
-        if (apiCoupons && apiCoupons.length > 0) {
-          loadedCoupons = apiCoupons;
-        }
-      } catch {}
-
+      // Coupon data is private. The authenticated API is its sole read source.
       if (vipsResult.status === 'fulfilled') setVips(vipsResult.value);
       if (prodsResult.status === 'fulfilled') setProducts(prodsResult.value);
       if (ordersResult.status === 'fulfilled') setOrders(loadedOrders);
       setCoupons(loadedCoupons);
       if (playersResult.status === 'fulfilled') setPlayers(loadedPlayers);
+      if (ticketsResult.status === 'fulfilled') {
+        setTickets(ticketsResult.value);
+        setTicketsError('');
+      } else {
+        setTicketsError('Não foi possível carregar os chamados do backend. Não foi feita nenhuma alteração.');
+      }
       if (eventsResult.status === 'fulfilled') setEvents(eventsResult.value);
       if (newsResult.status === 'fulfilled') setNews(newsResult.value);
       if (socialResult.status === 'fulfilled') setSocialLinks(socialResult.value);
       if (settingsResult.status === 'fulfilled' && settingsResult.value) setServerSettings(settingsResult.value);
 
-      if (dashResult.status === 'fulfilled') {
-        setStats(dashResult.value);
-      } else {
-        // Fallback: calculate stats from orders & players so dashboard never crashes
+      // All order history is retrieved via the authenticated Admin API.
+      // Never use public Firestore order reads or fabricated zero revenue.
+      if (ordersResult.status === 'fulfilled') {
         const paid = loadedOrders.filter(o => o.status === 'Pago' || o.status === 'Entregue');
-        const rev = paid.reduce((sum, o) => sum + (o.amount || 0), 0);
+        const rev = revenueReport(loadedOrders,brasiliaPeriod(new Date())!).totalCents / 100;
         setStats({
           playersCount: loadedPlayers.length,
           ordersCount: loadedOrders.length,
@@ -179,9 +254,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           paidOrdersCount: paid.length,
           vipsSoldCount: paid.filter(o => o.productType === 'vip').length,
           totalRevenue: Number(rev.toFixed(2)),
-          recentOrders: loadedOrders.slice(-10).reverse(),
+          recentOrders: loadedOrders.slice(0,10),
           recentPlayers: loadedPlayers.slice(-10).reverse()
         });
+      } else {
+        showError('Não foi possível consultar o histórico de pedidos no servidor.');
       }
     } catch (err: unknown) {
       showError(err instanceof Error ? err.message : 'Erro ao carregar dados do painel');
@@ -214,68 +291,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         pixUrl: editingVip.pixUrl ? String(editingVip.pixUrl).trim() : ''
       };
 
-      // 1. Direct write to Firestore FIRST (Official Source of Truth)
-      await saveVipToFirestore(savedVip);
-
-      // 2. Sync with backend API
-      if (isEditing) {
-        await api.updateVip(vipId, savedVip, adminToken).catch(() => {});
-        showSuccess('VIP atualizado com sucesso');
-        setVips(prev => prev.map(v => v.id === vipId ? savedVip : v));
-      } else {
-        await api.createVip(savedVip, adminToken).catch(() => {});
-        showSuccess('VIP criado com sucesso');
-        setVips(prev => [...prev.filter(v => v.id !== vipId), savedVip]);
-      }
+      // The authenticated backend owns VIP catalogue mutations and prices.
+      const persisted = isEditing
+        ? await api.updateVip(vipId, savedVip, adminToken)
+        : await api.createVip(savedVip, adminToken);
+      setVips(prev => [...prev.filter(v => v.id !== persisted.id), persisted]);
+      showSuccess(isEditing ? 'VIP atualizado com sucesso' : 'VIP criado com sucesso');
 
       setEditingVip(null);
       await loadData();
       await onRefreshGlobalData();
     } catch (err: unknown) {
       showError(err instanceof Error ? err.message : 'Erro ao salvar VIP');
-    }
-  };
-
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingProduct || !adminToken) return;
-    try {
-      const isEditing = !!editingProduct.id;
-      const prodId = editingProduct.id ? String(editingProduct.id).trim() : `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      const savedProd: Product = {
-        ...editingProduct,
-        id: prodId,
-        name: editingProduct.name || 'Novo Item',
-        category: editingProduct.category || 'outros',
-        price: Number(editingProduct.price) || 0,
-        description: editingProduct.description || '',
-        image: editingProduct.image || 'cube',
-        active: editingProduct.active !== false,
-        highlights: Array.isArray(editingProduct.highlights) ? editingProduct.highlights : [],
-        order: Number(editingProduct.order) || 1,
-        livepixUrl: editingProduct.livepixUrl ? String(editingProduct.livepixUrl).trim() : '',
-        pixUrl: editingProduct.pixUrl ? String(editingProduct.pixUrl).trim() : ''
-      };
-
-      // 1. Direct write to Firestore FIRST (Official Source of Truth)
-      await saveProductToFirestore(savedProd);
-
-      // 2. Sync with backend API
-      if (isEditing) {
-        await api.updateProduct(prodId, savedProd, adminToken).catch(() => {});
-        showSuccess('Item da loja atualizado');
-        setProducts(prev => prev.map(p => p.id === prodId ? savedProd : p));
-      } else {
-        await api.createProduct(savedProd, adminToken).catch(() => {});
-        showSuccess('Item criado na loja');
-        setProducts(prev => [...prev.filter(p => p.id !== prodId), savedProd]);
-      }
-
-      setEditingProduct(null);
-      await loadData();
-      await onRefreshGlobalData();
-    } catch (err: unknown) {
-      showError(err instanceof Error ? err.message : 'Erro ao salvar item');
     }
   };
 
@@ -293,7 +320,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         showSuccess('Evento criado');
         setEvents(prev => [...prev.filter(ev => ev.id !== savedEv.id), savedEv]);
       }
-      await saveEventToFirestore(savedEv).catch(() => {});
       setEditingEvent(null);
       await loadData();
       await onRefreshGlobalData();
@@ -316,7 +342,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         showSuccess('Notícia publicada');
         setNews(prev => [...prev.filter(n => n.id !== savedN.id), savedN]);
       }
-      await saveNewsToFirestore(savedN).catch(() => {});
       setEditingNews(null);
       await loadData();
       await onRefreshGlobalData();
@@ -339,7 +364,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         showSuccess('Rede social adicionada');
         setSocialLinks(prev => [...prev.filter(s => s.id !== savedSoc.id), savedSoc]);
       }
-      await saveSocialLinkToFirestore(savedSoc).catch(() => {});
       setEditingSocial(null);
       await loadData();
       await onRefreshGlobalData();
@@ -357,16 +381,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         prev.map(o => (o.id === rawId || o.id.replace(/^#/, '') === rawId.replace(/^#/, '')) ? { ...o, status } : o)
       );
 
-      // 2. Direct Firestore update for guaranteed persistence
-      await updateOrderStatusInFirestore(rawId, status).catch(fsErr => {
-        console.warn('Firestore direct order status update warning:', fsErr);
-      });
-
-      // 3. Backend API update
-      const updated = await api.updateOrderStatus(rawId, status, adminToken);
-      if (updated) {
-        await saveOrderToFirestore(updated).catch(() => {});
-      }
+      await api.updateOrderStatus(rawId, status, adminToken);
 
       showSuccess(`Status do pedido alterado para "${status}" com sucesso!`);
       await loadData();
@@ -424,14 +439,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         updatedAt: new Date().toISOString()
       };
 
-      // 1. Direct Firestore write
-      await saveCouponToFirestore(payload);
-
-      // 2. Server API update
+      // Coupon rules and usage are persisted by the authenticated backend.
       if (isEditing) {
-        await api.updateCoupon(couponId, payload, adminToken).catch(() => {});
+        await api.updateCoupon(couponId, payload, adminToken);
       } else {
-        await api.createCoupon(payload, adminToken).catch(() => {});
+        await api.createCoupon(payload, adminToken);
       }
 
       showSuccess(isEditing ? `Cupom "${rawCode}" atualizado com sucesso!` : `Cupom "${rawCode}" criado com sucesso!`);
@@ -454,8 +466,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       };
       setCoupons(prev => prev.map(c => c.id === coupon.id ? updated : c));
 
-      await saveCouponToFirestore(updated);
-      await api.updateCoupon(coupon.id, { active: nextActive }, adminToken).catch(() => {});
+      await api.updateCoupon(coupon.id, { active: nextActive }, adminToken);
 
       showSuccess(`Cupom "${coupon.code}" ${nextActive ? 'ativado' : 'desativado'} com sucesso!`);
       await loadData();
@@ -471,7 +482,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     try {
       setIsBulkDeleting(true);
       const res = await api.deleteOrdersBulk(bulkOrderFilter, adminToken);
-      await deleteOrdersBulkFromFirestore(bulkOrderFilter).catch(() => {});
+      // The admin API is responsible for all Firestore order changes.
 
       if (bulkOrderFilter === 'all') {
         setOrders([]);
@@ -525,12 +536,25 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     }
   };
 
+  const saveTicket = async (id:string, update:Pick<Partial<SupportTicket>,'status'|'reply'>) => {
+    if (!adminToken || savingTicketId) return;
+    setSavingTicketId(id);
+    try {
+      const persisted = await api.updateTicket(id, update, adminToken);
+      setTickets(previous => previous.map(t => t.id === persisted.id ? persisted : t));
+      showSuccess('Chamado atualizado com sucesso.');
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Não foi possível atualizar o chamado.');
+    } finally {
+      setSavingTicketId(null);
+    }
+  };
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!serverSettings || !adminToken) return;
     try {
       await api.updateSettings(serverSettings, adminToken);
-      await saveSettingsToFirestore(serverSettings).catch(() => {});
       showSuccess('Configurações atualizadas');
       await loadData();
       await onRefreshGlobalData();
@@ -556,9 +580,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       case 'vip':
         setVips(prev => prev.filter(v => v.id !== id && v.id.toLowerCase() !== lowerId && v.name.trim().toLowerCase() !== cleanName));
         break;
-      case 'product':
-        setProducts(prev => prev.filter(p => p.id !== id && p.id.toLowerCase() !== lowerId && p.name.trim().toLowerCase() !== cleanName));
-        break;
       case 'order':
         setOrders(prev => prev.filter(o => o.id !== id && o.id.toLowerCase() !== lowerId && o.id.toLowerCase().replace(/^#/, '') !== lowerId.replace(/^#/, '')));
         break;
@@ -583,59 +604,31 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       // 2. Perform deletions concurrently on server & Firestore
       switch (type) {
         case 'vip':
-          await Promise.allSettled([
-            api.deleteVip(id, adminToken, name),
-            deleteVipFromFirestore(id, name)
-          ]);
+          await api.deleteVip(id, adminToken, name);
           showSuccess(`VIP ${name} excluído com sucesso`);
           break;
-        case 'product':
-          await Promise.allSettled([
-            api.deleteProduct(id, adminToken, name),
-            deleteProductFromFirestore(id, name)
-          ]);
-          showSuccess(`Item ${name} excluído com sucesso`);
-          break;
         case 'order':
-          await Promise.allSettled([
-            api.deleteOrder(id, adminToken),
-            deleteOrderFromFirestore(id)
-          ]);
+          await api.deleteOrder(id, adminToken);
           showSuccess(`Pedido #${id} excluído com sucesso`);
           break;
         case 'player':
-          await Promise.allSettled([
-            api.deletePlayer(id, adminToken, extraNickname || name),
-            deleteUserFromFirestore(id, extraNickname || name)
-          ]);
+          await api.deletePlayer(id, adminToken, extraNickname || name);
           showSuccess(`Jogador ${name} removido do sistema`);
           break;
         case 'event':
-          await Promise.allSettled([
-            api.deleteEvent(id, adminToken, name),
-            deleteEventFromFirestore(id, name)
-          ]);
+          await api.deleteEvent(id, adminToken, name);
           showSuccess(`Evento ${name} excluído com sucesso`);
           break;
         case 'news':
-          await Promise.allSettled([
-            api.deleteNews(id, adminToken, name),
-            deleteNewsFromFirestore(id, name)
-          ]);
+          await api.deleteNews(id, adminToken, name);
           showSuccess(`Notícia ${name} excluída com sucesso`);
           break;
         case 'community':
-          await Promise.allSettled([
-            api.deleteSocialLink(id, adminToken, name),
-            deleteSocialLinkFromFirestore(id, name)
-          ]);
+          await api.deleteSocialLink(id, adminToken, name);
           showSuccess(`Comunidade ${name} excluída com sucesso`);
           break;
         case 'coupon':
-          await Promise.allSettled([
-            api.deleteCoupon(id, adminToken),
-            deleteCouponFromFirestore(id)
-          ]);
+          await api.deleteCoupon(id, adminToken);
           showSuccess(`Cupom "${name}" excluído com sucesso`);
           break;
       }
@@ -658,7 +651,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     { id: 'orders', label: 'Pedidos' },
     { id: 'coupons', label: 'Cupons' },
     { id: 'players', label: 'Jogadores' },
+    { id: 'tickets', label: 'Chamados' },
     { id: 'store', label: 'Loja' },
+    { id: 'categories', label: 'Categorias' },
+    { id: 'identity', label: 'Identidade Visual' },
     { id: 'events', label: 'Eventos' },
     { id: 'news', label: 'Notícias' },
     { id: 'community', label: 'Comunidade' },
@@ -721,11 +717,29 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           })}
         </div>
 
+        {previewSafety?.sharedStoreData && (
+          <div role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-xs text-amber-200 leading-relaxed">
+            <strong>Preview com isolamento parcial.</strong> Os jogadores e chamados de teste são mantidos separados.
+            Produtos, VIPs e categorias podem ser editados na Preview: as alterações são gravadas em cópias separadas,
+            sem alterar os registros originais da Production. O catálogo inicial ainda é consultado em modo leitura.
+            <strong> {previewSafety.storeWritesBlocked ? 'Cupons, configurações, identidade visual, eventos, notícias e pedidos históricos continuam bloqueados para edição.' : 'Confira a separação antes de editar outras áreas.'}</strong>
+            Pix simulado, jogadores e chamados isolados permanecem disponíveis.
+          </div>
+        )}
+        {previewSafetyUnknown && (
+          <p role="alert" className="rounded-lg border border-amber-500/40 p-3 text-xs text-amber-200">
+            Não foi possível verificar a separação dos ambientes. Evite alterações administrativas até a confirmação.
+          </p>
+        )}
+
+        {activeTab === 'identity' && <IdentityManager />}
+        {activeTab === 'categories' && <CategoryManager onManageProducts={id=>{setAdminProductCategory(id);setActiveTab('store');}}/>}
         {/* ============================================================== */}
         {/* 1. DASHBOARD */}
         {/* ============================================================== */}
         {activeTab === 'dashboard' && stats && (
           <div className="space-y-10">
+            <RevenuePanel />
             {/* KPI Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="p-5 rounded-xl border border-white/[0.06] bg-white/[0.01]">
@@ -755,14 +769,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                 </span>
               </div>
 
-              <div className="p-5 rounded-xl border border-white/[0.06] bg-white/[0.01]">
-                <span className="text-[11px] font-mono uppercase text-zinc-400 block mb-1">
-                  Receita Total
-                </span>
-                <span className="text-2xl font-bold text-emerald-400 font-heading">
-                  R$ {stats.totalRevenue.toFixed(2).replace('.', ',')}
-                </span>
-              </div>
+
             </div>
 
             {/* Últimos Pedidos */}
@@ -783,7 +790,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                     </div>
                     <div className="text-right">
                       <div className="font-bold text-white">
-                        R$ {o.amount.toFixed(2).replace('.', ',')}
+                        {formatStoredMoney(o.amount)}
                       </div>
                       <span className="text-[10px] uppercase font-mono text-zinc-400">
                         {o.status}
@@ -927,6 +934,55 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
               </div>
             </div>
 
+            <section className="rounded-xl border border-emerald-500/20 bg-white/[0.02] p-4 sm:p-5 space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Pix de teste · Mercado Pago Orders API</h3>
+                  <p className="text-zinc-400 text-[11px] mt-1">
+                    Últimas 50 simulações, somente leitura. Não são vendas reais,
+                    não entram no faturamento e não geram entregas Minecraft.
+                    Tentativas interrompidas não são pagamentos aprovados.
+                  </p>
+                </div>
+                <button type="button" onClick={() => void loadPixTestOrders()} disabled={pixTestLoading}
+                  className="text-xs border border-white/10 rounded-lg px-3 py-2 text-emerald-300 disabled:opacity-50">
+                  {pixTestLoading ? 'Consultando…' : 'Atualizar testes Pix'}
+                </button>
+              </div>
+              {pixTestError ? (
+                <p role="alert" className="text-amber-300 text-xs">{pixTestError}</p>
+              ) : pixTestLoading && pixTestOrders.length === 0 ? (
+                <p role="status" className="text-zinc-400 text-xs">Consultando pedidos de teste…</p>
+              ) : pixTestOrders.length === 0 ? (
+                <p className="text-zinc-400 text-xs">Nenhum pedido de teste encontrado no banco.</p>
+              ) : (
+                <div className="divide-y divide-white/[0.06]">
+                  {pixTestOrders.map(testOrder => (
+                    <div key={testOrder.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-white text-xs">
+                          {testOrder.gamertag} · {testOrder.linesCount} item(ns)
+                        </div>
+                        <div className="font-mono text-[10px] text-zinc-500 mt-1 break-all">
+                          Teste #{testOrder.id.slice(0, 12)} · {testOrder.createdAt
+                            ? new Date(testOrder.createdAt).toLocaleString('pt-BR')
+                            : 'Data não disponível'}
+                        </div>
+                      </div>
+                      <div className="text-right text-xs">
+                        <div className="font-semibold text-white">
+                          {(testOrder.totalCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </div>
+                        <div className={testOrder.state === 'approved' ? 'text-emerald-400' : 'text-amber-300'}>
+                          {pixTestStateLabel(testOrder)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
             <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
               {orders
                 .filter(o => {
@@ -962,7 +1018,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                     <div className="flex items-center gap-3 self-end sm:self-center">
                       <div className="text-right">
                         <div className="font-bold text-white font-mono">
-                          R$ {order.amount.toFixed(2).replace('.', ',')}
+                          {formatStoredMoney(order.amount)}
                         </div>
                         {order.originalAmount && order.originalAmount > order.amount && (
                           <div className="text-[10px] text-zinc-500 line-through font-mono">
@@ -986,6 +1042,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                         <option value="Pago">Pago</option>
                         <option value="Entregue">Entregue</option>
                         <option value="Cancelado">Cancelado</option>
+                        <option value="Reembolsado">Reembolsado</option>
+                        <option value="Estornado">Estornado</option>
                       </select>
 
                       {/* Botão de Excluir Pedido */}
@@ -1289,6 +1347,65 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
           </div>
         )}
 
+        {/* CHAMADOS PRIVADOS - ACESSO EXCLUSIVO DO ADMINISTRADOR */}
+        {activeTab === 'tickets' && (
+          <section className="space-y-5">
+            <div>
+              <h2 className="font-bold text-base text-white">Chamados de suporte</h2>
+              <p className="text-zinc-400 mt-1 text-xs">
+                Mensagens privadas, consultadas pelo backend. Não compartilhe conteúdo de chamados publicamente.
+              </p>
+            </div>
+            {ticketsError ? (
+              <p role="alert" className="text-amber-300 py-5">{ticketsError}</p>
+            ) : tickets.length === 0 ? (
+              <p className="text-zinc-400 py-5">Nenhum chamado registrado.</p>
+            ) : (
+              <div className="space-y-4">
+                {tickets.map(ticket => (
+                  <article key={ticket.id} className="rounded-xl border border-white/10 p-4 bg-white/[0.02] space-y-3">
+                    <div className="flex flex-wrap gap-3 items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-white">{ticket.subject}</h3>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          {ticket.nickname} · {ticket.category} · #{ticket.id}
+                          {' · '}{new Date(ticket.createdAt).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                      <select aria-label={`Status do chamado ${ticket.id}`}
+                        value={ticket.status}
+                        disabled={savingTicketId === ticket.id}
+                        onChange={e=>void saveTicket(ticket.id,{status:e.target.value as SupportTicket['status']})}
+                        className="bg-zinc-900 border border-white/20 text-zinc-100 rounded-lg p-2 text-xs">
+                        <option value="Aberto">Aberto</option>
+                        <option value="Em andamento">Em andamento</option>
+                        <option value="Resolvido">Resolvido</option>
+                        <option value="Fechado">Fechado</option>
+                      </select>
+                    </div>
+                    <p className="text-sm whitespace-pre-wrap break-words text-zinc-200">{ticket.message}</p>
+                    <label className="block text-xs text-zinc-400">
+                      Resposta da equipe
+                      <textarea className="w-full mt-2 p-3 rounded-lg bg-zinc-900 border border-white/10 text-zinc-100"
+                        rows={3} maxLength={8000} value={ticketReplies[ticket.id] ?? ticket.reply ?? ''}
+                        onChange={e=>setTicketReplies(prev=>({...prev,[ticket.id]:e.target.value}))}/>
+                    </label>
+                    <button type="button"
+                      disabled={savingTicketId === ticket.id || (ticketReplies[ticket.id] ?? ticket.reply ?? '') === (ticket.reply ?? '')}
+                      onClick={()=>void saveTicket(ticket.id,{reply:ticketReplies[ticket.id] ?? ticket.reply ?? ''})}
+                      className="border border-emerald-500/40 px-3 py-2 rounded-lg text-emerald-300 disabled:opacity-40">
+                      {savingTicketId === ticket.id ? 'Salvando…' : 'Salvar resposta'}
+                    </button>
+                    <p className="text-[11px] text-zinc-500">
+                      Resposta registrada para a equipe. Não há envio automático ao jogador por nickname.
+                    </p>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
         {/* ============================================================== */}
         {/* 4. JOGADORES (COM BUSCA E OPÇÃO DE APAGAR) */}
         {/* ============================================================== */}
@@ -1388,110 +1505,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
         {/* ============================================================== */}
         {/* 5. LOJA (ITENS DA LOJA: EDITAR, APAGAR, CRIAR) */}
         {/* ============================================================== */}
-        {activeTab === 'store' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-white">Itens da Loja</h2>
-                <p className="text-zinc-500 text-[11px]">Gerencie kits, itens, chaves, moedas, spawners e cosméticos</p>
-              </div>
-              <button
-                onClick={() =>
-                  setEditingProduct({
-                    name: '',
-                    category: 'kits',
-                    price: 9.90,
-                    description: '',
-                    image: 'cube',
-                    active: true,
-                    highlights: ['Item exclusivo para sua aventura'],
-                    order: products.length + 1
-                  })
-                }
-                className="px-3 py-1.5 bg-white text-zinc-950 rounded-lg text-xs font-semibold hover:bg-zinc-200 cursor-pointer flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Novo Item</span>
-              </button>
-            </div>
-
-            <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
-              {products.map(prod => (
-                <div key={prod.id} className="py-4 flex items-center justify-between text-xs">
-                  <div>
-                    <div className="font-bold text-white flex items-center gap-2">
-                      <span>{prod.name}</span>
-                      <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-zinc-300 font-mono text-[10px] uppercase">
-                        {prod.category}
-                      </span>
-                      {!prod.active && (
-                        <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono text-[10px] uppercase">
-                          Inativo
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-emerald-400 font-mono">
-                        R$ {prod.price.toFixed(2).replace('.', ',')}
-                      </span>
-                      {prod.pixUrl && prod.pixUrl.trim().length > 0 ? (
-                        <span className="px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-mono text-[10px] flex items-center gap-1">
-                          💠 PIX: {prod.pixUrl}
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded bg-zinc-800/80 border border-white/[0.06] text-zinc-500 font-mono text-[10px]">
-                          Sem PIX
-                        </span>
-                      )}
-                      {prod.livepixUrl && prod.livepixUrl.trim().length > 0 ? (
-                        <span className="px-2 py-0.5 rounded bg-[#00e676]/10 border border-[#00e676]/30 text-[#00e676] font-mono text-[10px] flex items-center gap-1">
-                          ⚡ LivePix: {prod.livepixUrl}
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded bg-zinc-800/80 border border-white/[0.06] text-zinc-500 font-mono text-[10px]">
-                          Sem LivePix
-                        </span>
-                      )}
-                    </div>
-                    {prod.description && (
-                      <div className="text-zinc-500 text-[11px] mt-1 line-clamp-1">
-                        {prod.description}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setEditingProduct({ ...prod })}
-                      title="Editar Item da Loja"
-                      className="text-zinc-400 hover:text-white p-1.5 rounded hover:bg-white/[0.05] transition-colors cursor-pointer"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() =>
-                        setDeleteConfirm({
-                          type: 'product',
-                          id: prod.id,
-                          name: prod.name
-                        })
-                      }
-                      title="Apagar Item da Loja"
-                      className="text-zinc-500 hover:text-rose-400 p-1.5 rounded hover:bg-rose-500/10 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {products.length === 0 && (
-                <div className="py-8 text-center text-zinc-500">
-                  Nenhum produto cadastrado na loja.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {activeTab === 'store' && <ProductManager products={products} categories={managedCategories} initialCategory={adminProductCategory} onSave={async product=>{if(!adminToken)throw new Error('Entre no painel novamente.');const saved=products.some(p=>p.id===product.id)?await api.updateProduct(product.id,product,adminToken):await api.createProduct(product,adminToken);setProducts(previous=>[...previous.filter(p=>p.id!==saved.id),saved]);onRefreshGlobalData().catch(()=>{});return saved;}} onDelete={async id=>{if(!adminToken)throw new Error('Entre no painel novamente.');await api.deleteProduct(id,adminToken);setProducts(previous=>previous.filter(p=>p.id!==id));onRefreshGlobalData().catch(()=>{});}}/>}
 
         {/* ============================================================== */}
         {/* 6. EVENTOS (EDITAR, APAGAR, CRIAR) */}
@@ -1964,7 +1978,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                       try {
                         const clean = (serverSettings.livePixUrl || '').trim();
                         await api.updateLivePixUrl(clean, adminToken);
-                        await saveSettingsToFirestore({ ...serverSettings, livePixUrl: clean }).catch(() => {});
                         showSuccess('Link do LivePix salvo com sucesso!');
                         await onRefreshGlobalData();
                       } catch (err: unknown) {
@@ -2005,7 +2018,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                       try {
                         const clean = (serverSettings.pixUrl || '').trim();
                         await api.updatePixUrl(clean, adminToken);
-                        await saveSettingsToFirestore({ ...serverSettings, pixUrl: clean }).catch(() => {});
                         showSuccess('Link de cobrança PIX padrão salvo com sucesso!');
                         await onRefreshGlobalData();
                       } catch (err: unknown) {
@@ -2041,6 +2053,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
             </h3>
 
             <form onSubmit={handleSaveVip} className="space-y-3">
+              <label className="block">Categoria na loja<select value={editingVip.categoryId||'vips'} onChange={e=>setEditingVip({...editingVip,categoryId:e.target.value})} className="w-full px-3 py-2 bg-[#090b10] border border-white/10 rounded-lg">{managedCategories.map(c=><option key={c.id} value={c.id}>{c.title}</option>)}</select></label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] text-zinc-400 mb-1">Nome do VIP</label>
@@ -2167,166 +2180,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
 
       {/* ============================================================== */}
       {/* MODAL: EDIT PRODUCT (ITEM DA LOJA) */}
-      {/* ============================================================== */}
-      {editingProduct && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#0d1017] border border-white/[0.08] rounded-2xl p-6 space-y-4">
-            <h3 className="text-base font-bold text-white font-heading">
-              {editingProduct.id ? `Editar Item: ${editingProduct.name}` : 'Criar Novo Item da Loja'}
-            </h3>
-
-            <form onSubmit={handleSaveProduct} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] text-zinc-400 mb-1">Nome do Item</label>
-                  <input
-                    type="text"
-                    required
-                    value={editingProduct.name || ''}
-                    onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                    className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
-                    placeholder="Ex: Kit Gladiador"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-zinc-400 mb-1">Preço (R$)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={editingProduct.price ?? 0}
-                    onChange={e => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] text-zinc-400 mb-1">Categoria</label>
-                  <select
-                    value={editingProduct.category || 'kits'}
-                    onChange={e => setEditingProduct({ ...editingProduct, category: e.target.value as ProductCategory })}
-                    className="w-full px-3 py-2 bg-[#090b10] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
-                  >
-                    <option value="kits">Kits</option>
-                    <option value="itens">Itens</option>
-                    <option value="cosmeticos">Cosméticos</option>
-                    <option value="vips">VIPs</option>
-                    <option value="outros">Outros</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] text-zinc-400 mb-1">Ordem de exibição</label>
-                  <input
-                    type="number"
-                    value={editingProduct.order || 1}
-                    onChange={e => setEditingProduct({ ...editingProduct, order: parseInt(e.target.value) || 1 })}
-                    className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">Descrição</label>
-                <textarea
-                  rows={3}
-                  value={editingProduct.description || ''}
-                  onChange={e => setEditingProduct({ ...editingProduct, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
-                  placeholder="Detalhes sobre o item entregue no servidor"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">Destaques / Itens inclusos (um por linha)</label>
-                <textarea
-                  rows={2}
-                  value={editingProduct.highlights?.join('\n') || ''}
-                  onChange={e =>
-                    setEditingProduct({
-                      ...editingProduct,
-                      highlights: e.target.value.split('\n').filter(h => h.trim())
-                    })
-                  }
-                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white outline-none"
-                  placeholder="Espada de Netherite Sharpness V&#10;32 Maçãs Douradas"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-zinc-300 font-bold mb-1 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-white">
-                    <span className="text-[#00e676]">⚡</span> Link do LivePix deste Item
-                  </span>
-                  <span className="text-[10px] text-zinc-500 font-mono">https://livepix.gg/...</span>
-                </label>
-                <input
-                  type="url"
-                  value={editingProduct.livepixUrl || ''}
-                  onChange={e => setEditingProduct({ ...editingProduct, livepixUrl: e.target.value })}
-                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] focus:border-[#00e676] rounded-lg text-xs font-mono text-white outline-none placeholder-zinc-600"
-                  placeholder="https://livepix.gg/SEU_LINK_ITEM"
-                />
-                <p className="text-[10px] text-zinc-500 mt-1">
-                  Cole o link do LivePix específico para este item da loja. Ao escolher LivePix no checkout, o jogador será direcionado para cá.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-zinc-300 font-bold mb-1 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-white">
-                    <span className="text-cyan-400">💠</span> Link de Cobrança PIX deste Item
-                  </span>
-                  <span className="text-[10px] text-zinc-500 font-mono">Mercado Pago / Nubank / etc.</span>
-                </label>
-                <input
-                  type="text"
-                  value={editingProduct.pixUrl || ''}
-                  onChange={e => setEditingProduct({ ...editingProduct, pixUrl: e.target.value })}
-                  className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] focus:border-cyan-400 rounded-lg text-xs font-mono text-white outline-none placeholder-zinc-600"
-                  placeholder="https://link.mercadopago.com.br/... ou sua chave PIX"
-                />
-                <p className="text-[10px] text-zinc-500 mt-1">
-                  Cole o link de cobrança PIX específico para este item (Mercado Pago, Nubank, PicPay ou chave). Ao escolher PIX no checkout, o jogador será direcionado para cá.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="prod-active"
-                  checked={editingProduct.active !== false}
-                  onChange={e => setEditingProduct({ ...editingProduct, active: e.target.checked })}
-                  className="rounded accent-emerald-500 cursor-pointer"
-                />
-                <label htmlFor="prod-active" className="text-xs text-zinc-300 cursor-pointer">
-                  Item ativo na loja
-                </label>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-white/[0.06]">
-                <button
-                  type="button"
-                  onClick={() => setEditingProduct(null)}
-                  className="px-3.5 py-1.5 rounded-lg border border-white/[0.08] text-xs text-zinc-300 hover:bg-white/[0.03] cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-white text-zinc-950 text-xs font-semibold hover:bg-zinc-200 cursor-pointer"
-                >
-                  Salvar Item
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================== */}
-      {/* MODAL: EDIT / CREATE COUPON */}
       {/* ============================================================== */}
       {editingCoupon && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
@@ -2829,6 +2682,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                     <option value="whatsapp">WhatsApp</option>
                     <option value="twitter">Twitter / X</option>
                     <option value="site">Site</option>
+                    <option value="pacotes">Pacotes</option>
                     <option value="outros">Outros</option>
                   </select>
                 </div>

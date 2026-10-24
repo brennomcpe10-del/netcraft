@@ -2,6 +2,7 @@ import {
   VIP,
   Product,
   Order,
+  PixTestOrderSummary,
   ServerEvent,
   NewsArticle,
   ServerSettings,
@@ -42,7 +43,34 @@ function getHeaders(adminToken?: string | null) {
   return headers;
 }
 
+async function adminRequest<T>(path: string, options: RequestInit): Promise<T> {
+  let res: Response;
+  try { res = await fetch(`${API_BASE}${path}`, {...options, cache:'no-store', signal:AbortSignal.timeout(15000)}); }
+  catch { throw new Error('Não foi possível conectar à API administrativa. Verifique sua conexão e tente novamente.'); }
+  // Auth failures invalidate the admin session even if a proxy returned HTML.
+  if (!res.ok) notifyIfSessionExpired(res.status);
+  const data = await res.json().catch(() => null);
+  if (!data || typeof data !== 'object') throw new Error('A API administrativa não respondeu em JSON. Verifique o deploy e as rotas /api no Vercel.');
+  if (!res.ok) throw new Error(data.error || `Falha no acesso administrativo (HTTP ${res.status}).`);
+  return data as T;
+}
+
 export const api = {
+  async uploadIdentity(value:{data:string;mime:string},token:string){const res=await fetch(`${API_BASE}/admin/identity/upload`,{method:'POST',headers:getHeaders(token),body:JSON.stringify(value)});return handleAdminFetch<{asset:import('./identity.ts').LogoAsset;uploadToken:string}>(res,'Não foi possível enviar o logo.');},
+  async saveIdentity(value:unknown,token:string){const res=await fetch(`${API_BASE}/admin/identity`,{method:'PUT',headers:getHeaders(token),body:JSON.stringify(value)});return handleAdminFetch<import('./identity.ts').SiteIdentity>(res,'Não foi possível salvar a identidade visual.');},
+  async getEnvironmentStatus(adminToken: string): Promise<{
+    environment: 'preview' | 'production' | 'development';
+    isolatedPlayerAndSupportData: boolean;
+    isolatedPreviewCatalog: boolean;
+    sharedStoreData: boolean;
+    storeWritesBlocked: boolean;
+  }> {
+    const res = await fetch(`${API_BASE}/admin/environment`, {
+      headers: getHeaders(adminToken), cache: 'no-store'
+    });
+    return handleAdminFetch(res, 'Não foi possível confirmar o isolamento da Preview.');
+  },
+  async getRevenue(period:string,token:string|null):Promise<import('./revenue.ts').RevenueReport>{const res=await fetch(`${API_BASE}/admin/revenue?period=${encodeURIComponent(period)}`,{headers:getHeaders(token),cache:'no-store'});return handleAdminFetch(res,'Não foi possível calcular o faturamento.');},
   // --- PLAYER / AUTH ---
   async loginPlayer(nickname: string): Promise<{ success: boolean; player: Player }> {
     const res = await fetch(`${API_BASE}/player/login`, {
@@ -71,28 +99,17 @@ export const api = {
 
   // --- ADMIN AUTH ---
   async loginAdmin(password: string): Promise<{ success: boolean; token: string }> {
-    const res = await fetch(`${API_BASE}/admin/login`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({ password })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Palavra-chave incorreta.');
-    }
-    return res.json();
+    return adminRequest('/admin/login', {method:'POST', headers:getHeaders(), body:JSON.stringify({password})});
   },
 
   async verifyAdmin(token: string): Promise<boolean> {
-    try {
-      const res = await fetch(`${API_BASE}/admin/verify`, {
-        headers: getHeaders(token)
-      });
-      const data = await res.json();
-      return !!data.authenticated;
-    } catch {
-      return false;
-    }
+    const data = await adminRequest<{authenticated:boolean}>('/admin/verify', {headers:getHeaders(token)});
+    return data.authenticated === true;
+  },
+
+  async saveStoreCategories(categories: import('./storeCategories.ts').StoreCategory[], token: string) {
+    const res = await fetch(`${API_BASE}/admin/store-categories`, {method:'PUT',headers:getHeaders(token),body:JSON.stringify({categories})});
+    return handleAdminFetch<{success:boolean}>(res, 'Não foi possível salvar as categorias.');
   },
 
   async logoutAdmin(token: string): Promise<void> {
@@ -143,8 +160,10 @@ export const api = {
   },
 
   // --- VIPS ---
-  async getVips(all = false): Promise<VIP[]> {
-    const res = await fetch(`${API_BASE}/vips${all ? '?all=true' : ''}`);
+  async getVips(all = false, adminToken?: string): Promise<VIP[]> {
+    const res = await fetch(`${API_BASE}/vips${all ? '?all=true' : ''}`, {
+      headers: getHeaders(adminToken), cache: 'no-store'
+    });
     if (!res.ok) throw new Error('Erro ao buscar VIPs.');
     return res.json();
   },
@@ -182,12 +201,14 @@ export const api = {
   },
 
   // --- STORE PRODUCTS ---
-  async getProducts(all = false, category?: string): Promise<Product[]> {
+  async getProducts(all = false, category?: string, adminToken?: string): Promise<Product[]> {
     const params = new URLSearchParams();
     if (all) params.append('all', 'true');
     if (category) params.append('category', category);
     const query = params.toString() ? `?${params.toString()}` : '';
-    const res = await fetch(`${API_BASE}/products${query}`);
+    const res = await fetch(`${API_BASE}/products${query}`, {
+      headers: getHeaders(adminToken), cache: 'no-store'
+    });
     if (!res.ok) throw new Error('Erro ao buscar produtos.');
     return res.json();
   },
@@ -198,8 +219,7 @@ export const api = {
       headers: getHeaders(adminToken),
       body: JSON.stringify(productData)
     });
-    if (!res.ok) throw new Error('Erro ao criar produto.');
-    return res.json();
+    return handleAdminFetch<Product>(res,'Erro ao criar produto.');
   },
 
   async updateProduct(id: string, productData: Partial<Product>, adminToken: string): Promise<Product> {
@@ -208,8 +228,7 @@ export const api = {
       headers: getHeaders(adminToken),
       body: JSON.stringify(productData)
     });
-    if (!res.ok) throw new Error('Erro ao atualizar produto.');
-    return res.json();
+    return handleAdminFetch<Product>(res,'Erro ao atualizar produto.');
   },
 
   async deleteProduct(id: string, adminToken: string, name?: string): Promise<void> {
@@ -218,7 +237,7 @@ export const api = {
       method: 'DELETE',
       headers: getHeaders(adminToken)
     });
-    if (!res.ok) throw new Error('Erro ao excluir produto.');
+    await handleAdminFetch<{success:boolean}>(res,'Erro ao excluir produto.');
   },
 
   // --- ORDERS ---
@@ -245,6 +264,14 @@ export const api = {
     const res = await fetch(`${API_BASE}/orders/${id}`);
     if (!res.ok) throw new Error('Pedido não encontrado.');
     return res.json();
+  },
+
+  async getPixTestOrders(adminToken: string): Promise<PixTestOrderSummary[]> {
+    const res = await fetch(`${API_BASE}/admin/pix-test-orders`, {
+      headers: getHeaders(adminToken),
+      cache: 'no-store'
+    });
+    return handleAdminFetch<PixTestOrderSummary[]>(res, 'Não foi possível consultar os Pix de teste.');
   },
 
   async getAllOrders(adminToken: string): Promise<Order[]> {
@@ -368,8 +395,10 @@ export const api = {
   },
 
   // --- EVENTS ---
-  async getEvents(all = false): Promise<ServerEvent[]> {
-    const res = await fetch(`${API_BASE}/events${all ? '?all=true' : ''}`);
+  async getEvents(all = false, adminToken?: string): Promise<ServerEvent[]> {
+    const res = await fetch(`${API_BASE}/events${all ? '?all=true' : ''}`, {
+      headers: getHeaders(adminToken), cache: 'no-store'
+    });
     if (!res.ok) throw new Error('Erro ao carregar eventos.');
     return res.json();
   },
@@ -404,8 +433,10 @@ export const api = {
   },
 
   // --- NEWS ---
-  async getNews(all = false): Promise<NewsArticle[]> {
-    const res = await fetch(`${API_BASE}/news${all ? '?all=true' : ''}`);
+  async getNews(all = false, adminToken?: string): Promise<NewsArticle[]> {
+    const res = await fetch(`${API_BASE}/news${all ? '?all=true' : ''}`, {
+      headers: getHeaders(adminToken), cache: 'no-store'
+    });
     if (!res.ok) throw new Error('Erro ao carregar notícias.');
     return res.json();
   },
@@ -440,8 +471,10 @@ export const api = {
   },
 
   // --- COMMUNITY ---
-  async getCommunity(): Promise<SocialLink[]> {
-    const res = await fetch(`${API_BASE}/community`);
+  async getCommunity(all = false, adminToken?: string): Promise<SocialLink[]> {
+    const res = await fetch(`${API_BASE}/community${all ? '?all=true' : ''}`, {
+      headers: getHeaders(adminToken), cache: 'no-store'
+    });
     if (!res.ok) throw new Error('Erro ao carregar redes sociais.');
     return res.json();
   },
@@ -485,7 +518,7 @@ export const api = {
     return res.json();
   },
 
-  async createTicket(ticketData: { nickname: string; category: string; subject: string; message: string }): Promise<SupportTicket> {
+  async createTicket(ticketData: { nickname: string; category: string; subject: string; message: string }): Promise<Pick<SupportTicket,'id'|'status'|'createdAt'>> {
     const res = await fetch(`${API_BASE}/tickets`, {
       method: 'POST',
       headers: getHeaders(),

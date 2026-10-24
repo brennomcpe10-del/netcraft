@@ -7,14 +7,15 @@ export function compressImageFile(
   file: File,
   maxWidth = 1280,
   maxHeight = 960,
-  quality = 0.82
+  quality = 0.82,
+  outputType: "image/jpeg" | "image/png" | "image/webp" = "image/jpeg",
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
+    reader.onerror = () => reject(new Error("Erro ao ler arquivo"));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(new Error('Erro ao decodificar imagem'));
+      img.onerror = () => reject(new Error("Erro ao decodificar imagem"));
       img.onload = () => {
         let width = img.width;
         let height = img.height;
@@ -28,10 +29,10 @@ export function compressImageFile(
           height = maxHeight;
         }
 
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext("2d");
         if (!ctx) {
           resolve(reader.result as string);
           return;
@@ -39,7 +40,7 @@ export function compressImageFile(
 
         // Draw and compress to JPEG format
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        const dataUrl = canvas.toDataURL(outputType, quality);
         resolve(dataUrl);
       };
       img.src = reader.result as string;

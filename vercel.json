@@ -1,5 +1,5 @@
 {
-  "buildCommand": "vite build",
+  "buildCommand": "npm run lint && NODE_ENV=test npm test && npm run build && node --import tsx -e 'import { runPreviewPixCheck } from \"./scripts/preview-pix-build.ts\"; runPreviewPixCheck();'",
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [

@@ -2,33 +2,52 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Preview-only player and support collections. No browser access.
+    // They avoid writing into Production users and tickets in the shared DB.
+    match /previewPlayers/{id} { allow read, write: if false; }
+    match /previewSupportTickets/{id} { allow read, write: if false; }
+    // Copy-on-write Preview store data. Only the Admin SDK can read/write.
+    match /previewProducts/{id} { allow read, write: if false; }
+    match /previewVips/{id} { allow read, write: if false; }
+    match /previewStoreSettings/{id} { allow read, write: if false; }
+
+    // Backend Admin SDK only. Never mirror these records into public orders.
+    match /pixTestCouponUsage/{id} { allow read, write: if false; }
+    match /pixTestOrders/{id} { allow read, write: if false; }
+    match /pixTestDeliveries/{id} { allow read, write: if false; }
+
     function isValidId(id) {
       return id is string && id.size() > 0 && id.size() <= 128;
     }
 
     match /users/{userId} {
-      allow read: if true;
-      allow write: if isValidId(userId);
+      // Pending safe rollout to Firebase after Production compatibility review.
+      // Preview uses Firebase Admin SDK; nickname-only access is not verification.
+      allow read, write: if false;
     }
 
     match /players/{playerId} {
-      allow read: if true;
-      allow write: if isValidId(playerId);
+      // Pending safe rollout to Firebase after Production compatibility review.
+      // Preview uses Firebase Admin SDK; nickname-only access is not verification.
+      allow read, write: if false;
     }
 
     match /vips/{vipId} {
+      // Public storefront may read, but pricing and availability are server-admin only.
       allow read: if true;
-      allow write: if isValidId(vipId);
+      allow write: if false;
     }
 
     match /products/{productId} {
+      // Public storefront may read, but pricing and availability are server-admin only.
       allow read: if true;
-      allow write: if isValidId(productId);
+      allow write: if false;
     }
 
     match /orders/{orderId} {
-      allow read: if true;
-      allow write: if isValidId(orderId);
+      // Legacy order history contains purchase records. Only the backend
+      // Admin SDK may read or change it; nickname-only login is not proof.
+      allow read, write: if false;
     }
 
     match /events/{eventId} {
@@ -48,12 +67,15 @@ service cloud.firestore {
 
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isValidId(settingId);
+      // Store categories are edited through the authenticated admin API.
+      // Other legacy setting writes require migration before locking them down.
+      allow write: if isValidId(settingId) && settingId != 'storeCategories';
     }
 
     match /tickets/{ticketId} {
-      allow read: if true;
-      allow write: if isValidId(ticketId);
+      // Pending safe rollout to Firebase after Production compatibility review.
+      // Preview uses Firebase Admin SDK; nickname-only access is not verification.
+      allow read, write: if false;
     }
 
     match /stats/{statId} {
@@ -102,8 +124,8 @@ service cloud.firestore {
     }
 
     match /coupons/{couponId} {
-      allow read: if true;
-      allow write: if isValidId(couponId);
+      // Coupon rules are private; only the authenticated server can read/write.
+      allow read, write: if false;
     }
 
     match /test/{testId} {

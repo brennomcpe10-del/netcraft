@@ -1,44 +1,48 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ToastProvider } from './context/ToastContext.tsx';
-import { PlayerProvider } from './context/PlayerContext.tsx';
-import { AdminProvider, useAdmin } from './context/AdminContext.tsx';
+import {IdentityProvider} from "./context/IdentityContext.tsx";
+import { CartProvider, useCart } from "./context/CartContext.tsx";
+import { CartView } from "./views/CartView.tsx";
+import { useStoreCategories } from "./hooks/useStoreCategories.ts";
+import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { ToastProvider, useToast } from "./context/ToastContext.tsx";
+import { PlayerProvider } from "./context/PlayerContext.tsx";
+import { AdminProvider, useAdmin } from "./context/AdminContext.tsx";
 
-import { Header } from './components/Header.tsx';
-import { Footer } from './components/Footer.tsx';
-import { NicknameModal } from './components/modals/NicknameModal.tsx';
-import { AdminLoginModal } from './components/modals/AdminLoginModal.tsx';
-import { CheckoutModal } from './components/modals/CheckoutModal.tsx';
+import { Header } from "./components/Header.tsx";
+import { Footer } from "./components/Footer.tsx";
+import { NicknameModal } from "./components/modals/NicknameModal.tsx";
+import { AdminLoginModal } from "./components/modals/AdminLoginModal.tsx";
 
-import { HomeView } from './views/HomeView.tsx';
-import { ServerView } from './views/ServerView.tsx';
-import { VipView } from './views/VipView.tsx';
-import { StoreView } from './views/StoreView.tsx';
-import { EventsView } from './views/EventsView.tsx';
-import { NewsView } from './views/NewsView.tsx';
-import { CommunityView } from './views/CommunityView.tsx';
-import { SupportView } from './views/SupportView.tsx';
-import { ProfileView } from './views/ProfileView.tsx';
-import { AdminView } from './views/AdminView.tsx';
+import { HomeView } from "./views/HomeView.tsx";
+import { ServerView } from "./views/ServerView.tsx";
+import { VipView } from "./views/VipView.tsx";
+import { StoreView } from "./views/StoreView.tsx";
+import { EventsView } from "./views/EventsView.tsx";
+import { NewsView } from "./views/NewsView.tsx";
+import { CommunityView } from "./views/CommunityView.tsx";
+import { SupportView } from "./views/SupportView.tsx";
+import { ProfileView } from "./views/ProfileView.tsx";
+const AdminView = lazy(() =>
+  import("./views/AdminView.tsx").then((module) => ({
+    default: module.AdminView,
+  })),
+);
 
-import { VIP, Product, ServerEvent, NewsArticle, ServerSettings, SocialLink } from './types/index.ts';
 import {
-  seedFirestoreIfEmpty,
-  subscribeToVips,
-  subscribeToProducts,
-  subscribeToServerSettings,
-  subscribeToEvents,
-  subscribeToNews,
-  subscribeToSocialLinks,
-  getVipsFromFirestore,
-  getProductsFromFirestore,
-  getEventsFromFirestore,
-  getNewsFromFirestore,
-  getSettingsFromFirestore,
-  getCommunityFromFirestore
-} from './lib/firestoreSync.ts';
+  VIP,
+  Product,
+  ServerEvent,
+  NewsArticle,
+  ServerSettings,
+  SocialLink,
+} from "./types/index.ts";
+
 
 function MainAppContent() {
-  const [currentTab, setCurrentTab] = useState<string>('home');
+  const categories = useStoreCategories();
+  const cart = useCart();
+  const { showSuccess } = useToast();
+  const [currentTab, setCurrentTab] = useState<string>("home");
+  const [storeCategory, setStoreCategory] = useState("all");
   const [settings, setSettings] = useState<ServerSettings | null>(null);
   const [vips, setVips] = useState<VIP[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -47,78 +51,71 @@ function MainAppContent() {
   const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Active checkout item modal state
-  const [checkoutItem, setCheckoutItem] = useState<{
-    item: VIP | Product;
-    type: 'vip' | 'product';
-  } | null>(null);
+  const { isAdminLoggedIn, isAdminChecking, openAdminModal } = useAdmin();
 
-  const { isAdminLoggedIn, openAdminModal } = useAdmin();
+  const [catalogError, setCatalogError] = useState("");
 
-  // 1. Initial Firestore data fetch (Official Source of Truth)
+  // Product prices and availability must come from the same backend used by Pix.
+  // Firestore browser listeners can race with an authoritative catalog response.
   const fetchGlobalData = useCallback(async () => {
-    try {
-      const [st, v, p, ev, nw, soc] = await Promise.all([
-        getSettingsFromFirestore(),
-        getVipsFromFirestore(),
-        getProductsFromFirestore(),
-        getEventsFromFirestore(),
-        getNewsFromFirestore(),
-        getCommunityFromFirestore()
-      ]);
-      if (st) setSettings(st);
-      if (v) setVips(v);
-      if (p) setProducts(p);
-      if (ev) setEvents(ev);
-      if (nw) setNews(nw);
-      if (soc) setSocialLinks(soc);
-    } catch (err) {
-      console.warn('Firestore initial fetch notice:', err);
-    } finally {
-      setLoading(false);
+    async function readJson(path: string): Promise<unknown> {
+      const res = await fetch(path, { cache: "no-store" });
+      if (!res.ok) throw new Error(`API indisponível: ${path}`);
+      return res.json();
     }
+    const [catalog, config, eventsResult, newsResult, communityResult] =
+      await Promise.allSettled([
+        readJson("/api/storefront/catalog"),
+        readJson("/api/settings"),
+        readJson("/api/events"),
+        readJson("/api/news"),
+        readJson("/api/community"),
+      ]);
+    if (catalog.status === "fulfilled" && catalog.value &&
+        typeof catalog.value === "object") {
+      const data = catalog.value as {products?: unknown; vips?: unknown};
+      if (Array.isArray(data.products) && Array.isArray(data.vips)) {
+        setProducts(data.products as Product[]);
+        setVips(data.vips as VIP[]);
+        setCatalogError("");
+      } else {
+        setProducts([]);
+        setVips([]);
+        setCatalogError("Não foi possível validar o catálogo oficial da loja.");
+      }
+    } else {
+      // Fail closed: never show stale prices from an unauthenticated client snapshot.
+      setProducts([]);
+      setVips([]);
+      setCatalogError("Catálogo temporariamente indisponível. Não é possível realizar compras.");
+    }
+    if (config.status === "fulfilled" && config.value &&
+        typeof config.value === "object") {
+      setSettings(config.value as ServerSettings);
+    }
+    if (eventsResult.status === "fulfilled" && Array.isArray(eventsResult.value))
+      setEvents(eventsResult.value as ServerEvent[]);
+    if (newsResult.status === "fulfilled" && Array.isArray(newsResult.value))
+      setNews(newsResult.value as NewsArticle[]);
+    if (communityResult.status === "fulfilled" && Array.isArray(communityResult.value))
+      setSocialLinks(communityResult.value as SocialLink[]);
+    setLoading(false);
   }, []);
 
-  // 2. Real-time Firestore synchronization across all devices
   useEffect(() => {
-    // Seed Firestore if collections are empty
-    seedFirestoreIfEmpty().catch(() => {});
-
-    // Fallback load
-    fetchGlobalData();
-
-    // Attach real-time listeners for live updates across all devices
-    const unsubVips = subscribeToVips(liveVips => {
-      setVips(liveVips);
-    });
-
-    const unsubProds = subscribeToProducts(liveProds => {
-      setProducts(liveProds);
-    });
-
-    const unsubSettings = subscribeToServerSettings(liveSettings => {
-      if (liveSettings) setSettings(liveSettings);
-    });
-
-    const unsubEvents = subscribeToEvents(liveEvents => {
-      setEvents(liveEvents);
-    });
-
-    const unsubNews = subscribeToNews(liveNews => {
-      setNews(liveNews);
-    });
-
-    const unsubSocial = subscribeToSocialLinks(liveSocial => {
-      setSocialLinks(liveSocial);
-    });
-
+    void fetchGlobalData();
+    // Cross-device changes are fetched through the server rather than
+    // subscriptions to collections whose writes must be protected.
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void fetchGlobalData();
+    }, 60000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void fetchGlobalData();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
-      unsubVips();
-      unsubProds();
-      unsubSettings();
-      unsubEvents();
-      unsubNews();
-      unsubSocial();
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [fetchGlobalData]);
 
@@ -126,37 +123,48 @@ function MainAppContent() {
   useEffect(() => {
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
-    if (path.includes('/admin') || hash === '#admin') {
+    if (!isAdminChecking && (path === "/admin" || path === "/admin/" || hash === "#admin")) {
       if (isAdminLoggedIn) {
-        setCurrentTab('admin');
+        setCurrentTab("admin");
       } else {
         openAdminModal();
       }
     }
-  }, [isAdminLoggedIn, openAdminModal]);
+  }, [isAdminLoggedIn, isAdminChecking, openAdminModal]);
+
+  useEffect(() => {
+    if (currentTab === "admin" && !isAdminChecking && !isAdminLoggedIn) {
+      setCurrentTab("home");
+      openAdminModal();
+    }
+  }, [currentTab, isAdminChecking, isAdminLoggedIn, openAdminModal]);
 
   // Handle buy item trigger
-  const handleBuyItem = (item: VIP | Product, type: 'vip' | 'product') => {
-    setCheckoutItem({ item, type });
+  const handleBuyItem = (item: VIP | Product, type: "vip" | "product") => {
+    cart.add(item, type);
+    showSuccess(`${item.name}: carrinho atualizado.`);
   };
 
   // If viewing admin panel, show AdminView full screen
-  if (currentTab === 'admin') {
-    if (!isAdminLoggedIn) {
-      openAdminModal();
-      setCurrentTab('home');
-      return null;
-    }
+  if (currentTab === "admin" && isAdminLoggedIn) {
     return (
-      <AdminView
-        onExit={() => {
-          setCurrentTab('home');
-          if (window.location.pathname.includes('/admin')) {
-            window.history.pushState(null, '', '/');
-          }
-        }}
-        onRefreshGlobalData={fetchGlobalData}
-      />
+      <Suspense
+        fallback={
+          <p role="status" className="p-8">
+            Carregando administração…
+          </p>
+        }
+      >
+        <AdminView
+          onExit={() => {
+            setCurrentTab("home");
+            if (window.location.pathname.includes("/admin")) {
+              window.history.pushState(null, "", "/");
+            }
+          }}
+          onRefreshGlobalData={fetchGlobalData}
+        />
+      </Suspense>
     );
   }
 
@@ -175,19 +183,37 @@ function MainAppContent() {
 
       {/* Header with [NETCRAFTBR] and [Nick] [Menu] */}
       <Header
+        cartCount={cart.count}
+        onOpenCart={() => {
+          setCurrentTab("cart");
+          window.scrollTo(0, 0);
+        }}
         currentTab={currentTab}
-        setCurrentTab={setCurrentTab}
+        setCurrentTab={(tab) => {
+          if (tab === "store") setStoreCategory("all");
+          setCurrentTab(tab);
+        }}
         onOpenPlayModal={() => {
-          setCurrentTab('server');
+          setCurrentTab("server");
         }}
       />
 
       {/* Main Content */}
-      <main className="flex-1 relative w-full overflow-x-hidden">
-        {currentTab === 'home' && (
+      <main
+        id="main-content"
+        className="flex-1 relative w-full overflow-x-hidden"
+      >
+        {catalogError && (currentTab === "store" || currentTab === "vip" || currentTab === "cart") && (
+          <p role="alert" className="mx-auto max-w-5xl my-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+            {catalogError}
+          </p>
+        )}
+        {currentTab === "home" && (
           <HomeView
             setCurrentTab={setCurrentTab}
             settings={settings}
+            categories={categories}
+            onExploreCategory={setStoreCategory}
             vips={vips}
             products={products}
             events={events}
@@ -197,20 +223,38 @@ function MainAppContent() {
           />
         )}
 
-        {currentTab === 'server' && (
-          <ServerView settings={settings} />
+        {currentTab === "cart" && (
+          <CartView
+            products={products}
+            vips={vips}
+            onShop={() => {
+              setStoreCategory("all");
+              setCurrentTab("store");
+            }}
+          />
         )}
+        {currentTab === "server" && <ServerView settings={settings} />}
 
-        {currentTab === 'vip' && (
-          <VipView
+        {currentTab === "vip" && (
+          <StoreView
+            categories={categories}
+            initialCategory="vips"
+            products={products}
             vips={vips}
             loading={loading}
-            onBuyVip={vip => handleBuyItem(vip, 'vip')}
+            onCategoryChange={(id) => {
+              setStoreCategory(id);
+              setCurrentTab("store");
+            }}
+            onBuyItem={handleBuyItem}
           />
         )}
 
-        {currentTab === 'store' && (
+        {currentTab === "store" && (
           <StoreView
+            categories={categories}
+            initialCategory={storeCategory}
+            onCategoryChange={setStoreCategory}
             products={products}
             vips={vips}
             loading={loading}
@@ -218,29 +262,31 @@ function MainAppContent() {
           />
         )}
 
-        {currentTab === 'events' && (
-          <EventsView
-            events={events}
-            loading={loading}
-          />
+        {currentTab === "events" && (
+          <EventsView events={events} loading={loading} />
         )}
 
-        {currentTab === 'community' && (
+        {currentTab === "news" && (
+          <NewsView news={news} loading={loading} />
+        )}
+
+        {currentTab === "community" && (
           <CommunityView socialLinks={socialLinks} />
         )}
 
-        {currentTab === 'support' && (
-          <SupportView />
-        )}
+        {currentTab === "support" && <SupportView />}
 
-        {currentTab === 'profile' && (
+        {currentTab === "profile" && (
           <ProfileView setCurrentTab={setCurrentTab} />
         )}
       </main>
 
       {/* Footer */}
       <Footer
-        setCurrentTab={setCurrentTab}
+        setCurrentTab={(tab) => {
+          if (tab === "store") setStoreCategory("all");
+          setCurrentTab(tab);
+        }}
         settings={settings}
       />
 
@@ -248,22 +294,10 @@ function MainAppContent() {
       <NicknameModal />
       <AdminLoginModal
         onSuccessRedirect={() => {
-          setCurrentTab('admin');
+          setCurrentTab("admin");
         }}
       />
 
-      {checkoutItem && (
-        <CheckoutModal
-          item={checkoutItem.item}
-          itemType={checkoutItem.type}
-          livePixUrl={settings?.livePixUrl}
-          pixUrl={settings?.pixUrl}
-          onClose={() => setCheckoutItem(null)}
-          onSuccess={async () => {
-            await fetchGlobalData();
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -271,11 +305,15 @@ function MainAppContent() {
 export default function App() {
   return (
     <ToastProvider>
+      <IdentityProvider>
       <PlayerProvider>
         <AdminProvider>
-          <MainAppContent />
+          <CartProvider>
+            <MainAppContent />
+          </CartProvider>
         </AdminProvider>
       </PlayerProvider>
+    </IdentityProvider>
     </ToastProvider>
   );
 }
