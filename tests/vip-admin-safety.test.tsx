@@ -71,3 +71,11 @@ test("VIP admin rejects non-text descriptions instead of coercing them", () => {
   assert.match(draft, /body\?\.description !== undefined && typeof body\.description !== 'string'/);
   assert.match(draft, /A descrição do VIP deve ser um texto/);
 });
+
+test("VIP price must be numeric and must not silently coerce null or strings", () => {
+  const source = readFileSync(new URL("../server/routes/api.ts", import.meta.url), "utf8");
+  const draft = source.slice(source.indexOf("function vipDraft("), source.indexOf("apiRouter.post('/admin/vips'"));
+  assert.match(draft, /typeof body\?\.price !== 'number'/);
+  assert.match(draft, /const price = body\.price/);
+  assert.match(draft, /Number\.isFinite\(price\)/);
+});
