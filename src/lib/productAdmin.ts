@@ -66,7 +66,7 @@ export function normalizeProduct(
   const order = data.order ?? 1;
   if (!Number.isSafeInteger(order) || order < 0 || order > 1000000)
     throw new Error("Informe uma ordem inteira entre 0 e 1000000.");
-  const description = data.description || "";
+  const description = data.description ?? "";
   if (typeof description !== "string" || description.length > 10000)
     throw new Error("A descrição pode ter até 10000 caracteres.");
   const image = data.image || "/categories/items.webp";
@@ -82,7 +82,7 @@ export function normalizeProduct(
     throw new Error(
       "Use uma imagem HTTPS, um caminho local ou envie uma imagem.",
     );
-  const highlights = data.highlights || [];
+  const highlights = data.highlights ?? [];
   if (
     !Array.isArray(highlights) ||
     highlights.length > 100 ||
