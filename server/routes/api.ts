@@ -167,12 +167,13 @@ function vipDraft(body:any, id:string) {
  const duration = typeof body?.duration === 'string' ? body.duration.trim() : '';
  if (!/^[a-zA-Z0-9_-]{2,128}$/.test(id) || !name || name.length > 120 ||
      !duration || duration.length > 80 || !Number.isFinite(price) ||
-     price < 0 || price > 10000 || Math.abs(price*100-Math.round(price*100)) > 0.000001)
+     price < 0 || price > 10000 || Math.abs(price*100-Math.round(price*100)) > 0.000001 ||
+     (body.active !== false && price === 0))
   throw new ProductCatalogError('Confira o nome, duração, identificador e preço do VIP.',400);
  return {
   id, name, price, duration,
   description: String(body.description || '').slice(0,10000),
-  benefits: Array.isArray(body.benefits) ? body.benefits.filter((x:unknown)=>typeof x==='string').slice(0,100) : [],
+  benefits: Array.isArray(body.benefits) ? body.benefits.filter((x:unknown)=>typeof x==='string').slice(0,100).map((x:string)=>x.slice(0,500)) : [],
   color: ['emerald','cyan','blue','purple','amber'].includes(body.color) ? body.color : 'emerald',
   image: typeof body.image === 'string' ? body.image.slice(0,850000) : 'crown',
   order: Number.isInteger(Number(body.order)) ? Math.max(0,Math.min(1000000,Number(body.order))) : 1,
