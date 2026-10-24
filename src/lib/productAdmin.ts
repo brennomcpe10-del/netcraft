@@ -95,6 +95,13 @@ export function normalizeProduct(
   const max = data.maxQuantity ?? 64;
   if (!Number.isInteger(max) || max < 1 || max > 64)
     throw new Error("O limite de unidades deve ser entre 1 e 64.");
+  for (const field of ["livepixUrl", "pixUrl"] as const) {
+    const value = data[field];
+    if (value !== undefined && (typeof value !== "string" || value.length > 2048))
+      throw new Error("O link ou a chave de pagamento deve ter até 2048 caracteres.");
+  }
+  if (data.livepixUrl?.trim() && !/^https?:\/\//i.test(data.livepixUrl.trim()))
+    throw new Error("O link LivePix deve começar com http:// ou https://.");
   validateRewardDraft(data.rewardDraft);
   const result: Product = {
     ...data,
