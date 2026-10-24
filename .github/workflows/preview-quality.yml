@@ -1,0 +1,33 @@
+name: NetCraftBR Preview Quality
+
+on:
+  push:
+    branches:
+      - redesign-mobile-solaris
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: TypeScript, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Preview branch
+        uses: actions/checkout@v4
+      - name: Install Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: TypeScript typecheck
+        run: npm run lint
+      - name: Automated tests
+        run: NODE_ENV=test npm test
+      - name: Build storefront
+        run: npm run build
