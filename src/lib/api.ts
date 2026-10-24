@@ -60,6 +60,7 @@ export const api = {
     environment: 'preview' | 'production' | 'development';
     isolatedPlayerAndSupportData: boolean;
     sharedStoreData: boolean;
+    storeWritesBlocked: boolean;
   }> {
     const res = await fetch(`${API_BASE}/admin/environment`, {
       headers: getHeaders(adminToken), cache: 'no-store'
