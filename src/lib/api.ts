@@ -56,6 +56,16 @@ async function adminRequest<T>(path: string, options: RequestInit): Promise<T> {
 export const api = {
   async uploadIdentity(value:{data:string;mime:string},token:string){const res=await fetch(`${API_BASE}/admin/identity/upload`,{method:'POST',headers:getHeaders(token),body:JSON.stringify(value)});return handleAdminFetch<{asset:import('./identity.ts').LogoAsset;uploadToken:string}>(res,'Não foi possível enviar o logo.');},
   async saveIdentity(value:unknown,token:string){const res=await fetch(`${API_BASE}/admin/identity`,{method:'PUT',headers:getHeaders(token),body:JSON.stringify(value)});return handleAdminFetch<import('./identity.ts').SiteIdentity>(res,'Não foi possível salvar a identidade visual.');},
+  async getEnvironmentStatus(adminToken: string): Promise<{
+    environment: 'preview' | 'production' | 'development';
+    isolatedPlayerAndSupportData: boolean;
+    sharedStoreData: boolean;
+  }> {
+    const res = await fetch(`${API_BASE}/admin/environment`, {
+      headers: getHeaders(adminToken), cache: 'no-store'
+    });
+    return handleAdminFetch(res, 'Não foi possível confirmar o isolamento da Preview.');
+  },
   async getRevenue(period:string,token:string|null):Promise<import('./revenue.ts').RevenueReport>{const res=await fetch(`${API_BASE}/admin/revenue?period=${encodeURIComponent(period)}`,{headers:getHeaders(token),cache:'no-store'});return handleAdminFetch(res,'Não foi possível calcular o faturamento.');},
   // --- PLAYER / AUTH ---
   async loginPlayer(nickname: string): Promise<{ success: boolean; player: Player }> {
