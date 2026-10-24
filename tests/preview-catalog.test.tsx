@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { mergeCatalogSnapshots, previewCatalogName } from "../server/services/previewCatalog.ts";
+import { mergeCatalogSnapshots, previewCatalogName, readCatalogItem } from "../server/services/previewCatalog.ts";
 
 test("Preview uses separate product and VIP namespaces", () => {
   assert.equal(previewCatalogName("products"),"previewProducts");
@@ -85,4 +85,39 @@ test("single-item Preview reads strip internal tombstone marker as list reads do
   const read = source.slice(source.indexOf("export async function readCatalogItem("), source.indexOf("export function listCatalog("));
   assert.match(read, /const \{ __previewDeleted: _internalMarker, \.\.\.visibleOverlay \} = overlay\.data\(\) \|\| \{\}/);
   assert.match(read, /\.\.\.visibleOverlay,id:overlay\.id/);
+});
+
+test("isolated Preview single-item read merges partial overrides and hides tombstones", async () => {
+  const previous = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = "preview";
+  try {
+    const documents = new Map<string, Record<string, unknown>>([
+      ["products/item", { name: "Original", price: 19.9, active: true }],
+      ["previewProducts/item", { price: 5, __previewDeleted: false }],
+    ]);
+    const db = {
+      collection(name: string) {
+        return {
+          doc(id: string) {
+            const key = `${name}/${id}`;
+            return { key };
+          },
+        };
+      },
+    };
+    const tx = {
+      async get(ref: { key: string }) {
+        const data = documents.get(ref.key);
+        return { exists: data !== undefined, id: ref.key.split("/")[1], data: () => data };
+      },
+    };
+    const visible = await readCatalogItem("products", "item", tx, db as any);
+    assert.deepEqual(visible, { id: "item", name: "Original", price: 5, active: true });
+    assert.equal(documents.get("products/item")?.price, 19.9);
+    documents.set("previewProducts/item", { __previewDeleted: true });
+    assert.equal(await readCatalogItem("products", "item", tx, db as any), null);
+  } finally {
+    if (previous === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previous;
+  }
 });
