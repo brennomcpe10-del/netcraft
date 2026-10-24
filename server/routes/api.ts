@@ -9,6 +9,7 @@ import { protectSharedPreviewWrite } from '../services/previewWriteGuard.ts';
 import { catalogWriteReference, listCatalog, readCatalogItem, readStoreCategories, previewCategoryReference } from '../services/previewCatalog.ts';
 import { isPreviewEnvironment } from '../services/previewIsolation.ts';
 import { validateVipCategoryId, assertVipCategoryExists } from '../services/vipCategoryId.ts';
+import { validateVipImage } from '../services/vipImage.ts';
 import {firestoreProducts} from '../services/firestoreProducts.ts';
 import {quoteCart,validateCartRequest} from '../../src/lib/cartQuote.ts';
 import {validateCategories, defaultStoreCategories} from '../../src/lib/storeCategories.ts';
@@ -168,7 +169,7 @@ async function vipCategories() {
  validateCategories(current);
  return current;
 }
-function vipDraft(body:any, id:string, previousCategoryId?:string) {
+function vipDraft(body:any, id:string, previousCategoryId?:string, previousImage?:string) {
  if ((body?.active !== undefined && typeof body.active !== 'boolean') ||
      (body?.isPopular !== undefined && typeof body.isPopular !== 'boolean'))
   throw new ProductCatalogError('Disponibilidade e destaque do VIP devem ser valores booleanos.',400);
@@ -200,7 +201,7 @@ function vipDraft(body:any, id:string, previousCategoryId?:string) {
   description: String(body.description || '').slice(0,10000),
   benefits: body.benefits || [],
   color: ['emerald','cyan','blue','purple','amber'].includes(body.color) ? body.color : 'emerald',
-  image: typeof body.image === 'string' && body.image.length <= 850000 && (['crown','cube'].includes(body.image) || /^(https:\/\/|\/(?!\/)|data:image\/(png|jpeg|webp|gif);base64,)/.test(body.image)) ? body.image : 'crown',
+  image: validateVipImage(body.image,previousImage),
   order: body.order ?? 1,
   active: body.active !== false,
   categoryId: validateVipCategoryId(body.categoryId, previousCategoryId),
@@ -235,7 +236,8 @@ apiRouter.put('/admin/vips/:id',requireAdmin,async(req,res)=>{
    const existing=await readCatalogItem('vips',id,tx);
    if(!existing)throw new ProductCatalogError('VIP não encontrado.',404);
    const previousCategoryId='categoryId' in existing && typeof existing.categoryId==='string' ? existing.categoryId : 'vips';
-   const next=vipDraft({...existing,...req.body},id,previousCategoryId);
+   const previousImage=typeof existing.image==='string' ? existing.image : undefined;
+   const next=vipDraft({...existing,...req.body},id,previousCategoryId,previousImage);
    assertVipCategoryExists(next.categoryId,categories,previousCategoryId);
    tx.set(ref,next);
    return next;
