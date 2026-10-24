@@ -31,9 +31,11 @@ export function catalogWriteReference(kind: CatalogKind,id:string) {
 }
 
 export async function readCatalogItem(
-  kind: CatalogKind, id:string, tx?:Reader,
+  kind: CatalogKind, id:string, tx?:Reader, existingDb?:ReturnType<typeof paymentDatabase>,
 ): Promise<CatalogRecord | null> {
-  const db=paymentDatabase();
+  // Use the transaction's existing database, including isolated in-memory
+  // test repositories. Never open a second Firestore connection in a Pix tx.
+  const db=existingDb??paymentDatabase();
   const read=(ref:any)=>tx?tx.get(ref):ref.get();
   if (isPreviewEnvironment()) {
     const overlay=await read(db.collection(previewCatalogName(kind)).doc(id));
