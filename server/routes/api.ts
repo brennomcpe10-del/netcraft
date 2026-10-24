@@ -30,6 +30,7 @@ apiRouter.get('/admin/environment', requireAdmin, (_req,res)=>{
  return res.json({
   environment:stage,
   isolatedPlayerAndSupportData:stage==='preview',
+  isolatedPreviewCatalog:stage==='preview',
   sharedStoreData:stage==='preview',
   storeWritesBlocked:stage==='preview',
  });
