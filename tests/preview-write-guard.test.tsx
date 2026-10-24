@@ -8,14 +8,14 @@ import { apiRouter } from "../server/routes/api.ts";
 import { previewSharedWriteBlocked } from "../server/services/previewWriteGuard.ts";
 import { generateAdminToken } from "../server/auth/admin.ts";
 
-test("store edits require a private Preview catalog before touching shared records", () => {
+test("remaining shared Preview writes stay protected by a server guard", () => {
   assert.equal(previewSharedWriteBlocked({VERCEL_ENV:"preview"} as NodeJS.ProcessEnv), true);
   for (const env of ["production","development",undefined]) {
     assert.equal(previewSharedWriteBlocked({VERCEL_ENV:env} as NodeJS.ProcessEnv), false);
   }
 });
 
-test("authenticated Preview cannot write to shared catalog, branding, editorial or legacy orders", async () => {
+test("authenticated Preview cannot write to remaining shared settings, branding, coupons, editorial or legacy orders", async () => {
   const beforeKey = process.env.ADMIN_KEYWORD;
   const beforeEnv = process.env.VERCEL_ENV;
   process.env.ADMIN_KEYWORD = randomBytes(24).toString("hex");
@@ -28,10 +28,7 @@ test("authenticated Preview cannot write to shared catalog, branding, editorial 
   const port = (server.address() as any).port;
   const token = generateAdminToken();
   const protectedPaths: [string,string][] = [
-    ["POST","/admin/vips"], ["PUT","/admin/vips/test-vip"],
-    ["DELETE","/admin/vips/test-vip"], ["POST","/admin/products"],
-    ["PUT","/admin/products/test-product"], ["DELETE","/admin/products/test-product"],
-    ["PUT","/admin/store-categories"], ["POST","/admin/coupons"],
+    ["POST","/admin/coupons"],
     ["PUT","/admin/coupons/test-coupon"], ["DELETE","/admin/coupons/test-coupon"],
     ["PUT","/admin/settings"], ["PUT","/admin/settings/livepix"], ["PUT","/admin/settings/pix"],
     ["POST","/admin/events"], ["PUT","/admin/events/test-event"],
@@ -60,6 +57,7 @@ test("authenticated Preview cannot write to shared catalog, branding, editorial 
     assert.deepEqual(await environment.json(),{
       environment:"preview",
       isolatedPlayerAndSupportData:true,
+      isolatedPreviewCatalog:true,
       sharedStoreData:true,
       storeWritesBlocked:true
     });
