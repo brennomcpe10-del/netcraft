@@ -41,7 +41,8 @@ export async function readCatalogItem(
     const overlay=await read(db.collection(previewCatalogName(kind)).doc(id));
     if (overlay.exists) {
       if (overlay.data()?.__previewDeleted === true) return null;
-      return {...overlay.data(),id:overlay.id} as CatalogRecord;
+      const base=await read(db.collection(kind).doc(id));
+      return {...(base.exists ? base.data() : {}),...overlay.data(),id:overlay.id} as CatalogRecord;
     }
   }
   const source=await read(db.collection(kind).doc(id));
