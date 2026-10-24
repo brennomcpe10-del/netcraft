@@ -105,6 +105,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const [players, setPlayers] = useState<Player[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [ticketsError, setTicketsError] = useState('');
+  const [previewSafety, setPreviewSafety] = useState<{
+    environment: 'preview' | 'production' | 'development';
+    isolatedPlayerAndSupportData: boolean;
+    sharedStoreData: boolean;
+  } | null>(null);
+  const [previewSafetyUnknown, setPreviewSafetyUnknown] = useState(false);
   const [ticketReplies, setTicketReplies] = useState<Record<string,string>>({});
   const [savingTicketId, setSavingTicketId] = useState<string | null>(null);
   const [events, setEvents] = useState<ServerEvent[]>([]);
@@ -162,6 +168,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       void loadPixTestOrders();
     }
   }, [adminToken, activeTab]);
+
+  useEffect(() => {
+    if (!adminToken) return;
+    let active = true;
+    api.getEnvironmentStatus(adminToken)
+      .then(status => {
+        if (!active) return;
+        setPreviewSafety(status);
+        setPreviewSafetyUnknown(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setPreviewSafety(null);
+        setPreviewSafetyUnknown(true);
+      });
+    return () => { active = false; };
+  }, [adminToken]);
 
   useEffect(() => {
     if (adminToken) {
@@ -691,6 +714,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
             );
           })}
         </div>
+
+        {previewSafety?.sharedStoreData && (
+          <div role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-xs text-amber-200 leading-relaxed">
+            <strong>Preview com isolamento parcial.</strong> Os jogadores e chamados de teste são mantidos separados.
+            Produtos, VIPs, cupons, categorias e configurações ainda compartilham o banco de dados usado pela Production.
+            Alterar esses registros aqui também pode afetar a loja principal. Não edite esses dados até a separação completa.
+          </div>
+        )}
+        {previewSafetyUnknown && (
+          <p role="alert" className="rounded-lg border border-amber-500/40 p-3 text-xs text-amber-200">
+            Não foi possível verificar a separação dos ambientes. Evite alterações administrativas até a confirmação.
+          </p>
+        )}
 
         {activeTab === 'identity' && <IdentityManager />}
         {activeTab === 'categories' && <CategoryManager onManageProducts={id=>{setAdminProductCategory(id);setActiveTab('store');}}/>}
