@@ -6,6 +6,8 @@ import { adminAuthRouter, requireAdmin, isValidAdminToken } from '../auth/admin.
 import {productCatalog,ProductCatalogError} from '../services/productCatalog.ts';
 import { editorialRepository, EditorialError } from '../services/editorialCatalog.ts';
 import { protectSharedPreviewWrite } from '../services/previewWriteGuard.ts';
+import { catalogWriteReference, listCatalog, readCatalogItem, readStoreCategories, previewCategoryReference } from '../services/previewCatalog.ts';
+import { isPreviewEnvironment } from '../services/previewIsolation.ts';
 import {firestoreProducts} from '../services/firestoreProducts.ts';
 import {quoteCart,validateCartRequest} from '../../src/lib/cartQuote.ts';
 import {validateCategories} from '../../src/lib/storeCategories.ts';
@@ -146,16 +148,14 @@ apiRouter.put('/admin/settings/pix',requireAdmin,protectSharedPreviewWrite, asyn
 // -------------------------------------------------------------
 // VIP PACKAGES
 // -------------------------------------------------------------
-apiRouter.get('/vips', async (req, res) => {
+apiRouter.get('/vips', async (req,res)=>{
  try {
-  const {paymentDatabase}=await import('../payments/database.ts');
-  const snap=await paymentDatabase().collection('vips').get();
-  const token=String(req.headers.authorization || '').replace(/^Bearer /,'');
+  const token=String(req.headers.authorization||'').replace(/^Bearer /,'');
   const includeInactive=req.query.all==='true' && isValidAdminToken(token);
+  const items=await listCatalog('vips');
   res.setHeader('Cache-Control','no-store');
-  return res.json(snap.docs.map(d=>({...d.data(),id:d.id}))
-   .filter((v:any)=>includeInactive || v.active===true)
-   .sort((a:any,b:any)=>Number(a.order||0)-Number(b.order||0)));
+  return res.json(items.filter(v=>includeInactive||v.active===true)
+   .sort((a,b)=>Number(a.order||0)-Number(b.order||0)));
  }catch{return res.status(503).json({error:'Não foi possível consultar os planos VIP.'});}
 });
 
@@ -182,43 +182,51 @@ function vipDraft(body:any, id:string) {
   pixUrl: typeof body.pixUrl === 'string' ? body.pixUrl.slice(0,2048) : ''
  };
 }
-apiRouter.post('/admin/vips', requireAdmin, protectSharedPreviewWrite, async (req,res)=>{
+apiRouter.post('/admin/vips',requireAdmin,async(req,res)=>{
  try {
-  const id = typeof req.body?.id==='string' && req.body.id.trim() ? req.body.id.trim() : `vip-${crypto.randomUUID()}`;
-  const vip = vipDraft(req.body,id);
+  const id=typeof req.body?.id==='string'&&req.body.id.trim()?req.body.id.trim():`vip-${crypto.randomUUID()}`;
+  const vip=vipDraft(req.body,id);
   const {paymentDatabase}=await import('../payments/database.ts');
-  const db=paymentDatabase(),ref=db.collection('vips').doc(id);
+  const db=paymentDatabase(),ref=catalogWriteReference('vips',id);
   await db.runTransaction(async tx=>{
-   if((await tx.get(ref)).exists) throw new ProductCatalogError('Este VIP já existe. Atualize o catálogo.',409);
-   tx.create(ref,vip);
-  });
-  dbStore.createVip(vip);
-  return res.status(201).json(vip);
- } catch(error){return productError(res,error);}
-});
-apiRouter.put('/admin/vips/:id', requireAdmin, protectSharedPreviewWrite, async(req,res)=>{
- try {
-  const id=req.params.id;
-  const {paymentDatabase}=await import('../payments/database.ts');
-  const db=paymentDatabase(),ref=db.collection('vips').doc(id);
-  let vip:any;
-  await db.runTransaction(async tx=>{
-   const snap=await tx.get(ref);
-   if(!snap.exists) throw new ProductCatalogError('VIP não encontrado.',404);
-   vip=vipDraft({...snap.data(),...req.body},id);
+   if(await readCatalogItem('vips',id,tx))
+    throw new ProductCatalogError('Este VIP já existe. Atualize o catálogo.',409);
    tx.set(ref,vip);
   });
-  dbStore.updateVip(id,vip);
-  return res.json(vip);
- } catch(error){return productError(res,error);}
+  if(!isPreviewEnvironment())dbStore.createVip(vip);
+  return res.status(201).json(vip);
+ }catch(error){return productError(res,error);}
 });
-apiRouter.delete('/admin/vips/:id', requireAdmin, protectSharedPreviewWrite, async(req,res)=>{
+apiRouter.put('/admin/vips/:id',requireAdmin,async(req,res)=>{
  try {
   const id=req.params.id;
-  if(!/^[a-zA-Z0-9_-]{2,128}$/.test(id)) return res.status(400).json({error:'Identificador inválido.'});
   const {paymentDatabase}=await import('../payments/database.ts');
-  await paymentDatabase().collection('vips').doc(id).delete();
-  dbStore.deleteVip(id);
+  const db=paymentDatabase(),ref=catalogWriteReference('vips',id);
+  const vip=await db.runTransaction(async tx=>{
+   const existing=await readCatalogItem('vips',id,tx);
+   if(!existing)throw new ProductCatalogError('VIP não encontrado.',404);
+   const next=vipDraft({...existing,...req.body},id);
+   tx.set(ref,next);
+   return next;
+  });
+  if(!isPreviewEnvironment())dbStore.updateVip(id,vip);
+  return res.json(vip);
+ }catch(error){return productError(res,error);}
+});
+apiRouter.delete('/admin/vips/:id',requireAdmin,async(req,res)=>{
+ try {
+  const id=req.params.id;
+  if(!/^[a-zA-Z0-9_-]{2,128}$/.test(id))
+   return res.status(400).json({error:'Identificador inválido.'});
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const db=paymentDatabase(),ref=catalogWriteReference('vips',id);
+  await db.runTransaction(async tx=>{
+   if(!(await readCatalogItem('vips',id,tx)))
+    throw new ProductCatalogError('VIP não encontrado.',404);
+   if(isPreviewEnvironment())tx.set(ref,{__previewDeleted:true,id});
+   else tx.delete(ref);
+  });
+  if(!isPreviewEnvironment())dbStore.deleteVip(id);
   return res.json({success:true,message:'VIP excluído com sucesso.',removed:true});
  }catch(error){return productError(res,error);}
 });
