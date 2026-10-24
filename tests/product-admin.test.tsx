@@ -178,3 +178,17 @@ test("product document identifiers reject unsafe paths and hidden whitespace", a
   const saved = await service.save({ ...product, id: "kit_PVP-001" });
   assert.equal(saved.id, "kit_PVP-001");
 });
+
+test("admin rejects malformed product description and highlights before persisting", async () => {
+  const { data, repository } = memoryRepository([product]);
+  const service = productCatalog(repository);
+  for (const patch of [
+    { description: 123 },
+    { description: false },
+    { highlights: "Kit de teste" },
+    { highlights: 4 },
+  ]) {
+    await assert.rejects(service.save(patch as any, product.id));
+  }
+  assert.deepEqual(data.get(product.id), product);
+});
