@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { SupportTicket } from "../../src/types/index.ts";
 import { paymentDatabase } from "../payments/database.ts";
+import { managedCollection } from "./previewIsolation.ts";
 
 export class TicketError extends Error {
   constructor(message: string, public readonly statusCode = 400) { super(message); }
@@ -50,7 +51,7 @@ export function ticketUpdateDraft(value: unknown) {
   return update;
 }
 export async function listAdminTickets(): Promise<SupportTicket[]> {
-  const snapshot = await paymentDatabase().collection("tickets").get();
+  const snapshot = await paymentDatabase().collection(managedCollection("supportTickets")).get();
   return snapshot.docs.map(doc=>({...doc.data(),id:doc.id} as SupportTicket))
     .sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
 }
@@ -58,13 +59,13 @@ export async function createSupportTicket(value: unknown): Promise<SupportTicket
   const draft = ticketDraft(value);
   const id = `TCK-${crypto.randomUUID()}`;
   const ticket: SupportTicket = {...draft,id,status:"Aberto",createdAt:new Date().toISOString()};
-  await paymentDatabase().collection("tickets").doc(id).create(ticket);
+  await paymentDatabase().collection(managedCollection("supportTickets")).doc(id).create(ticket);
   return ticket;
 }
 export async function updateSupportTicket(id: string, value: unknown): Promise<SupportTicket> {
   if(!validId(id))throw new TicketError("ID inválido.");
   const patch = ticketUpdateDraft(value), db = paymentDatabase();
-  const ref = db.collection("tickets").doc(id);
+  const ref = db.collection(managedCollection("supportTickets")).doc(id);
   return db.runTransaction(async tx=>{
     const snap=await tx.get(ref);
     if(!snap.exists)throw new TicketError("Chamado não encontrado.",404);
