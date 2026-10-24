@@ -16,7 +16,9 @@ test("VIP admin validation prevents active zero-price plans", () => {
 test("VIP benefits are length-bounded prior to writing into Firestore", () => {
   const source = readFileSync(new URL("../server/routes/api.ts", import.meta.url), "utf8");
   const draft = source.slice(source.indexOf("function vipDraft("), source.indexOf("apiRouter.post('/admin/vips'"));
-  assert.match(draft, /slice\(0,100\)\.map\(\(x:string\)=>x\.slice\(0,500\)\)/);
+  assert.match(draft, /body\.benefits\.length > 100/);
+  assert.match(draft, /typeof x !== 'string' \|\| x\.length > 500/);
+  assert.match(draft, /benefits: body\.benefits \|\| \[\]/);
   assert.match(draft, /\^\[a-zA-Z0-9_-\]\{2,128\}\$/);
 });
 
