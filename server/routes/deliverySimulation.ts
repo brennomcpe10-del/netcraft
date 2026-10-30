@@ -15,18 +15,26 @@ export function createDeliverySimulationRouter(options: {
 }) {
   const router = express.Router();
   const jobs = new Map<string, RecordState>();
-  const nonces = new Set<string>();
+  const nonces = new Map<string, number>();
   const now = options.now || Date.now;
+  const nonceHeaderInvalid = (value: string | undefined) =>
+    typeof value !== "string" || value.length !== 32;
   router.use(async (req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     if (options.production || process.env.VERCEL_ENV === "production" ||
       process.env.NODE_ENV !== "test" || options.secret.length < 32)
       return res.status(503).json({ error: "Simulation unavailable" });
+    // Only accept bounded JSON requests to avoid unauthenticated work on the simulator.
+    if (req.method !== "POST" || !req.is("application/json") ||
+        (req.headers["content-length"] && Number(req.headers["content-length"]) > 2048))
+      return res.status(415).json({ error: "Unsupported request" });
     const timestamp = String(req.header("x-nc-timestamp") || "");
     const nonce = String(req.header("x-nc-nonce") || "");
     const signature = String(req.header("x-nc-signature") || "");
     const bearer = String(req.header("x-nc-bds-token") || "");
     const usesToken = bearer.length > 0;
+    if (bearer.length > 256 || nonceHeaderInvalid(req.header("x-nc-nonce")))
+      return res.status(401).json({ error: "Unauthorized" });
     const token = options.bdsToken || "";
     const allowedBdsRoute = req.path === "/poll" || req.path === "/ack";
     const tokenAuthorized = usesToken && allowedBdsRoute && req.method === "POST" && token.length >= 32 &&
@@ -50,7 +58,9 @@ export function createDeliverySimulationRouter(options: {
         return res.status(503).json({ error: "Simulation unavailable" });
       }
     } else {
-      nonces.add(nonce);
+      // Unit-test-only fallback; the Firestore emulator path is the durable mode.
+      for (const [key, expiry] of nonces) if (expiry <= now()) nonces.delete(key);
+      nonces.set(nonce, now() + 120000);
     }
     next();
   });
