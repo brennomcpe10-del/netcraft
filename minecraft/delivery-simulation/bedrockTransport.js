@@ -19,7 +19,7 @@ export function createBedrockDeliveryTransport(options) {
           return { ok: false, reason: "unauthenticated_response" };
         const deliveries = [];
         for (const row of result.data.deliveries) {
-          if (!row || !/^[a-f0-9]{64}-\\d{1,3}$/.test(row.id || "") ||
+          if (!row || !/^[a-f0-9]{64}-\d{1,3}$/.test(row.id || "") ||
               !["vip", "kit"].includes(row.kind) || row.simulation !== true)
             return { ok: false, reason: "invalid_response" };
           deliveries.push({ id: row.id, kind: row.kind, simulation: true });
@@ -32,7 +32,7 @@ export function createBedrockDeliveryTransport(options) {
       }
     },
     async simulateAck(deliveryId) {
-      if (!/^[a-f0-9]{64}-\\d{1,3}$/.test(deliveryId || ""))
+      if (!/^[a-f0-9]{64}-\d{1,3}$/.test(deliveryId || ""))
         return { ok: false, reason: "invalid_id" };
       try {
         const response = await options.post("/ack", { deliveryId });
