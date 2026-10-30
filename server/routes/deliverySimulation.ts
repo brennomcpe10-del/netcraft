@@ -97,9 +97,10 @@ export function createDeliverySimulationRouter(options: {
     const job = typeof id === "string" ? jobs.get(id) : undefined;
     if (!job) return res.status(404).json({ error: "Not found" });
     if (job.state === "blocked") return res.status(409).json({ error: "Refund blocked" });
+    const duplicate = job.state === "simulated_complete";
     job.acknowledged = true;
     job.state = "simulated_complete";
-    return res.json({ id, state: job.state, duplicate: true, simulation: true });
+    return res.json({ id, state: job.state, duplicate, simulation: true });
   });
   router.post("/refund", async (req, res) => {
     const id = req.body?.deliveryId;
