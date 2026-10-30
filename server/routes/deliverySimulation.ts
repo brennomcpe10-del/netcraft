@@ -17,7 +17,7 @@ export function createDeliverySimulationRouter(options: {
   const jobs = new Map<string, RecordState>();
   const nonces = new Set<string>();
   const now = options.now || Date.now;
-  router.use((req, res, next) => {
+  router.use(async (req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     if (options.production || process.env.VERCEL_ENV === "production" ||
       process.env.NODE_ENV !== "test" || options.secret.length < 32)
@@ -33,7 +33,16 @@ export function createDeliverySimulationRouter(options: {
     const expected = crypto.createHmac("sha256", options.secret).update(message).digest("hex");
     if (!crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(signature, "hex")))
       return res.status(401).json({ error: "Unauthorized" });
-    nonces.add(nonce);
+    if (options.store) {
+      try {
+        const claimed = await options.store.claimNonce(nonce, Number(timestamp));
+        if (!claimed) return res.status(401).json({ error: "Unauthorized" });
+      } catch {
+        return res.status(503).json({ error: "Simulation unavailable" });
+      }
+    } else {
+      nonces.add(nonce);
+    }
     next();
   });
   router.post("/seed", async (req, res) => {
