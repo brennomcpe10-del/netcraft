@@ -3,11 +3,9 @@
 import express from "express";
 import https from "node:https";
 import { readFileSync } from "node:fs";
-import { createPixRouter } from "../server/routes/pix.ts"; // Type-check only; never mounted.
 import { paymentDatabase } from "../server/payments/database.ts";
 import { emulatorDeliveryStore } from "../server/delivery/emulatorStore.ts";
 import { createDeliverySimulationRouter } from "../server/routes/deliverySimulation.ts";
-void createPixRouter;
 export function startLocalDeliveryHttpsDemo() {
   if (process.env.NODE_ENV !== "test" ||
       process.env.VERCEL_ENV ||
