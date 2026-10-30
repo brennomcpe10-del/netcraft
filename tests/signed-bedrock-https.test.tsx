@@ -38,11 +38,11 @@ test("signed Bedrock HTTPS bridge signs poll + ACK and rejects unsafe results", 
     }},
   };
   const bridge = createSignedBedrockHttpsBridge(options);
-  assert.equal((await bridge.poll("DemoPlayer")).jobs?.[0]?.id, id);
+  assert.equal(((await bridge.poll("DemoPlayer")) as any).jobs?.[0]?.id, id);
   assert.deepEqual(await bridge.simulatedAck(id), { ok: true, simulation: true, duplicate: false });
   assert.equal((await bridge.simulatedAck("invalid")).ok, false);
   assert.equal(requests.length, 2);
   const bad = createSignedBedrockHttpsBridge({ ...options,
     http: { request: async () => ({ status: 200, body: JSON.stringify({ deliveries: [{ id, kind: "vip", simulation: false }] }) }) } });
-  assert.equal((await bad.poll("DemoPlayer")).reason, "invalid_jobs");
+  assert.equal(((await bad.poll("DemoPlayer")) as any).reason, "invalid_jobs");
 });
