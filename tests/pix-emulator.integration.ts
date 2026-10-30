@@ -121,4 +121,57 @@ await deliveryStore.refund(demoId);
 await assert.rejects(() => deliveryStore.acknowledge(demoId));
 assert.equal((await deliveryStore.seed(demo)).state, "blocked");
 console.log("PASS persistent demo delivery: duplicate seed, offline poll, retry, atomic ACK and refund block");
+
+const express = (await import("express")).default;
+const { createDeliverySimulationRouter } = await import("../server/routes/deliverySimulation.ts");
+const { once } = await import("node:events");
+const signatureSecret = "emulator-simulation-secret-not-a-production-credential";
+const app = express();
+app.use(express.json());
+app.use("/sim", createDeliverySimulationRouter({ secret: signatureSecret, store: deliveryStore }));
+const server = app.listen(0, "127.0.0.1");
+await once(server, "listening");
+const origin = "http://127.0.0.1:" + (server.address() as any).port;
+async function signed(path: string, data: object, options: { bad?: boolean; replayNonce?: string } = {}) {
+  const body = JSON.stringify(data);
+  const timestamp = String(Date.now());
+  const nonce = options.replayNonce || crypto.randomBytes(16).toString("hex");
+  const payload = ["POST", path, timestamp, nonce, body].join("\n");
+  const signature = crypto.createHmac("sha256", options.bad ? "wrong-secret" : signatureSecret).update(payload).digest("hex");
+  const response = await fetch(origin + "/sim" + path, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-nc-timestamp": timestamp,
+      "x-nc-nonce": nonce, "x-nc-signature": signature },
+    body,
+  });
+  return { status: response.status, data: await response.json() };
+}
+try {
+  const httpId = "c".repeat(64) + "-0";
+  const payload = { deliveryId: httpId, gamertag: "OfflineHTTP", kind: "kit",
+    environment: "test", dispatchEnabled: false };
+  assert.equal((await signed("/seed", payload, { bad: true })).status, 401);
+  assert.equal((await signed("/seed", { ...payload, dispatchEnabled: true })).status, 400);
+  assert.equal((await signed("/seed", payload)).status, 201);
+  assert.equal((await signed("/seed", payload)).data.duplicate, true);
+  assert.equal((await signed("/poll", { gamertag: "NoPlayer" })).data.deliveries.length, 0);
+  assert.equal((await signed("/poll", { gamertag: "OfflineHTTP" })).data.deliveries.length, 1);
+  assert.equal((await signed("/retry", { deliveryId: httpId })).data.retried, true);
+  const responses = await Promise.all([
+    signed("/ack", { deliveryId: httpId }),
+    signed("/ack", { deliveryId: httpId }),
+  ]);
+  assert.equal(responses.filter(r => r.data.duplicate === false).length, 1);
+  assert.equal((await signed("/poll", { gamertag: "OfflineHTTP" })).data.deliveries.length, 0);
+  assert.equal((await signed("/refund", { deliveryId: httpId })).data.state, "blocked");
+  assert.equal((await signed("/ack", { deliveryId: httpId })).status, 409);
+  const replayNonce = crypto.randomBytes(16).toString("hex");
+  const firstReplay = await signed("/poll", { gamertag: "OfflineHTTP" }, { replayNonce });
+  assert.equal(firstReplay.status, 200);
+  assert.equal((await signed("/poll", { gamertag: "OfflineHTTP" }, { replayNonce })).status, 401);
+  console.log("PASS authenticated HTTP emulator delivery: HMAC, replay, offline poll, idempotency, concurrent ACK, retry and refund");
+} finally {
+  await new Promise<void>(resolve => server.close(() => resolve()));
+}
+
 await db.terminate();
