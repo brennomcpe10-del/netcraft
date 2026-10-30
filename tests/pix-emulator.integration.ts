@@ -168,6 +168,26 @@ try {
   const firstReplay = await signed("/poll", { gamertag: "OfflineHTTP" }, { replayNonce });
   assert.equal(firstReplay.status, 200);
   assert.equal((await signed("/poll", { gamertag: "OfflineHTTP" }, { replayNonce })).status, 401);
+
+// Simulated signed client acts as a stand-in for the future Bedrock bridge.
+// Neither this test nor the client uses a Minecraft API or live Pix orders.
+// @ts-ignore JavaScript test-only client intentionally has no generated declarations.
+const { NetCraftDeliverySimulationClient } = await import("../minecraft/delivery-simulation/client.js");
+const client = new NetCraftDeliverySimulationClient({ origin, secret: signatureSecret });
+const clientId = "d".repeat(64) + "-1";
+const clientJob = {
+  deliveryId: clientId, gamertag: "OfflineBridge", kind: "vip",
+  environment: "test", dispatchEnabled: false,
+};
+assert.equal((await client.seed(clientJob)).status, 201);
+assert.equal((await client.seed(clientJob)).data.duplicate, true);
+assert.deepEqual(await client.syncPlayer("OfflineBridge", false), { received: 0, simulated: 0 });
+const firstSync = await client.syncPlayer("OfflineBridge", true);
+assert.deepEqual(firstSync, { received: 1, simulated: 1 });
+assert.deepEqual(await client.syncPlayer("OfflineBridge", true), { received: 0, simulated: 0 });
+assert.equal((await client.refund(clientId)).data.state, "blocked");
+assert.equal((await client.request("/ack", { deliveryId: clientId })).status, 409);
+console.log("PASS signed localhost delivery client: offline, authenticated poll, ACK, idempotency, refund");
   console.log("PASS authenticated HTTP emulator delivery: HMAC, replay, offline poll, idempotency, concurrent ACK, retry and refund");
 } finally {
   await new Promise<void>(resolve => server.close(() => resolve()));
