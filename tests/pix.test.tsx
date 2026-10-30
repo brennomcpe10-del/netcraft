@@ -75,6 +75,20 @@ function setup() {
     gets: () => gets,
   };
 }
+test("Orders Pix request explicitly uses automatic processing with the documented method", () => {
+  const request = orderRequest(
+    { id: "local-order", totalCents: 2500 },
+    { email: "test_payer@example.com", first_name: "APRO" },
+  );
+  assert.equal(request.type, "online");
+  assert.equal(request.processing_mode, "automatic");
+  assert.equal(request.total_amount, "25.00");
+  assert.equal(request.transactions.payments[0].amount, "25.00");
+  assert.deepEqual(request.transactions.payments[0].payment_method, {
+    id: "pix", type: "bank_transfer",
+  });
+});
+
 test("Preview Pix sends sandbox fixture but keeps checkout total", async () => {
   const old = process.env.VERCEL_ENV;
   process.env.VERCEL_ENV = "preview";
