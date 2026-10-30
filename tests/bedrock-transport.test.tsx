@@ -17,7 +17,7 @@ test("Bedrock simulation polls safe fixtures, handles offline/retry and fail-clo
     return { status: 200, data: { simulation: true, state: "simulated_complete" }, verified: true };
   };
   const bridge = createBedrockDeliveryTransport({ simulation: true, post, verify: (r: any) => r.verified === true });
-  assert.equal((await bridge.poll("OfflinePlayer")).deliveries[0].id, id);
+  assert.equal((await bridge.poll("OfflinePlayer")).deliveries?.[0]?.id, id);
   assert.equal((await bridge.simulateAck(id)).ok, true);
   assert.equal((await bridge.simulateAck("not-a-delivery")).ok, false);
   networkFail = true;
