@@ -10,7 +10,7 @@ export type DeliverySimulation = {
 };
 type RecordState = DeliverySimulation & { state: "waiting_for_player" | "simulated_complete" | "blocked"; acknowledged: boolean };
 export function createDeliverySimulationRouter(options: {
-  secret: string; now?: () => number; production?: boolean;
+  secret: string; now?: () => number; production?: boolean; bdsToken?: string;
   store?: ReturnType<typeof emulatorDeliveryStore>;
 }) {
   const router = express.Router();
@@ -25,13 +25,20 @@ export function createDeliverySimulationRouter(options: {
     const timestamp = String(req.header("x-nc-timestamp") || "");
     const nonce = String(req.header("x-nc-nonce") || "");
     const signature = String(req.header("x-nc-signature") || "");
+    const bearer = String(req.header("x-nc-bds-token") || "");
+    const usesToken = bearer.length > 0;
+    const token = options.bdsToken || "";
+    const allowedBdsRoute = req.path === "/poll" || req.path === "/ack";
+    const tokenAuthorized = usesToken && allowedBdsRoute && token.length >= 32 &&
+      bearer.length === token.length &&
+      crypto.timingSafeEqual(Buffer.from(bearer), Buffer.from(token));
     if (!/^\d{13}$/.test(timestamp) || Math.abs(now() - Number(timestamp)) > 60000 ||
-      !/^[a-f0-9]{32}$/.test(nonce) || !/^[a-f0-9]{64}$/.test(signature) || nonces.has(nonce))
+      !/^[a-f0-9]{32}$/.test(nonce) || (usesToken ? !tokenAuthorized : !/^[a-f0-9]{64}$/.test(signature)) || nonces.has(nonce))
       return res.status(401).json({ error: "Unauthorized" });
     const body = JSON.stringify(req.body ?? {});
     const message = [req.method, req.path, timestamp, nonce, body].join("\n");
     const expected = crypto.createHmac("sha256", options.secret).update(message).digest("hex");
-    if (!crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(signature, "hex")))
+    if (!usesToken && !crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(signature, "hex")))
       return res.status(401).json({ error: "Unauthorized" });
     if (options.store) {
       try {
