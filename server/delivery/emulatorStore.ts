@@ -9,9 +9,9 @@ export function emulatorDeliveryStore(db: Firestore) {
     throw new Error("Demo emulator required");
   const collection = db.collection("deliverySimulationOnly");
   const validId = (id: string) => /^[a-f0-9]{64}-\d{1,3}$/.test(id);
-  async function seed(job: { id: string; gamertag: string; kind: "vip" | "kit"; dispatchEnabled: false }) {
+  async function seed(job: { id: string; gamertag: string; kind: "vip" | "kit"; dispatchEnabled: false; refunded?: boolean }) {
     if (!validId(job.id) || !/^[a-zA-Z0-9_ ]{1,32}$/.test(job.gamertag) ||
-        !["vip","kit"].includes(job.kind) || job.dispatchEnabled !== false)
+        !["vip","kit"].includes(job.kind) || job.dispatchEnabled !== false || (job.refunded !== undefined && typeof job.refunded !== "boolean"))
       throw new Error("Invalid simulated job");
     const ref = collection.doc(job.id);
     return db.runTransaction(async tx => {
@@ -21,8 +21,8 @@ export function emulatorDeliveryStore(db: Firestore) {
           throw new Error("Conflicting delivery");
         return { duplicate: true, state: snapshot.data()?.state };
       }
-      tx.create(ref, { ...job, state: "waiting_for_player", attempts: 0, acknowledged: false });
-      return { duplicate: false, state: "waiting_for_player" };
+      tx.create(ref, { ...job, state: job.refunded ? "blocked" : "waiting_for_player", attempts: 0, acknowledged: false });
+      return { duplicate: false, state: job.refunded ? "blocked" : "waiting_for_player" };
     });
   }
   async function poll(gamertag: string) {
