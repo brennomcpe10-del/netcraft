@@ -127,7 +127,9 @@ const { createDeliverySimulationRouter } = await import("../server/routes/delive
 const signatureSecret = "emulator-simulation-secret-not-a-production-credential";
 const app = express();
 app.use(express.json());
-app.use("/sim", createDeliverySimulationRouter({ secret: signatureSecret, store: deliveryStore }));
+const signedSimulationRouter = createDeliverySimulationRouter({ secret: signatureSecret, store: deliveryStore });
+app.use("/sim", signedSimulationRouter);
+app.use("/delivery", signedSimulationRouter);
 const server = app.listen(0, "127.0.0.1");
 if (!server.listening) await new Promise<void>(resolve => server.once("listening", resolve));
 const origin = "http://127.0.0.1:" + (server.address() as any).port;
