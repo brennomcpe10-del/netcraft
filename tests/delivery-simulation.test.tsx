@@ -42,7 +42,12 @@ test("authenticated test-only bridge: offline, retry, ACK, refund and disabled r
     assert.equal(duplicate.data.duplicate, true);
     assert.equal((await request("/poll", { gamertag: "SomeoneElse" })).data.deliveries.length, 0);
     assert.equal((await request("/poll", { gamertag: "OfflinePlayer" })).data.deliveries.length, 1);
-    assert.equal((await request("/ack", { deliveryId: id })).data.state, "simulated_complete");
+    const firstAck = await request("/ack", { deliveryId: id });
+    assert.equal(firstAck.data.state, "simulated_complete");
+    assert.equal(firstAck.data.duplicate, false);
+    const repeatedAck = await request("/ack", { deliveryId: id });
+    assert.equal(repeatedAck.data.state, "simulated_complete");
+    assert.equal(repeatedAck.data.duplicate, true);
     assert.equal((await request("/poll", { gamertag: "OfflinePlayer" })).data.deliveries.length, 0);
     assert.equal((await request("/refund", { deliveryId: id })).data.state, "blocked");
     assert.equal((await request("/ack", { deliveryId: id })).status, 409);
