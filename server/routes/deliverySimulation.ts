@@ -29,7 +29,7 @@ export function createDeliverySimulationRouter(options: {
     const usesToken = bearer.length > 0;
     const token = options.bdsToken || "";
     const allowedBdsRoute = req.path === "/poll" || req.path === "/ack";
-    const tokenAuthorized = usesToken && allowedBdsRoute && token.length >= 32 &&
+    const tokenAuthorized = usesToken && allowedBdsRoute && req.method === "POST" && token.length >= 32 &&
       bearer.length === token.length &&
       crypto.timingSafeEqual(Buffer.from(bearer), Buffer.from(token));
     if (!/^\d{13}$/.test(timestamp) || Math.abs(now() - Number(timestamp)) > 60000 ||
@@ -37,9 +37,11 @@ export function createDeliverySimulationRouter(options: {
       return res.status(401).json({ error: "Unauthorized" });
     const body = JSON.stringify(req.body ?? {});
     const message = [req.method, req.path, timestamp, nonce, body].join("\n");
-    const expected = crypto.createHmac("sha256", options.secret).update(message).digest("hex");
-    if (!usesToken && !crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(signature, "hex")))
-      return res.status(401).json({ error: "Unauthorized" });
+    if (!usesToken) {
+      const expected = crypto.createHmac("sha256", options.secret).update(message).digest("hex");
+      if (!crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(signature, "hex")))
+        return res.status(401).json({ error: "Unauthorized" });
+    }
     if (options.store) {
       try {
         const claimed = await options.store.claimNonce(nonce, Number(timestamp));
