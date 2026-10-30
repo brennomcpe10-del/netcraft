@@ -104,4 +104,21 @@ for (const collection of [
 console.log(
   "PASS Firestore transactions, mixed cart, coupon reservation, concurrent duplicate approvals, private rules, refund outbox blocking",
 );
+
+const { emulatorDeliveryStore } = await import("../server/delivery/emulatorStore.ts");
+const deliveryStore = emulatorDeliveryStore(db);
+const demoId = "b".repeat(64) + "-0";
+const demo = { id: demoId, gamertag: "OfflinePlayer", kind: "vip" as const, dispatchEnabled: false as const };
+assert.equal((await deliveryStore.seed(demo)).duplicate, false);
+assert.equal((await deliveryStore.seed(demo)).duplicate, true);
+assert.equal((await deliveryStore.poll("SomeoneElse")).length, 0);
+assert.equal((await deliveryStore.poll("OfflinePlayer")).length, 1);
+assert.equal(await deliveryStore.retry(demoId), true);
+const acks = await Promise.all([deliveryStore.acknowledge(demoId), deliveryStore.acknowledge(demoId)]);
+assert.equal(acks.filter(a => !a.duplicate).length, 1);
+assert.equal((await deliveryStore.poll("OfflinePlayer")).length, 0);
+await deliveryStore.refund(demoId);
+await assert.rejects(() => deliveryStore.acknowledge(demoId));
+assert.equal((await deliveryStore.seed(demo)).state, "blocked");
+console.log("PASS persistent demo delivery: duplicate seed, offline poll, retry, atomic ACK and refund block");
 await db.terminate();
