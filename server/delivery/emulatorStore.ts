@@ -5,7 +5,7 @@ import type { Firestore } from "firebase-admin/firestore";
 export function emulatorDeliveryStore(db: Firestore) {
   if (process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:8085" ||
       process.env.NODE_ENV !== "test" ||
-      db.app.options.projectId !== "demo-netcraft-admin-test")
+      process.env.GCLOUD_PROJECT !== "demo-netcraft-admin-test")
     throw new Error("Demo emulator required");
   const collection = db.collection("deliverySimulationOnly");
   const validId = (id: string) => /^[a-f0-9]{64}-\d{1,3}$/.test(id);
