@@ -61,5 +61,16 @@ export function emulatorDeliveryStore(db: Firestore) {
       return { state: "blocked" };
     });
   }
-  return { seed, poll, acknowledge, retry, refund };
+  async function claimNonce(nonce: string, timestamp: number) {
+    if (!/^[a-f0-9]{32}$/.test(nonce) || !Number.isSafeInteger(timestamp) ||
+        Math.abs(Date.now() - timestamp) > 60000) return false;
+    const ref = db.collection("deliverySimulationNonces").doc(nonce);
+    return db.runTransaction(async tx => {
+      const snapshot = await tx.get(ref);
+      if (snapshot.exists) return false;
+      tx.create(ref, { timestamp, expireAt: new Date(timestamp + 120000) });
+      return true;
+    });
+  }
+  return { seed, poll, acknowledge, retry, refund, claimNonce };
 }
