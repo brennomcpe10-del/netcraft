@@ -73,6 +73,7 @@ export function orderRequest(
 ) {
   return {
     type: "online",
+    processing_mode: "automatic",
     external_reference: order.id,
     total_amount: amountString(order.totalCents),
     payer: {
