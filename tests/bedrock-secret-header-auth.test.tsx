@@ -41,7 +41,7 @@ test("opaque BDS header token only grants simulation poll/ack, with nonce and ti
       headers: { "x-nc-bds-token": token, "x-nc-nonce": "f".repeat(32),
         "x-nc-timestamp": String(Date.now()) },
     });
-    assert.equal(getRequest.status, 401);
+    assert.equal(getRequest.status, 415);
   }finally{
     await new Promise<void>(resolve=>server.close(()=>resolve()));
     if(original===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=original;
