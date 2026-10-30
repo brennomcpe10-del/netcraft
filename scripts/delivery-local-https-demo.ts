@@ -16,13 +16,13 @@ export function startLocalDeliveryHttpsDemo() {
   const bdsToken = process.env.NC_DELIVERY_SIM_BDS_TOKEN || "";
   const certPath = process.env.NC_DELIVERY_SIM_TLS_CERT_PATH;
   const keyPath = process.env.NC_DELIVERY_SIM_TLS_KEY_PATH;
-  if (secret.length < 32 || !certPath || !keyPath)
-    throw new Error("Missing external test-only HMAC secret or TLS files");
+  if (secret.length < 32 || bdsToken.length < 32 || !certPath || !keyPath)
+    throw new Error("Missing isolated test credentials or TLS files");
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "2kb" }));
   app.use("/delivery", createDeliverySimulationRouter({
-    secret, ...(bdsToken.length >= 32 ? { bdsToken } : {}), store: emulatorDeliveryStore(paymentDatabase()),
+    secret, bdsToken, store: emulatorDeliveryStore(paymentDatabase()),
   }));
   return https.createServer({
     cert: readFileSync(certPath), key: readFileSync(keyPath),
