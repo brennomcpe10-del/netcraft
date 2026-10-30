@@ -120,6 +120,11 @@ assert.equal((await deliveryStore.poll("OfflinePlayer")).length, 0);
 await deliveryStore.refund(demoId);
 await assert.rejects(() => deliveryStore.acknowledge(demoId));
 assert.equal((await deliveryStore.seed(demo)).state, "blocked");
+const replayNonce = "e".repeat(32);
+assert.equal(await deliveryStore.claimNonce(replayNonce, Date.now()), true);
+assert.equal(await deliveryStore.claimNonce(replayNonce, Date.now()), false);
+assert.equal(await deliveryStore.claimNonce("f".repeat(32), Date.now() - 180000), false);
+console.log("PASS atomic persistent nonce replay rejection and stale timestamp");
 console.log("PASS persistent demo delivery: duplicate seed, offline poll, retry, atomic ACK and refund block");
 
 const express = (await import("express")).default;
