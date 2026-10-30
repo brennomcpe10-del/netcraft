@@ -45,7 +45,7 @@ export function createDeliverySimulationRouter(options: {
       return res.status(400).json({ error: "Invalid test delivery" });
     if (options.store) {
       try {
-        const result = await options.store.seed({ id: d.deliveryId, gamertag: d.gamertag, kind: d.kind, dispatchEnabled: false, refunded: d.refunded });
+        const result = await options.store.seed({ id: d.deliveryId, gamertag: d.gamertag, kind: d.kind, dispatchEnabled: false, ...(d.refunded !== undefined ? { refunded: d.refunded } : {}) });
         return res.status(result.duplicate ? 200 : 201).json({ id: d.deliveryId, ...result });
       } catch { return res.status(409).json({ error: "Simulation rejected" }); }
     }
