@@ -124,13 +124,12 @@ console.log("PASS persistent demo delivery: duplicate seed, offline poll, retry,
 
 const express = (await import("express")).default;
 const { createDeliverySimulationRouter } = await import("../server/routes/deliverySimulation.ts");
-const { once } = await import("node:events");
 const signatureSecret = "emulator-simulation-secret-not-a-production-credential";
 const app = express();
 app.use(express.json());
 app.use("/sim", createDeliverySimulationRouter({ secret: signatureSecret, store: deliveryStore }));
 const server = app.listen(0, "127.0.0.1");
-await once(server, "listening");
+if (!server.listening) await new Promise<void>(resolve => server.once("listening", resolve));
 const origin = "http://127.0.0.1:" + (server.address() as any).port;
 async function signed(path: string, data: object, options: { bad?: boolean; replayNonce?: string } = {}) {
   const body = JSON.stringify(data);
