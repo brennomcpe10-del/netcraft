@@ -29,6 +29,12 @@ test("opaque BDS header token only grants simulation poll/ack, with nonce and ti
     assert.equal(await call("/refund",token,"c".repeat(32)),401);
     assert.equal(await call("/poll","wrong","d".repeat(32)),401);
     assert.equal(await call("/poll",token,"e".repeat(32),Date.now()-300000),401);
+    const getRequest = await fetch(root + "/poll", {
+      method: "GET",
+      headers: { "x-nc-bds-token": token, "x-nc-nonce": "f".repeat(32),
+        "x-nc-timestamp": String(Date.now()) },
+    });
+    assert.equal(getRequest.status, 401);
   }finally{
     await new Promise<void>(resolve=>server.close(()=>resolve()));
     if(original===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=original;
