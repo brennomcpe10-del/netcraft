@@ -33,3 +33,60 @@ jobs:
         run: NODE_ENV=test npm test
       - name: Build storefront
         run: npm run build
+
+  pix-firestore-emulator:
+    name: Pix Firestore emulator (demo only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      NODE_ENV: test
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+      GCLOUD_PROJECT: demo-netcraft-admin-test
+      GOOGLE_CLOUD_PROJECT: demo-netcraft-admin-test
+      FIREBASE_PROJECT_ID: demo-netcraft-admin-test
+      FIREBASE_SERVICE_ACCOUNT_JSON: ""
+      GOOGLE_APPLICATION_CREDENTIALS: ""
+      MERCADOPAGO_ACCESS_TOKEN: ""
+      MERCADOPAGO_WEBHOOK_SECRET: ""
+    steps:
+      - name: Checkout Preview branch
+        uses: actions/checkout@v4
+      - name: Install Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Java 21 for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install
+      - name: Run isolated Firestore emulator integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$FIRESTORE_EMULATOR_HOST" = "127.0.0.1:8085"
+          test "$GCLOUD_PROJECT" = "demo-netcraft-admin-test"
+          test -z "$FIREBASE_SERVICE_ACCOUNT_JSON"
+          test -z "$GOOGLE_APPLICATION_CREDENTIALS"
+          test -z "$MERCADOPAGO_ACCESS_TOKEN"
+          cat > /tmp/netcraft-firebase-emulator.json <<'JSON'
+          {
+            "firestore": {"rules": "firestore.rules"},
+            "emulators": {
+              "firestore": {"host": "127.0.0.1", "port": 8085},
+              "ui": {"enabled": false}
+            }
+          }
+          JSON
+          # Config lives in the checkout so its relative rules path resolves.
+          cp /tmp/netcraft-firebase-emulator.json .firebase-emulator-ci.json
+          npx --yes firebase-tools@14 emulators:exec --only firestore \
+            --project demo-netcraft-admin-test \
+            --config .firebase-emulator-ci.json \
+            'node --import tsx tests/pix-emulator.integration.ts'
