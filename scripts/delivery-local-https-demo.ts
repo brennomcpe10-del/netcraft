@@ -13,6 +13,7 @@ export function startLocalDeliveryHttpsDemo() {
       process.env.GCLOUD_PROJECT !== "demo-netcraft-admin-test")
     throw new Error("Local Firestore Emulator test only");
   const secret = process.env.NC_DELIVERY_SIM_HMAC_TEST_SECRET || "";
+  const bdsToken = process.env.NC_DELIVERY_SIM_BDS_TOKEN || "";
   const certPath = process.env.NC_DELIVERY_SIM_TLS_CERT_PATH;
   const keyPath = process.env.NC_DELIVERY_SIM_TLS_KEY_PATH;
   if (secret.length < 32 || !certPath || !keyPath)
@@ -21,7 +22,7 @@ export function startLocalDeliveryHttpsDemo() {
   app.disable("x-powered-by");
   app.use(express.json({ limit: "2kb" }));
   app.use("/delivery", createDeliverySimulationRouter({
-    secret, store: emulatorDeliveryStore(paymentDatabase()),
+    secret, ...(bdsToken.length >= 32 ? { bdsToken } : {}), store: emulatorDeliveryStore(paymentDatabase()),
   }));
   return https.createServer({
     cert: readFileSync(certPath), key: readFileSync(keyPath),
