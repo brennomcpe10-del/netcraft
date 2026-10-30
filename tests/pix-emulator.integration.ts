@@ -124,7 +124,13 @@ const replayNonce = "e".repeat(32);
 assert.equal(await deliveryStore.claimNonce(replayNonce, Date.now()), true);
 assert.equal(await deliveryStore.claimNonce(replayNonce, Date.now()), false);
 assert.equal(await deliveryStore.claimNonce("f".repeat(32), Date.now() - 180000), false);
-console.log("PASS atomic persistent nonce replay rejection and stale timestamp");
+const concurrentNonce = "d".repeat(32);
+const nonceResults = await Promise.all([
+  deliveryStore.claimNonce(concurrentNonce, Date.now()),
+  deliveryStore.claimNonce(concurrentNonce, Date.now()),
+]);
+assert.equal(nonceResults.filter(Boolean).length, 1);
+console.log("PASS atomic persistent nonce replay rejection, concurrency and stale timestamp");
 console.log("PASS persistent demo delivery: duplicate seed, offline poll, retry, atomic ACK and refund block");
 
 const express = (await import("express")).default;
