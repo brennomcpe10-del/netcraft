@@ -5,11 +5,30 @@ export class NonceGate {
   async fetch(request) {
     const data = await request.json();
     const nonce = data.nonce;
-    if (!/^[a-f0-9]{32}$/.test(nonce)) return new Response("invalid", { status: 400 });
-    const key = "nonce:" + nonce;
-    if (this.ctx.storage.kv.get(key) !== undefined)
-      return new Response("duplicate", { status: 409 });
-    this.ctx.storage.kv.put(key, Date.now());
+    if (typeof nonce !== "string" || !/^[a-f0-9]{32}$/.test(nonce))
+      return new Response("invalid", { status: 400 });
+    const operation = data.operation || "claim";
+    const issuedKey = "issued:" + nonce;
+    const usedKey = "nonce:" + nonce;
+    const now = Date.now();
+    if (operation === "issue") {
+      if (this.ctx.storage.kv.get(issuedKey) !== undefined ||
+          this.ctx.storage.kv.get(usedKey) !== undefined)
+        return new Response("duplicate", {status:409});
+      this.ctx.storage.kv.put(issuedKey, now);
+      return new Response("issued");
+    }
+    if (operation !== "claim") return new Response("invalid_operation",{status:400});
+    if (this.ctx.storage.kv.get(usedKey) !== undefined)
+      return new Response("duplicate", {status:409});
+    if (data.requireIssued === true) {
+      const issuedAt = this.ctx.storage.kv.get(issuedKey);
+      if (typeof issuedAt !== "number" || issuedAt > now ||
+          now - issuedAt > 60000)
+        return new Response("not_issued_or_expired", {status:410});
+      this.ctx.storage.kv.delete(issuedKey);
+    }
+    this.ctx.storage.kv.put(usedKey, now);
     return new Response("accepted");
   }
 }
@@ -49,8 +68,15 @@ export default {
     if (url.pathname === "/delivery/challenge") {
       // Issued only after test-token authentication. No delivery action here.
       const nonce = secureChallengeNonce(globalThis.crypto);
-      return nonce ? json({nonce,simulation:true})
-        : json({error:"secure_random_unavailable"},503);
+      if (!nonce) return json({error:"secure_random_unavailable"},503);
+      if (env.NC_CHALLENGE_REQUIRED === "true") {
+        const gate = env.NONCE_GATE.get(env.NONCE_GATE.idFromName("netcraft-delivery-sandbox-v1"));
+        const issued = await gate.fetch("https://internal/claim",{
+          method:"POST",body:JSON.stringify({nonce,operation:"issue"})
+        });
+        if (!issued.ok) return json({error:"challenge_unavailable"},503);
+      }
+      return json({nonce,simulation:true});
     }
     const stamp = request.headers.get("x-nc-timestamp") || "";
     const nonce = request.headers.get("x-nc-nonce") || "";
@@ -74,9 +100,9 @@ export default {
       return json({error:"invalid_delivery"},400);
     const stub = env.NONCE_GATE.get(env.NONCE_GATE.idFromName("netcraft-delivery-sandbox-v1"));
     const result = await stub.fetch("https://internal/claim",{
-      method:"POST",body:JSON.stringify({nonce})
+      method:"POST",body:JSON.stringify({nonce,requireIssued:env.NC_CHALLENGE_REQUIRED === "true"})
     });
-    if (!result.ok) return json({error:result.status===409?"replay":"nonce_error"},result.status===409?401:503);
+    if (!result.ok) return json({error:result.status===409?"replay":result.status===410?"challenge_expired_or_unknown":"nonce_error"},result.status===409?401:result.status===410?401:503);
     // Never return a job until sandbox store and offline/ACK semantics are reviewed.
     if (url.pathname === "/delivery/poll") return json({deliveries:[],simulation:true});
     return json({error:"ack_disabled",simulation:true},409);
