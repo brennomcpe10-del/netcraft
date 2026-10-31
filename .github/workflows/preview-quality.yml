@@ -31,6 +31,30 @@ jobs:
         run: npm run lint
       - name: Automated tests
         run: NODE_ENV=test npm test
+      - name: Package and inspect OFF BDS preflight without deployment
+        run: |
+          set -euo pipefail
+          node scripts/build-bds-preflight-off.mjs
+          python3 - <<'PY'
+          import json, zipfile
+          path = "dist/bds-off/NetCraft_Delivery_Homologacao_OFF_v0.2.0.mcpack"
+          expected = {
+              "manifest.json",
+              "scripts/main.js",
+              "scripts/secretHeaderProbe.js",
+              "scripts/capabilityInspection.js",
+          }
+          with zipfile.ZipFile(path) as pack:
+              assert set(pack.namelist()) == expected, "Unexpected BDS package contents"
+              manifest = json.loads(pack.read("manifest.json"))
+              assert manifest["modules"][0]["entry"] == "scripts/main.js"
+              assert manifest["modules"][0]["uuid"] == "99ac2e49-b003-46fc-8473-55700984acc7"
+              entry = pack.read("scripts/main.js").decode()
+              for forbidden in ("secretHeaderProbe", "http.request", "secrets.get", "runInterval", "runTimeout"):
+                  assert forbidden not in entry, "BDS entrypoint is not inert"
+              assert "modo OFF" in entry
+          print("PASS: OFF-only BDS .mcpack archive inspected; no deployment")
+          PY
       - name: Build storefront
         run: npm run build
 
