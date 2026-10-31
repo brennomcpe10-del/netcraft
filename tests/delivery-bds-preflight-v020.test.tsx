@@ -2,9 +2,6 @@ import {test} from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
-import {execFileSync} from "node:child_process";
-import {mkdtempSync,writeFileSync,rmSync} from "node:fs";
-import {tmpdir} from "node:os";
 import {join} from "node:path";
 
 const base=resolve("minecraft/delivery-simulation/preflight-pack");
