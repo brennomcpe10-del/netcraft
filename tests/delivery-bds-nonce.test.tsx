@@ -7,11 +7,11 @@ import { secureNonce32, safeTimestamp } from "../minecraft/delivery-simulation/s
 test("BDS nonce generation requires secure randomness and fails closed", () => {
   assert.throws(() => secureNonce32(undefined), /secure_random_unavailable/);
   assert.throws(() => secureNonce32({ getRandomValues: null }), /secure_random_unavailable/);
-  const nonce = secureNonce32({ getRandomValues(array: Uint8Array) { array.set(randomBytes(array.length)); } });
+  const nonce = secureNonce32({ getRandomValues(array: Uint8Array) { array.set(randomBytes(array.length)); return array; } });
   assert.match(nonce, /^[a-f0-9]{32}$/);
   assert.equal(nonce.length, 32);
   const distinct = new Set(Array.from({ length: 128 }, () =>
-    secureNonce32({ getRandomValues(array: Uint8Array) { array.set(randomBytes(array.length)); } })));
+    secureNonce32({ getRandomValues(array: Uint8Array) { array.set(randomBytes(array.length)); return array; } })));
   assert.equal(distinct.size, 128);
   assert.equal(createHash("sha256").update(nonce).digest("hex").length, 64);
 });
@@ -20,4 +20,10 @@ test("BDS timestamp rejects broken clocks", () => {
   assert.equal(safeTimestamp(() => 1793370000000), 1793370000000);
   assert.throws(() => safeTimestamp(() => NaN), /clock_unavailable/);
   assert.throws(() => safeTimestamp(() => 1), /clock_unavailable/);
+});
+
+test("BDS nonce rejects malformed providers without using predictable fallback", () => {
+  assert.throws(() => secureNonce32({ getRandomValues(array: Uint8Array) { return array; } }), /secure_random_unavailable/);
+  assert.throws(() => secureNonce32({ getRandomValues(array: Uint8Array) { array.fill(7); return undefined; } }), /secure_random_unavailable/);
+  assert.throws(() => secureNonce32({ getRandomValues() { throw new Error("no_secure_entropy"); } }), /no_secure_entropy/);
 });
