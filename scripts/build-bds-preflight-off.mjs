@@ -9,7 +9,7 @@ if(manifest.header.name!=="NetCraft Delivery Homologacao OFF" ||
    manifest.modules[0].entry!=="scripts/main.js")
   throw new Error("Unsafe BDS preflight manifest");
 const entry=readFileSync(join(base,"scripts/main.js"),"utf8");
-if(/http\.request|secrets\.get|secretHeaderProbe|runInterval|playerSpawn/.test(entry))
+if(/http\.request|secrets\.get|secretHeaderProbe|capabilityInspection|runInterval|runTimeout|runJob|playerSpawn|runCommand/.test(entry))
   throw new Error("Preflight entrypoint is not inert");
 const out=resolve("dist/bds-off");
 mkdirSync(out,{recursive:true});
