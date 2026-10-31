@@ -62,9 +62,9 @@ test("BDS OFF secret header probe stays unreferenced, network-free and opaque",(
 
 test("BDS opaque probe mock: missing secret, opaque success and runtime failures fail closed",()=>{
  const probe=readFileSync(join(base,"scripts/secretHeaderProbe.js"),"utf8")
-  .replace(/^import .*;\\s*$/gm,"")
+  .replace(/^import .*;\s*$/gm,"")
   .replace("export function makeOpaqueTestAuthorizationHeader","function makeOpaqueTestAuthorizationHeader");
- const source=probe+"\\nmakeOpaqueTestAuthorizationHeader()";
+ const source=probe+"\nmakeOpaqueTestAuthorizationHeader()";
  const secret={toString(){throw new Error("opaque secret must not be inspected");}};
  const run=(get:()=>unknown, Header: new (name:string,value:unknown)=>unknown)=>
   runInNewContext(source,{secrets:{get},HttpHeader:Header}) as {ok:boolean,reason?:string,header?:unknown};
