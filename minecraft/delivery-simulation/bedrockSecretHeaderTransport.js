@@ -13,7 +13,7 @@ export async function isolatedBedrockDemoRequest(path, input, nonce, timestamp) 
   // Deliberately not enabled without an external sandbox and separate review.
   if (variables.get("nc_delivery_test_enabled") !== true) return { ok: false, reason: "disabled" };
   if (path !== "/poll" && path !== "/ack") return { ok: false, reason: "not_allowed" };
-  if (!/^[a-f0-9]{32}$/.test(nonce) || !/^\d{13}$/.test(String(timestamp)))
+  if (!/^[a-f0-9]{32}$/.test(nonce) || !/^\d{13}$/.test(String(timestamp)) ||\n      Math.abs(Date.now() - Number(timestamp)) > 60000)
     return { ok: false, reason: "invalid_request" };
   if ((path === "/poll" && !PLAYER.test(input)) ||
       (path === "/ack" && !ID.test(input))) return { ok: false, reason: "invalid_data" };
@@ -34,18 +34,18 @@ export async function isolatedBedrockDemoRequest(path, input, nonce, timestamp) 
       new HttpHeader("x-nc-timestamp", String(timestamp)),
     ];
     const response = await http.request(req);
+    // ACK never counts as success in this sandbox, even if a server replies 200.
+    if (path === "/ack") return { ok: false, reason: "ack_disabled" };
     if (response.status !== 200 || typeof response.body !== "string" || response.body.length > 8192)
       return { ok: false, reason: "http_rejected" };
-    const result = JSON.parse(response.body);
-    if (path === "/poll") {
-      if (!Array.isArray(result.deliveries) || result.deliveries.length > 30 ||
-          result.deliveries.some(j => !j || !ID.test(j.id) || j.simulation !== true ||
-            !["vip", "kit"].includes(j.kind))) return { ok: false, reason: "invalid_jobs" };
-      return { ok: true, jobs: result.deliveries };
-    }
-    return result.simulation === true && result.state === "simulated_complete"
-      ? { ok: true, simulation: true, duplicate: result.duplicate === true }
-      : { ok: false, reason: "invalid_ack" };
+    let result;
+    try { result = JSON.parse(response.body); }
+    catch { return { ok: false, reason: "invalid_json" }; }
+    // The Cloudflare isolation contract cannot authorize *any* delivery job.
+    if (!result || result.simulation !== true || !Array.isArray(result.deliveries) ||
+        result.deliveries.length !== 0)
+      return { ok: false, reason: "unexpected_jobs" };
+    return { ok: true, jobs: [], simulation: true };
   } catch {
     return { ok: false, reason: "transport_error" };
   } finally {
