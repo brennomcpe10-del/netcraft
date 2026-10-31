@@ -10,7 +10,7 @@ function fixture(){
   delete:(k:string)=>data.delete(k)
  }}});
  const env={NC_SANDBOX_ENABLED:"true",NC_CHALLENGE_REQUIRED:"true",
-   NC_BDS_TEST_TOKEN:token,NONCE_GATE:{idFromName:()=> "one",get:()=>gate}};
+   NC_BDS_TEST_TOKEN:token,NONCE_GATE:{idFromName:()=> "one",get:()=>({fetch:(url:string,init:{method:string;body:string})=>gate.fetch(new Request(url,init))})}};
  const req=(path:string,nonce="",auth=token)=>
   new Request("https://isolated.invalid"+path,{method:"POST",
    headers:{"content-type":"application/json","x-nc-bds-token":auth,
