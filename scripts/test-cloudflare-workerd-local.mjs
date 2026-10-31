@@ -99,6 +99,21 @@ try{
   const future=await issue();
   r=await makeRequest(future,token,120000);
   if(r.status!==401)throw new Error("future accepted");
+  // Opt-in real-time expiry test: this intentionally takes longer than 60 seconds.
+  // NC_TEST_CHALLENGE_EXPIRY=1 only affects this local temporary workerd instance.
+  if(process.env.NC_TEST_CHALLENGE_EXPIRY==="1"){
+    const expired=await issue();
+    await sleep(61000);
+    r=await makeRequest(expired);
+    if(r.status!==401||(await r.json()).error!=="challenge_expired_or_unknown")
+      throw new Error("expired issued challenge accepted");
+  }
+  // An invalid token must not consume a previously issued, valid challenge.
+  const authGuard=await issue();
+  r=await makeRequest(authGuard,"bad");
+  if(r.status!==401)throw new Error("invalid token was accepted");
+  r=await makeRequest(authGuard);
+  if(r.status!==200)throw new Error("invalid token consumed issued challenge");
   const ack=await issue();
   r=await makeRequest(ack,token,0,"/delivery/ack");
   if(r.status!==409)throw new Error("ACK enabled");
