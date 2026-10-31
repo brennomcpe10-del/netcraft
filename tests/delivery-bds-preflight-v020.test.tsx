@@ -90,3 +90,17 @@ test("BDS opaque probe mock: missing secret, opaque success and runtime failures
  assert.equal(bad.reason,"opaque_header_unavailable");
  assert.equal(JSON.stringify(bad).includes("unsafe header details"),false);
 });
+
+test("BDS OFF packaging guard rejects accidental activation patterns",()=>{
+ const packaging=readFileSync(resolve("scripts/build-bds-preflight-off.mjs"),"utf8");
+ const entry=readFileSync(join(base,"scripts/main.js"),"utf8");
+ const guardLine=packaging.split("\n").find(line=>line.startsWith("if(/") && line.includes("Preflight")===false && line.includes("entry))"));
+ assert.ok(guardLine,"Missing entrypoint safety check");
+ const match=guardLine.match(/^if\((\/.*\/).test\(entry\)\)/);
+ assert.ok(match,"Expected explicit regular-expression guard for entrypoint");
+ const guard=runInNewContext(match[1]) as RegExp;
+ for(const forbidden of ["http.request", "secrets.get", "secretHeaderProbe", "capabilityInspection", "runInterval", "runTimeout", "runJob", "playerSpawn", "runCommand"]){
+  assert.equal(guard.test(forbidden),true,`Expected packer to reject ${forbidden}`);
+ }
+ assert.equal(guard.test(entry),false,"Inert entrypoint must remain packageable");
+});
