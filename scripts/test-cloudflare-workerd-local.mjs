@@ -30,7 +30,19 @@ writeFileSync(config,[
   'new_sqlite_classes = ["NonceGate"]',
 ].join("\n")+"\n");
 mkdirSync(persist,{recursive:true});
-const exe=process.platform==="win32"?"wrangler.cmd":"wrangler";
+const exe="wrangler";
+const launch=(args)=>{
+  if(process.platform!=="win32") return spawn(exe,args,
+    {cwd,env:{...process.env,WRANGLER_SEND_METRICS:"false"},stdio:"ignore"});
+  // Windows .cmd shims cannot be executed directly with shell:false.
+  // Invoke cmd.exe explicitly to avoid Node DEP0190 and keep the command local.
+  // Temp paths come from mkdtempSync; reject unsafe shell characters.
+  for(const arg of args) if (/[%"!^&|<>\r\n]/.test(arg))
+    throw new Error("Unsafe Windows test argument");
+  const command=["wrangler.cmd",...args.map(a=>'"'+a+'"')].join(" ");
+  return spawn(process.env.ComSpec||"cmd.exe",["/d","/s","/c",command],
+    {cwd,env:{...process.env,WRANGLER_SEND_METRICS:"false"},stdio:"ignore",shell:false});
+};
 const root="http://127.0.0.1:"+port;
 const nonce=crypto.randomBytes(16).toString("hex");
 const makeRequest=(id,auth=token,offset=0,route="/delivery/poll")=>
@@ -41,9 +53,8 @@ const makeRequest=(id,auth=token,offset=0,route="/delivery/poll")=>
       {deliveryId:"a".repeat(64)+"-1"}:{gamertag:"JogadorTeste"})});
 let child;
 async function start(){
-  child=spawn(exe,["dev","--local","--ip","127.0.0.1","--port",String(port),
-    "--persist-to",persist,"--config",config],
-    {cwd,env:{...process.env,WRANGLER_SEND_METRICS:"false"},stdio:"ignore",shell:process.platform==="win32"});
+  child=launch(["dev","--local","--ip","127.0.0.1","--port",String(port),
+    "--persist-to",persist,"--config",config]);
   for(let i=0;i<100;i++){
     if(child.exitCode!==null)throw new Error("workerd exited before ready");
     try{const r=await fetch(root+"/health");if(r.ok)return;}catch{}
