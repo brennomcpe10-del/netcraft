@@ -2,11 +2,11 @@
   "format_version": 2,
   "header": {
     "name": "NetCraft Delivery Homologacao OFF",
-    "description": "Pacote inerte de preflight. Sem rede, pagamento, VIP ou item.",
+    "description": "Pacote BDS inerte para homologacao futura de SecretString/HttpHeader em clone. Sem rede ou entregas.",
     "uuid": "6c521552-24ef-4339-9212-e2a349ace991",
     "version": [
       0,
-      1,
+      2,
       0
     ],
     "min_engine_version": [
@@ -22,7 +22,7 @@
       "uuid": "99ac2e49-b003-46fc-8473-55700984acc7",
       "version": [
         0,
-        1,
+        2,
         0
       ],
       "entry": "scripts/main.js"
