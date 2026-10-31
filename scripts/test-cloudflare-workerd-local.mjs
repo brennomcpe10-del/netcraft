@@ -40,8 +40,8 @@ const launch=(args)=>{
   for(const arg of args) if (/[%"!^&|<>\r\n]/.test(arg))
     throw new Error("Unsafe Windows test argument");
   const command=["wrangler.cmd",...args.map(a=>'"'+a+'"')].join(" ");
-  return spawn(process.env.ComSpec||"cmd.exe",["/d","/s","/c",command],
-    {cwd,env:{...process.env,WRANGLER_SEND_METRICS:"false"},stdio:"ignore",shell:false});
+  return spawn(process.env.ComSpec||"cmd.exe",["/d","/c",command],
+    {cwd,env:{...process.env,WRANGLER_SEND_METRICS:"false"},stdio:"inherit",shell:false});
 };
 const root="http://127.0.0.1:"+port;
 const nonce=crypto.randomBytes(16).toString("hex");
