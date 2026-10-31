@@ -66,6 +66,32 @@ jobs:
           path: dist/bds-off/NetCraft_Delivery_Homologacao_OFF_v0.2.0.mcpack
           if-no-files-found: error
           retention-days: 7
+      - name: Package and verify separate minimal Gate A OFF pack
+        run: |
+          set -euo pipefail
+          node scripts/build-bds-gate-a-minimal.mjs
+          python3 - <<'PY'
+          import json,zipfile
+          path="dist/bds-off/NetCraft_Delivery_GateA_Minimal_OFF_v0.2.1.mcpack"
+          with zipfile.ZipFile(path) as z:
+              assert sorted(z.namelist()) == ["manifest.json","scripts/main.js"]
+              m=json.loads(z.read("manifest.json"))
+              s=z.read("scripts/main.js").decode()
+              assert m["header"]["uuid"]=="91bc21f7-a701-4f06-9785-7126cbdb67f1"
+              assert m["modules"][0]["uuid"]=="16f58c35-975f-45ac-a512-85f282b7ea45"
+              assert m["dependencies"]==[{"module_name":"@minecraft/server","version":"1.17.0"}]
+              assert "system.run" in s and "MINIMAL OFF loaded" in s
+              for forbidden in ("server-net","server-admin","http.request","secrets.get","runCommand","fetch(","eval("):
+                  assert forbidden not in s
+          print("PASS: two-file Gate A minimal OFF pack inspected")
+          PY
+      - name: Publish separate Gate A minimal OFF archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcraft-gate-a-minimal-off-v021
+          path: dist/bds-off/NetCraft_Delivery_GateA_Minimal_OFF_v0.2.1.mcpack
+          if-no-files-found: error
+          retention-days: 7
       - name: Build storefront
         run: npm run build
 
