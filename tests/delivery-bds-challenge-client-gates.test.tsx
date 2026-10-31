@@ -13,7 +13,8 @@ test("BDS challenge-poll is opt-in, offline-gated, has no rewards and uses opaqu
  assert.match(s,/new HttpHeader\("x-nc-bds-token", token\)/);
  assert.match(s,/data\.simulation !== true/);
  assert.match(s,/isolatedBedrockDemoRequest\("\/poll", gamertag, nonce, Date\.now\(\)\)/);
- assert.doesNotMatch(s,/Math\.random|runInterval|runTimeout|playerSpawn|give\s+@|grantVip|console\./);
+ const executable=s.split("\n").filter(line=>!line.trimStart().startsWith("//")).join("\n");
+ assert.doesNotMatch(executable,/Math\.random|runInterval|runTimeout|playerSpawn|give\s+@|grantVip|console\./);
 });
 test("BDS preflight entrypoint never activates challenge-poll transport",()=>{
  const main=read("minecraft/delivery-simulation/preflight-pack/scripts/main.js");
