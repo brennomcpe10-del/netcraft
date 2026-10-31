@@ -21,6 +21,7 @@ writeFileSync(config,[
   'workers_dev = false',
   '[vars]',
   'NC_SANDBOX_ENABLED = "true"',
+  'NC_CHALLENGE_REQUIRED = "true"',
   'NC_BDS_TEST_TOKEN = '+JSON.stringify(token),
   '[[durable_objects.bindings]]',
   'name = "NONCE_GATE"',
@@ -74,26 +75,46 @@ async function stop(){
 }
 try{
   await start();
-  let r=await makeRequest(nonce);if(r.status!==200)throw new Error("first claim "+r.status);
-  r=await makeRequest(nonce);if(r.status!==401||(await r.json()).error!=="replay")throw new Error("replay failed");
-  r=await makeRequest(crypto.randomBytes(16).toString("hex"),"bad");if(r.status!==401)throw new Error("bad token allowed");
-  const validAfterBad=crypto.randomBytes(16).toString("hex");
-  r=await makeRequest(validAfterBad,"bad");if(r.status!==401)throw new Error("bad token rejected incorrectly");
-  r=await makeRequest(validAfterBad);if(r.status!==200)throw new Error("invalid token consumed nonce");
-  const freshAfterStale=crypto.randomBytes(16).toString("hex");
-  r=await makeRequest(freshAfterStale,token,-120000);if(r.status!==401)throw new Error("stale accepted");
-  r=await makeRequest(freshAfterStale);if(r.status!==200)throw new Error("stale request consumed nonce");
-  r=await makeRequest(crypto.randomBytes(16).toString("hex"),token,120000);if(r.status!==401)throw new Error("future timestamp allowed");
-  r=await makeRequest(crypto.randomBytes(16).toString("hex"),token,0,"/delivery/ack");if(r.status!==409)throw new Error("ACK enabled");
-  const same=crypto.randomBytes(16).toString("hex");
-  const responses=await Promise.all(Array.from({length:24},()=>makeRequest(same)));
+  const issue=async()=>{
+    const r=await makeRequest("",token,0,"/delivery/challenge");
+    if(r.status!==200)throw new Error("challenge issuance "+r.status);
+    const body=await r.json();
+    if(body.simulation!==true||!/^[a-f0-9]{32}$/.test(body.nonce))throw new Error("invalid challenge");
+    return body.nonce;
+  };
+  let r=await makeRequest(nonce);
+  if(r.status!==401)throw new Error("unissued nonce allowed");
+  const issued=await issue();
+  r=await makeRequest(issued);
+  if(r.status!==200)throw new Error("issued poll rejected "+r.status);
+  r=await makeRequest(issued);
+  if(r.status!==401||(await r.json()).error!=="replay")throw new Error("replay failed");
+  r=await makeRequest(await issue(),"bad");
+  if(r.status!==401)throw new Error("bad token allowed");
+  const stale=await issue();
+  r=await makeRequest(stale,token,-120000);
+  if(r.status!==401)throw new Error("stale accepted");
+  r=await makeRequest(stale);
+  if(r.status!==200)throw new Error("stale consumed challenge");
+  const future=await issue();
+  r=await makeRequest(future,token,120000);
+  if(r.status!==401)throw new Error("future accepted");
+  const ack=await issue();
+  r=await makeRequest(ack,token,0,"/delivery/ack");
+  if(r.status!==409)throw new Error("ACK enabled");
+  const concurrent=await issue();
+  const responses=await Promise.all(Array.from({length:24},()=>makeRequest(concurrent)));
   if(responses.filter(r=>r.status===200).length!==1||responses.filter(r=>r.status===401).length!==23)
-    throw new Error("concurrency invariant failed: "+responses.map(r=>r.status));
+    throw new Error("concurrent claims failed: "+responses.map(r=>r.status));
+  const persisted=await issue();
   await stop();
   await start();
-  r=await makeRequest(nonce);
-  if(r.status!==401||(await r.json()).error!=="replay")throw new Error("nonce lost on workerd restart");
-  console.log("PASS: local SQLite DO restart, concurrency, stale token/time and disabled ACK");
+  r=await makeRequest(persisted);
+  if(r.status!==200)throw new Error("issued challenge lost on restart");
+  r=await makeRequest(concurrent);
+  if(r.status!==401||(await r.json()).error!=="replay")
+    throw new Error("consumed challenge lost on restart");
+  console.log("PASS: local SQLite DO issued challenges, restart, replay, concurrency, stale token/time and disabled ACK");
 }finally{
   await stop();
   rmSync(dir,{recursive:true,force:true});
