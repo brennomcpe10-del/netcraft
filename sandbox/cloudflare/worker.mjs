@@ -49,7 +49,7 @@ export default {
     if (url.pathname === "/delivery/challenge") {
       // Issued only after test-token authentication. No delivery action here.
       const nonce = secureChallengeNonce(globalThis.crypto);
-      return nonce ? json({nonce,simulation:true,expiresInMs:60000})
+      return nonce ? json({nonce,simulation:true})
         : json({error:"secure_random_unavailable"},503);
     }
     const stamp = request.headers.get("x-nc-timestamp") || "";
