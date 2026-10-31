@@ -7,10 +7,15 @@ import { HttpHeader } from "@minecraft/server-net";
 const SECRET_NAME = "nc_delivery_homologation_header_token";
 export function makeOpaqueTestAuthorizationHeader() {
   // SecretString is opaque; never stringify, interpolate, log or persist it.
-  const secret = secrets.get(SECRET_NAME);
-  if (!secret) return { ok: false, reason: "missing_server_secret" };
-  // Actual SecretString + HttpHeader runtime compatibility remains UNVERIFIED.
-  return { ok: true, header: new HttpHeader("x-nc-bds-token", secret) };
+  try {
+    const secret = secrets.get(SECRET_NAME);
+    if (!secret) return { ok: false, reason: "missing_server_secret" };
+    // Only construct an opaque header; never emit an HTTP request or serialize it.
+    return { ok: true, header: new HttpHeader("x-nc-bds-token", secret) };
+  } catch {
+    // Do not propagate runtime exceptions that might contain credential details.
+    return { ok: false, reason: "opaque_header_unavailable" };
+  }
 }
 // No http.request, timers, event listeners, player modifications or grants.
 // Never import this from scripts/main.js without a separate security review.
