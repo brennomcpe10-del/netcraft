@@ -1,7 +1,7 @@
 // Optional real workerd/SQLite smoke test. Runs ONLY locally, never deploys.
 // Requires Wrangler CLI installed, Node >=20, and sandbox/cloudflare sources.
 import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -30,19 +30,20 @@ writeFileSync(config,[
   'new_sqlite_classes = ["NonceGate"]',
 ].join("\n")+"\n");
 mkdirSync(persist,{recursive:true});
-const exe="wrangler";
-const launch=(args)=>{
-  if(process.platform!=="win32") return spawn(exe,args,
-    {cwd,env:{...process.env,WRANGLER_SEND_METRICS:"false"},stdio:"ignore"});
-  // Windows .cmd shims cannot be executed directly with shell:false.
-  // Invoke cmd.exe explicitly to avoid Node DEP0190 and keep the command local.
-  // Temp paths come from mkdtempSync; reject unsafe shell characters.
-  for(const arg of args) if (/[%"!^&|<>\r\n]/.test(arg))
-    throw new Error("Unsafe Windows test argument");
-  const command=["wrangler.cmd",...args.map(a=>'"'+a+'"')].join(" ");
-  return spawn(process.env.ComSpec||"cmd.exe",["/d","/c",command],
-    {cwd,env:{...process.env,WRANGLER_SEND_METRICS:"false"},stdio:"inherit",shell:false});
-};
+// Launch Wrangler via its JS entry point, not the Windows .cmd shim.
+function wranglerEntry() {
+  const roots = [
+    process.env.APPDATA && join(process.env.APPDATA, "npm", "node_modules", "wrangler", "bin", "wrangler.js"),
+    process.env.npm_config_prefix && join(process.env.npm_config_prefix, "node_modules", "wrangler", "bin", "wrangler.js"),
+    ...String(process.env.PATH || "").split(process.platform === "win32" ? ";" : ":")
+      .map(p => p && join(p, "node_modules", "wrangler", "bin", "wrangler.js")),
+  ].filter(Boolean);
+  const found = roots.find(existsSync);
+  if (!found) throw new Error("Cannot find Wrangler JS entry point; ensure Wrangler is installed globally via npm");
+  return found;
+}
+const launch=(args)=>spawn(process.execPath,[wranglerEntry(),...args],
+  {cwd,env:{...process.env,WRANGLER_SEND_METRICS:"false"},stdio:"inherit",shell:false});
 const root="http://127.0.0.1:"+port;
 const nonce=crypto.randomBytes(16).toString("hex");
 const makeRequest=(id,auth=token,offset=0,route="/delivery/poll")=>
