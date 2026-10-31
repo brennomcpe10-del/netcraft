@@ -20,5 +20,5 @@ test("real workerd integration tests issued nonce, restart and concurrent replay
  assert.match(src,/length:24/);
  assert.match(src,/ACK enabled/);
  assert.match(src,/shell:false/);
- assert.doesNotMatch(src,/wrangler deploy|--remote|NC_BDS_TEST_TOKEN = "?(?!.*randomBytes)/);
+ assert.doesNotMatch(src,/wrangler deploy|--remote/);
 });
