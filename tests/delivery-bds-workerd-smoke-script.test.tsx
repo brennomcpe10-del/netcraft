@@ -19,6 +19,10 @@ test("real workerd integration tests issued nonce, restart and concurrent replay
  assert.match(src,/consumed challenge lost on restart/);
  assert.match(src,/length:24/);
  assert.match(src,/ACK enabled/);
+ assert.match(src,/NC_TEST_CHALLENGE_EXPIRY/);
+ assert.match(src,/await sleep\(61000\)/);
+ assert.match(src,/expired issued challenge accepted/);
+ assert.match(src,/invalid token consumed issued challenge/);
  assert.match(src,/shell:false/);
  assert.doesNotMatch(src,/wrangler deploy|--remote/);
 });
