@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import {join} from "node:path";
+import {runInNewContext} from "node:vm";
 
 const base=resolve("minecraft/delivery-simulation/preflight-pack");
 const manifest=JSON.parse(readFileSync(join(base,"manifest.json"),"utf8"));
@@ -57,4 +58,35 @@ test("BDS OFF secret header probe stays unreferenced, network-free and opaque",(
   assert.doesNotMatch(source,/\b(?:console\.(?:log|warn|error)|JSON\.stringify|\.toString)\s*\(/);
   assert.doesNotMatch(source,/\.runCommand(?:Async)?\s*\(/);
  }
+});
+
+test("BDS opaque probe mock: missing secret, opaque success and runtime failures fail closed",()=>{
+ const probe=readFileSync(join(base,"scripts/secretHeaderProbe.js"),"utf8")
+  .replace(/^import .*;\\s*$/gm,"")
+  .replace("export function makeOpaqueTestAuthorizationHeader","function makeOpaqueTestAuthorizationHeader");
+ const source=probe+"\\nmakeOpaqueTestAuthorizationHeader()";
+ const secret={toString(){throw new Error("opaque secret must not be inspected");}};
+ const run=(get:()=>unknown, Header: new (name:string,value:unknown)=>unknown)=>
+  runInNewContext(source,{secrets:{get},HttpHeader:Header}) as {ok:boolean,reason?:string,header?:unknown};
+ const Header=class{constructor(public name:string,public value:unknown){}};
+ const missing=run(()=>undefined,Header);
+ assert.equal(missing.ok,false);
+ assert.equal(missing.reason,"missing_server_secret");
+ const good=run(()=>secret,Header);
+ assert.equal(good.ok,true);
+ assert.equal((good.header as InstanceType<typeof Header>).value,secret);
+ assert.equal((good.header as InstanceType<typeof Header>).name,"x-nc-bds-token");
+ for(const failure of [
+  ()=>{throw new Error("unsafe internal token detail");},
+ ]){
+  const result=run(failure,Header);
+  assert.equal(result.ok,false);
+  assert.equal(result.reason,"opaque_header_unavailable");
+  assert.equal(JSON.stringify(result).includes("unsafe internal token detail"),false);
+ }
+ const badHeader=class{constructor(){throw new Error("unsafe header details");}};
+ const bad=run(()=>secret,badHeader);
+ assert.equal(bad.ok,false);
+ assert.equal(bad.reason,"opaque_header_unavailable");
+ assert.equal(JSON.stringify(bad).includes("unsafe header details"),false);
 });
