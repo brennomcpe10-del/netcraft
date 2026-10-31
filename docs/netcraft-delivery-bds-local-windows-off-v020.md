@@ -15,6 +15,13 @@ Get-FileHash .\NetCraft_Delivery_Homologacao_OFF_v0.2.0.mcpack -Algorithm SHA256
 ```
 O hash calculado é para identificação do arquivo local, não prova isoladamente a origem ou a segurança. Comparar com evidências da execução e inspecionar o manifest no ZIP antes de usar.
 
+## Verificador automático offline
+Após baixar e extrair o artefato, com uma cópia do repositório na branch `redesign-mobile-solaris`, rode no PowerShell:
+```powershell
+powershell -NoProfile -File .\\scripts\\verify-bds-off-artifact.ps1 -PackPath "C:\\CAMINHO\\NetCraft_Delivery_Homologacao_OFF_v0.2.0.mcpack"
+```
+O script confere a lista exata dos arquivos ZIP, UUIDs, versões, dependências e o entrypoint em modo OFF; também imprime o SHA-256. Ele não instala o addon, não acessa rede e não comprova compatibilidade com BDS. Não execute o pacote no servidor principal.
+
 ## Gate A — somente carregamento inerte
 1. Iniciar o clone sem addon, confirmar que inicia e registrar versão do BDS.
 2. Desligar o clone. Importar **somente** o behavior pack OFF e habilitá-lo no mundo descartável (não no mundo real). Não inserir segredo ou ativar integração HTTP.
