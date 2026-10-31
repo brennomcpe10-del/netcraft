@@ -14,3 +14,20 @@ A later release requires reviewing nonce source, scoped authentication, connecti
 ` scripts/secretHeaderProbe.js ` is an unreferenced helper for **future** `SecretString` → `HttpHeader` validation; the actual entrypoint does not import or call it. It does not send HTTP requests. The pack uses its own module UUID (`99ac2e49-b003-46fc-8473-55700984acc7`) and must not reuse the existing HTTPS diagnostic UUID. This addition is **not** proof of `SecretString` compatibility with the actual BDS runtime.
 
 No installation on MagnoHost, no edits to `config/default/permissions.json`, no tokens in files, and no Cloudflare enablement are authorized. Offline/ACK/idempotency checks remain simulations; Cloudflare ACK is explicitly disabled.
+
+
+## Validation checkpoint — 2026-10-31
+
+The owner has **already passed** a real local Windows test using Wrangler 4.156.0, SQLite Durable Object, and `NC_TEST_CHALLENGE_EXPIRY=1`. The final output was:
+
+`PASS: local SQLite DO issued challenges, restart, replay, concurrency, stale token/time and disabled ACK`
+
+This confirms local challenge emission, expiration, 24-way concurrent claim, replay denial, restart persistence, invalid token/time checks and blocked ACK. **Do not ask for this test to be repeated.**
+
+### Remaining, distinct BDS runtime gate
+
+This pack's `scripts/main.js` is deliberately OFF and does **not** import `secretHeaderProbe.js`. That probe now returns `opaque_header_unavailable` on API exceptions without exposing runtime messages or secret material. This is only preparation; its function has not been executed on an actual BDS.
+
+To verify Bedrock compatibility later, obtain explicit approval to use a **cloned** BDS 1.26.61.1 server, with a separate test-only secret in Bedrock server secret storage and per-module permissions scoped to this pack UUID. The probe must remain an explicitly triggered, non-network diagnostic before any authenticated HTTPS test. Keep the Cloudflare public Worker disabled; localhost Workerd is not externally reachable from MagnoHost.
+
+No production installation, payment, reward grant, ACK, or public Worker deployment is authorized.
