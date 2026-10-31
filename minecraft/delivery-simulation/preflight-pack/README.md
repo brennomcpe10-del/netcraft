@@ -7,3 +7,10 @@ Before any MagnoHost activation: back up the world and test on a cloned BDS inst
 The authenticated transport code is NOT included. The loopback TLS server remains local; a publicly accessible isolated HTTPS sandbox has NOT been provisioned. No guarantee about secure nonce availability in BDS: secureNonce32 deliberately fails closed when the runtime has no trustworthy `crypto.getRandomValues` equivalent. A header-token prototype does not prove authenticated end-to-end operation without a real test host and runtime.
 
 A later release requires reviewing nonce source, scoped authentication, connectivity, refund safety, idempotency, request leasing/ACK semantics and BDS module compatibility before any active testing.
+
+
+## Opaque header prototype (still OFF)
+
+` scripts/secretHeaderProbe.js ` is an unreferenced helper for **future** `SecretString` → `HttpHeader` validation; the actual entrypoint does not import or call it. It does not send HTTP requests. The pack uses its own module UUID (`99ac2e49-b003-46fc-8473-55700984acc7`) and must not reuse the existing HTTPS diagnostic UUID. This addition is **not** proof of `SecretString` compatibility with the actual BDS runtime.
+
+No installation on MagnoHost, no edits to `config/default/permissions.json`, no tokens in files, and no Cloudflare enablement are authorized. Offline/ACK/idempotency checks remain simulations; Cloudflare ACK is explicitly disabled.
