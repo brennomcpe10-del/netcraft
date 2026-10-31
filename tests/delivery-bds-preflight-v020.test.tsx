@@ -43,3 +43,18 @@ test("BDS OFF entrypoint cannot schedule a hidden trigger or import a transport"
  assert.doesNotMatch(entry,/from\s*["'][^"']*(?:Probe|Transport|client|Bridge)["']/i);
  assert.doesNotMatch(entry,/\.runCommand(?:Async)?\s*\(/);
 });
+
+test("BDS OFF secret header probe stays unreferenced, network-free and opaque",()=>{
+ const entry=readFileSync(join(base,"scripts/main.js"),"utf8");
+ const probe=readFileSync(join(base,"scripts/secretHeaderProbe.js"),"utf8");
+ const inspect=readFileSync(join(base,"scripts/capabilityInspection.js"),"utf8");
+ assert.doesNotMatch(entry,/secretHeaderProbe|capabilityInspection|makeOpaqueTestAuthorizationHeader|inspectOpaqueHeaderCompatibility/);
+ assert.match(probe,/new HttpHeader\("x-nc-bds-token", secret\)/);
+ assert.match(probe,/secrets\.get\(SECRET_NAME\)/);
+ assert.match(probe,/opaque_header_unavailable/);
+ for(const source of [probe,inspect]){
+  assert.doesNotMatch(source,/\b(?:http\.request|fetch|setInterval|setTimeout|runInterval|runTimeout)\s*\(/);
+  assert.doesNotMatch(source,/\b(?:console\.(?:log|warn|error)|JSON\.stringify|\.toString)\s*\(/);
+  assert.doesNotMatch(source,/\.runCommand(?:Async)?\s*\(/);
+ }
+});
