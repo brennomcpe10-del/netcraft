@@ -20,6 +20,7 @@ test("optional, unreferenced SecretString header probe neither logs secrets nor 
   const probe=file("scripts/secretHeaderProbe.js");
   assert.match(probe,/secrets\.get\(SECRET_NAME\)/);
   assert.match(probe,/new HttpHeader\("x-nc-bds-token", secret\)/);
-  assert.doesNotMatch(probe,/http\.request|console\.|JSON\.stringify\(secret\)|String\(secret\)|runTimeout|runInterval/);
+  const executableLines=probe.split("\n").filter(line=>!line.trimStart().startsWith("//")).join("\n");
+  assert.doesNotMatch(executableLines,/http\.request|console\.|JSON\.stringify\(secret\)|String\(secret\)|runTimeout|runInterval/);
   assert.doesNotMatch(probe,/\b(give|grantVIP|addItem)\s*\(/);
 });
