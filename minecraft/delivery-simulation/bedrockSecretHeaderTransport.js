@@ -55,3 +55,47 @@ export async function isolatedBedrockDemoRequest(path, input, nonce, timestamp) 
 }
 // Deliberately no interval, join listener, console output or item grant.
 // No package manifest imports this module. Do not distribute as a live addon.
+
+
+// Optional two-stage test flow. NOT called by the OFF behavior pack.
+// The isolated Worker generates the nonce; the BDS never uses Math.random.
+export async function isolatedBedrockChallengePoll(gamertag, isOnline) {
+  if (variables.get("nc_delivery_test_enabled") !== true)
+    return { ok: false, reason: "disabled" };
+  if (isOnline !== true) return { ok: false, reason: "offline" };
+  if (typeof gamertag !== "string" || !PLAYER.test(gamertag))
+    return { ok: false, reason: "invalid_data" };
+  if (running) return { ok: false, reason: "busy" };
+  const origin = variables.get("nc_delivery_test_origin");
+  if (typeof origin !== "string" || !HOST.test(origin))
+    return { ok: false, reason: "not_configured_or_busy" };
+  const token = secrets.get("nc_delivery_test_header_token");
+  if (!token) return { ok: false, reason: "not_configured_or_busy" };
+  running = true;
+  let nonce;
+  try {
+    const challenge = new HttpRequest(origin + "/delivery/challenge");
+    challenge.method = HttpRequestMethod.Post;
+    challenge.timeout = 5;
+    challenge.body = "{}";
+    challenge.headers = [
+      new HttpHeader("Content-Type", "application/json"),
+      new HttpHeader("x-nc-bds-token", token)
+    ];
+    const response = await http.request(challenge);
+    if (response.status !== 200 || typeof response.body !== "string" ||
+        response.body.length > 512) return { ok: false, reason: "challenge_rejected" };
+    const data = JSON.parse(response.body);
+    if (!data || data.simulation !== true || typeof data.nonce !== "string" ||
+        !/^[a-f0-9]{32}$/.test(data.nonce))
+      return { ok: false, reason: "invalid_challenge" };
+    nonce = data.nonce;
+  } catch {
+    return { ok: false, reason: "challenge_error" };
+  } finally {
+    running = false;
+  }
+  // The poll implementation independently checks enabled state, nonce, origin,
+  // time window, no-job response and ACK denial before returning any result.
+  return isolatedBedrockDemoRequest("/poll", gamertag, nonce, Date.now());
+}
