@@ -55,6 +55,10 @@ jobs:
               assert "modo OFF" in entry
           print("PASS: OFF-only BDS .mcpack archive inspected; no deployment")
           PY
+      - name: Verify OFF mcpack using Windows-compatible PowerShell checker
+        shell: pwsh
+        run: |
+          ./scripts/verify-bds-off-artifact.ps1 -PackPath "./dist/bds-off/NetCraft_Delivery_Homologacao_OFF_v0.2.0.mcpack"
       - name: Publish inert BDS OFF package for clone-only inspection
         uses: actions/upload-artifact@v4
         with:
