@@ -76,7 +76,13 @@ try{
   let r=await makeRequest(nonce);if(r.status!==200)throw new Error("first claim "+r.status);
   r=await makeRequest(nonce);if(r.status!==401||(await r.json()).error!=="replay")throw new Error("replay failed");
   r=await makeRequest(crypto.randomBytes(16).toString("hex"),"bad");if(r.status!==401)throw new Error("bad token allowed");
-  r=await makeRequest(crypto.randomBytes(16).toString("hex"),token,-120000);if(r.status!==401)throw new Error("stale allowed");
+  const validAfterBad=crypto.randomBytes(16).toString("hex");
+  r=await makeRequest(validAfterBad,"bad");if(r.status!==401)throw new Error("bad token rejected incorrectly");
+  r=await makeRequest(validAfterBad);if(r.status!==200)throw new Error("invalid token consumed nonce");
+  const freshAfterStale=crypto.randomBytes(16).toString("hex");
+  r=await makeRequest(freshAfterStale,token,-120000);if(r.status!==401)throw new Error("stale accepted");
+  r=await makeRequest(freshAfterStale);if(r.status!==200)throw new Error("stale request consumed nonce");
+  r=await makeRequest(crypto.randomBytes(16).toString("hex"),token,120000);if(r.status!==401)throw new Error("future timestamp allowed");
   r=await makeRequest(crypto.randomBytes(16).toString("hex"),token,0,"/delivery/ack");if(r.status!==409)throw new Error("ACK enabled");
   const same=crypto.randomBytes(16).toString("hex");
   const responses=await Promise.all(Array.from({length:24},()=>makeRequest(same)));
