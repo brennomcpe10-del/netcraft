@@ -13,6 +13,15 @@ export class NonceGate {
     return new Response("accepted");
   }
 }
+function secureChallengeNonce(cryptoProvider) {
+  if (!cryptoProvider || typeof cryptoProvider.getRandomValues !== "function")
+    return null;
+  const bytes = new Uint8Array(16);
+  try {
+    if (cryptoProvider.getRandomValues(bytes) !== bytes) return null;
+  } catch { return null; }
+  return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+}
 function equalsFixed(a,b) {
   if (typeof a !== "string" || typeof b !== "string" ||
       a.length < 32 || a.length > 256 || a.length !== b.length) return false;
@@ -31,12 +40,18 @@ export default {
     if (url.pathname === "/health" && request.method === "GET")
       return json({environment:"isolated_test",simulation:true,deliveryEnabled:false});
     if (request.method !== "POST" ||
-        !["/delivery/poll","/delivery/ack"].includes(url.pathname))
+        !["/delivery/poll","/delivery/ack","/delivery/challenge"].includes(url.pathname))
       return json({error:"not_found"},404);
     if (!request.headers.get("content-type")?.startsWith("application/json"))
       return json({error:"unsupported_media_type"},415);
     if (!equalsFixed(request.headers.get("x-nc-bds-token"),env.NC_BDS_TEST_TOKEN))
       return json({error:"unauthorized"},401);
+    if (url.pathname === "/delivery/challenge") {
+      // Issued only after test-token authentication. No delivery action here.
+      const nonce = secureChallengeNonce(globalThis.crypto);
+      return nonce ? json({nonce,simulation:true,expiresInMs:60000})
+        : json({error:"secure_random_unavailable"},503);
+    }
     const stamp = request.headers.get("x-nc-timestamp") || "";
     const nonce = request.headers.get("x-nc-nonce") || "";
     if (!/^\d{13}$/.test(stamp) || Math.abs(Date.now()-Number(stamp))>60000 ||
