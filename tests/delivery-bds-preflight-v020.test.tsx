@@ -104,3 +104,17 @@ test("BDS OFF packaging guard rejects accidental activation patterns",()=>{
  }
  assert.equal(guard.test(entry),false,"Inert entrypoint must remain packageable");
 });
+
+test("BDS OFF version and API versions remain pinned for isolated compatibility review",()=>{
+ assert.equal(manifest.format_version,2);
+ assert.equal(manifest.header.uuid,"6c521552-24ef-4339-9212-e2a349ace991");
+ assert.deepEqual(manifest.header.version,[0,2,0]);
+ assert.equal(manifest.modules[0].uuid,"99ac2e49-b003-46fc-8473-55700984acc7");
+ assert.deepEqual(Object.fromEntries(manifest.dependencies.map((d:{module_name:string,version:string})=>[d.module_name,d.version])),{
+  "@minecraft/server":"1.17.0",
+  "@minecraft/server-admin":"1.0.0-beta",
+  "@minecraft/server-net":"1.0.0-beta"
+ });
+ const builder=readFileSync(resolve("scripts/build-bds-preflight-off.mjs"),"utf8");
+ assert.match(builder,/Unexpected BDS OFF manifest identity or dependencies/);
+});
