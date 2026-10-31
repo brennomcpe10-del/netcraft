@@ -13,7 +13,8 @@ export async function isolatedBedrockDemoRequest(path, input, nonce, timestamp) 
   // Deliberately not enabled without an external sandbox and separate review.
   if (variables.get("nc_delivery_test_enabled") !== true) return { ok: false, reason: "disabled" };
   if (path !== "/poll" && path !== "/ack") return { ok: false, reason: "not_allowed" };
-  if (!/^[a-f0-9]{32}$/.test(nonce) || !/^\d{13}$/.test(String(timestamp)) ||\n      Math.abs(Date.now() - Number(timestamp)) > 60000)
+  if (!/^[a-f0-9]{32}$/.test(nonce) || !/^\d{13}$/.test(String(timestamp)) ||
+      Math.abs(Date.now() - Number(timestamp)) > 60000)
     return { ok: false, reason: "invalid_request" };
   if ((path === "/poll" && !PLAYER.test(input)) ||
       (path === "/ack" && !ID.test(input))) return { ok: false, reason: "invalid_data" };
