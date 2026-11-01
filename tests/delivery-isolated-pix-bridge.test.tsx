@@ -121,3 +121,13 @@ test("bridge refuses production/preview and real secrets before touching outbox"
  assert.throws(()=>f.bridge(),/isolated_firestore_emulator_required/);
  delete process.env.MERCADOPAGO_ACCESS_TOKEN;
 });
+
+test("provider refund between offer and ACK requires manual review",async()=>{
+ const f=fixture();await f.seed();const bridge=f.bridge();
+ assert.equal((await bridge.offer(ref(0),true)).status,"offered");
+ await f.update("pixTestOrders",id,{state:"refunded"});
+ await f.update("pixTestDeliveries",ref(0),{state:"blocked"});
+ const result=await bridge.acknowledge(ref(0),"applied");
+ assert.equal(result.status,"held");
+ assert.equal((await bridge.inspect(ref(0))).status,"refund_after_grant_review");
+});
