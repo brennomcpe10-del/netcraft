@@ -127,12 +127,12 @@ export class MercadoPago {
           const detailText = typeof firstDetail === "string" && firstDetail.length <= 2000
             ? firstDetail.toLowerCase() : "";
           const detailCategory = !detailText ? "unavailable"
-            : /\\b(insufficient[_ -]?funds|saldo insuficiente)\\b/.test(detailText) ? "insufficient_funds"
-            : /\\b(test[_ -]?user|test[_ -]?account|sandbox|conta de teste)\\b/.test(detailText) ? "test_account_restriction"
-            : /\\b(payer|pagador|buyer)\\b/.test(detailText) ? "payer_related"
-            : /\\b(collector|receiver|seller|vendedor|recebedor)\\b/.test(detailText) ? "receiver_related"
-            : /\\b(not[_ -]?allowed|not[_ -]?enabled|not[_ -]?supported|not[_ -]?authorized|não permitido|não habilitado)\\b/.test(detailText) ? "operation_restricted"
-            : /\\b(rejected|declined|recusad[oa]|negad[oa])\\b/.test(detailText) ? "transaction_rejected"
+            : /\b(insufficient[_ -]?funds|saldo insuficiente)\b/.test(detailText) ? "insufficient_funds"
+            : /\b(test[_ -]?user|test[_ -]?account|sandbox|conta de teste)\b/.test(detailText) ? "test_account_restriction"
+            : /\b(payer|pagador|buyer)\b/.test(detailText) ? "payer_related"
+            : /\b(collector|receiver|seller|vendedor|recebedor)\b/.test(detailText) ? "receiver_related"
+            : /\b(not[_ -]?allowed|not[_ -]?enabled|not[_ -]?supported|not[_ -]?authorized|não permitido|não habilitado)\b/.test(detailText) ? "operation_restricted"
+            : /\b(rejected|declined|recusad[oa]|negad[oa])\b/.test(detailText) ? "transaction_rejected"
             : "unclassified";
           console.warn("[MercadoPago order rejection classification]", {
             detailCategory,
