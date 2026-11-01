@@ -55,6 +55,27 @@ jobs:
           node --test minecraft/delivery-e2e-local/test-phone-udp-relay.cjs
           sha256sum minecraft/delivery-e2e-local/phone_udp_relay.cjs
 
+      - name: Isolated Redmi UDP proxy installer — syntax and no BDS rule mutation
+        shell: pwsh
+        run: |
+          $path = 'scripts/netcraft-delivery-phone-relay.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          $source = Get-Content $path -Raw
+          foreach ($required in @('NETCRAFT_PHONE_RELAY_READY','NETCRAFT_PHONE_RELAY_CLEANED',
+                 '192.168.1.2','192.168.1.9','19144',
+                 'NC_PHONE_LAB_RELAY','Get-FileHash','sourceSha',
+                 'CheckLabRule','IsOurRule','phone_udp_relay.cjs')) {
+            if (!$source.Contains($required)) { throw ('Missing proxy verification: ' + $required) }
+          }
+          foreach ($forbidden in @('Set-NetFirewallAddressFilter','Disable-NetFirewallRule',
+                 'Set-NetFirewallProfile','netsh advfirewall set')) {
+            if ($source.Contains($forbidden)) { throw ('Unexpected firewall mutation: ' + $forbidden) }
+          }
+          Write-Host 'PASS: proxy installer syntax and BDS block preservation'
+
       - name: Redmi LAN firewall helper — syntax and IPv4 complement safety
         shell: pwsh
         run: |
