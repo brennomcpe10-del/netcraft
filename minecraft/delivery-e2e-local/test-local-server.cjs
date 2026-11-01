@@ -60,3 +60,38 @@ test('Real localhost TLS fixture: authentication, nonce, offline hold, grant ACK
   }finally{await close(srv);}
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+
+test('Suite HTTPS: independent VIP, renewal and kit ACKs survive restart',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ncbr-suite-'));
+ try{
+  const {key,cert}=makeCert(dir),receiptPath=path.join(dir,'receipts.json');
+  const params={key,cert,token:TOKEN,gamertag:'Lab Tester',kind:'suite',
+    rankTag:'ncbr:vip_explorer',receiptPath};
+  let srv=createLocalServer(params),base=await listen(srv);
+  const challenge=async()=>{const x=await request(base,cert,'/delivery/challenge',TOKEN);return x.data.nonce;};
+  try{
+   const noOffer=await request(base,cert,'/delivery/ack',TOKEN,
+     {deliveryId:'d'.repeat(64)+'-1',result:'applied'},await challenge());
+   assert.equal(noOffer.status,409);
+   const first=await request(base,cert,'/delivery/poll',TOKEN,{gamertag:'Lab Tester'},await challenge());
+   assert.equal(first.status,200);
+   assert.deepEqual(first.data.deliveries.map(x=>x.id),[
+     'd'.repeat(64)+'-1','d'.repeat(64)+'-3','d'.repeat(64)+'-2']);
+   assert.equal(first.data.deliveries[2].items.length,2);
+   for(const job of first.data.deliveries){
+    const ack=await request(base,cert,'/delivery/ack',TOKEN,
+       {deliveryId:job.id,result:'applied'},await challenge());
+    assert.equal(ack.status,200);
+   }
+   assert.deepEqual((await request(base,cert,'/delivery/poll',TOKEN,
+       {gamertag:'Lab Tester'},await challenge())).data.deliveries,[]);
+  }finally{await close(srv);}
+  srv=createLocalServer(params);base=await listen(srv);
+  try{
+   const fresh=await request(base,cert,'/delivery/challenge',TOKEN);
+   assert.deepEqual((await request(base,cert,'/delivery/poll',TOKEN,
+      {gamertag:'Lab Tester'},fresh.data.nonce)).data.deliveries,[]);
+  }finally{await close(srv);}
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
