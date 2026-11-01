@@ -63,7 +63,7 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
       throw new PixError("Identificador da compra inválido.");
     if (
       typeof input.gamertag !== "string" ||
-      !/^.{3,32}$/.test(input.gamertag.trim()) ||
+      !/^(?=.{3,32}$)[A-Za-z0-9_ ]+$/.test(input.gamertag.trim()) ||
       typeof input.email !== "string" ||
       !/^[^\s@]{1,100}@[^\s@]{1,100}\.[^\s@]{2,30}$/.test(input.email) ||
       !/^\d{11}$/.test(cpf)
