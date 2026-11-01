@@ -371,6 +371,29 @@ apiRouter.get('/admin/pix-test-orders', requireAdmin, async (_req, res) => {
   }
 });
 
+// Read-only preview outbox monitoring: no mutation, no reward drafts, no credentials.
+apiRouter.get('/admin/pix-test-deliveries', requireAdmin, async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (process.env.VERCEL_ENV !== 'preview' &&
+      process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8085')
+    return res.status(404).json({error:'Fila de teste disponível apenas na Preview.'});
+  try {
+    const {paymentDatabase} = await import('../payments/database.ts');
+    const {testDeliverySummary} = await import('../payments/adminTestDeliveries.ts');
+    const db = paymentDatabase();
+    const jobs = await db.collection('pixTestDeliveries')
+      .orderBy('createdAt','desc').limit(50).get();
+    const ids = [...new Set(jobs.docs.map(d => d.data().orderId)
+      .filter(id => typeof id === 'string' && /^[a-f0-9]{64}$/.test(id)))];
+    const snapshots = await Promise.all(ids.map(id => db.collection('pixTestOrders').doc(id).get()));
+    const byId = new Map(snapshots.map(s => [s.id, s.exists ? s.data() : null]));
+    return res.json(jobs.docs.map(d =>
+      testDeliverySummary(d.id,d.data(),byId.get(d.data().orderId) ?? null)));
+  } catch {
+    return res.status(503).json({error:'Não foi possível consultar as entregas de teste.'});
+  }
+});
+
 apiRouter.get('/orders', requireAdmin, async (_req, res) => {
   try {
     const {paymentDatabase}=await import('../payments/database.ts');
