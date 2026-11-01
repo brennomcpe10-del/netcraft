@@ -18,7 +18,8 @@ export function validateLabResponse(parsed, expectedGamertag) {
   const jobs = [];
   const ids = new Set();
   for (const entry of parsed.deliveries) {
-    if (!entry || entry.labFixture !== true || entry.contract !== 'netcraft.delivery.v1' ||
+    if (!entry || Object.keys(entry).some(key=>!['contract','labFixture','id','orderId','gamertag','kind','items','rankTag','days'].includes(key)) ||
+        entry.labFixture !== true || entry.contract !== 'netcraft.delivery.v1' ||
         entry.orderId !== ORDER_ID || entry.gamertag !== expectedGamertag ||
         typeof entry.id !== 'string' || ids.has(entry.id)) return null;
     ids.add(entry.id);
