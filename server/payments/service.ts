@@ -9,6 +9,7 @@ import {
 import crypto from "node:crypto";
 import type { Firestore } from "firebase-admin/firestore";
 import { validateRewardDraft } from "../../src/lib/rewardDraft.ts";
+import { previewDeliveryPlan } from "../delivery/rewardPlan.ts";
 import { quoteCart, validateCartRequest } from "../../src/lib/cartQuote.ts";
 import { readCatalogItem } from "../services/previewCatalog.ts";
 import {
@@ -292,6 +293,7 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
               lineIndex: i,
               gamertag: o.gamertag,
               line,
+              previewPlan: previewDeliveryPlan(line),
               approvedAt,
               approvalObservedAt,
               requiresApprovalTimestamp: !approvedAt,
@@ -361,6 +363,7 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
               lineIndex: i,
               gamertag: o.gamertag,
               line,
+              previewPlan: previewDeliveryPlan(line),
               approvedAt,
               state: "pending",
               environment: "test",
