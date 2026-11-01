@@ -21,3 +21,11 @@ The Core executor uses world dynamic-property write-ahead receipts per determini
 In a disposable BDS 1.26.61.1 clone, with a valid short-lived loopback TLS test certificate, trusted privately supplied `SecretString` token, module-scoped server-net permission and private Firestore emulator, run the authenticated TEST outbox and confirm distinct kit and VIP grants, restart, replay, offline, inventory-full and refunds. Never install this addon on MagnoHost or production before an independent review.
 
 No actual provider credentials, customer records, bank settlement, webhook secret or public endpoint are included.
+
+## Optional real BDS clone-only localhost test fixture server
+
+The script `minecraft/delivery-v031-core-lab/start-v031-bds-clone-local.mjs` takes a private disposable test token and local TLS certificate paths from `NCBR_PIX_LAB_TOKEN`, `NCBR_PIX_LAB_TLS_KEY`, `NCBR_PIX_LAB_TLS_CERT`, and an exact test gamertag in `NCBR_PIX_LAB_PLAYER`. It requires `NODE_ENV=test`, `FIRESTORE_EMULATOR_HOST=127.0.0.1:8085`, and `GCLOUD_PROJECT=demo-netcraft-admin-test`; any production credential or Vercel environment is rejected.
+
+Start it with `node --import tsx minecraft/delivery-v031-core-lab/start-v031-bds-clone-local.mjs` from an isolated repository checkout AFTER starting the demo Firestore emulator. It will seed a deterministic **mock-approved** local TEST order with exactly a 3-diamond + 6-iron kit and a 30-day Explorer VIP and listen on HTTPS loopback port 18443. This is a synthetic test fixture and must **never** be represented as a genuine Mercado Pago provider authorization.
+
+BDS clone configuration must supply matching secret only through private `secrets.json` and enable `ncbr_pix_emulator_enabled` only in `variables.json`; restart clone after changing the flag. The module needs BDS-scoped `server-net` permissions. No unattended operation on public server.

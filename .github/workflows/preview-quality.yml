@@ -29,6 +29,8 @@ jobs:
         run: bun install
       - name: Core v0.3.1 BDS clone executor idempotency (no Minecraft/server)
         run: node --test tests/delivery-core-v031-clone.test.mjs
+      - name: Check v0.3.1 isolated mock BDS fixture server syntax
+        run: node --check minecraft/delivery-v031-core-lab/start-v031-bds-clone-local.mjs
       - name: TypeScript typecheck
         run: npm run lint
       - name: Automated tests
