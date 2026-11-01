@@ -164,7 +164,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
       const [ordersList, deliveriesList, catalogAudit] = await Promise.all([
         api.getPixTestOrders(adminToken),
         api.getPixTestDeliveries(adminToken),
-        api.getDeliveryCatalogAudit(adminToken),
+        // A missing audit must not hide existing Pix orders or deliveries.
+        api.getDeliveryCatalogAudit(adminToken).catch(() => null),
       ]);
       setPixTestOrders(ordersList);
       setPixTestDeliveries(deliveriesList);
