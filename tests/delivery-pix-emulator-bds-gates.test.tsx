@@ -1,13 +1,18 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-test("Pix emulator Bedrock bridge is strictly opt-in and loopback-only",()=>{
+test("Pix emulator stays OFF; remote origin is clone-flagged and allowlisted",()=>{
  const bridge=fs.readFileSync("minecraft/delivery-e2e-local/delivery_verified_outbox_bds.js","utf8");
  const protocol=fs.readFileSync("minecraft/delivery-e2e-local/verified_outbox_protocol.js","utf8");
  const gateway=fs.readFileSync("minecraft/delivery-e2e-local/verified_outbox_server.cjs","utf8");
+ const origin=fs.readFileSync("minecraft/delivery-e2e-local/fixture_gateway_origin.js","utf8");
  for(const s of ["ncbr_pix_emulator_enabled","ncbr_pix_emulator_token",
-    "https://127.0.0.1:18443","verified_pix_emulator","FAIL_CLOSED"])
+    "verified_pix_emulator","FAIL_CLOSED"])
    assert.equal(bridge.includes(s)||protocol.includes(s),true,s);
+ assert.match(origin,/https:\/\/127\.0\.0\.1:18443/);
+ assert.match(origin,/netcraft-delivery-fixture-clone-only/);
+ assert.match(bridge,/fixtureGatewayOrigin/);
+ assert.match(bridge,/ncbr_fixture_clone_only/);
  assert.match(bridge,/variables\.get\(FLAG\)===true/);
  assert.match(bridge,/secrets\.get\(TOKEN\)/);
  assert.match(bridge,/@minecraft\/server-admin/);
