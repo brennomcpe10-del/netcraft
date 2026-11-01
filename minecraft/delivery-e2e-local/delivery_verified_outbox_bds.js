@@ -4,8 +4,15 @@
 import { variables, secrets } from '@minecraft/server-admin';
 import { http, HttpRequest, HttpRequestMethod, HttpHeader } from '@minecraft/server-net';
 import { validateVerifiedOutboxResponse } from './verified_outbox_protocol.js';
+import { fixtureGatewayOrigin } from './fixture_gateway_origin.js';
 
-const ORIGIN='https://127.0.0.1:18443';
+function origin() {
+ const remote=variables.get('ncbr_fixture_remote_mode_enabled')===true;
+ const clone=variables.get('ncbr_fixture_clone_only')===true;
+ if(remote && (!clone || variables.get('ncbr_e2e_lab_enabled')===true))
+   throw Error('not_clone_only');
+ return fixtureGatewayOrigin(variables.get('ncbr_fixture_gateway_origin'),remote,clone);
+}
 const FLAG='ncbr_pix_emulator_enabled', TOKEN='ncbr_pix_emulator_token';
 const active=new Set();
 let started=false;
@@ -16,7 +23,7 @@ function enabled(){
 function post(route,body,secret,nonce){
  if(!['/delivery/challenge','/delivery/poll','/delivery/nack','/delivery/ack'].includes(route))
   throw Error('route_denied');
- const req=new HttpRequest(ORIGIN+route);
+ const req=new HttpRequest(origin()+route);
  req.method=HttpRequestMethod.Post;req.timeout=5;req.body=JSON.stringify(body);
  req.headers=[new HttpHeader('Content-Type','application/json'),
   new HttpHeader('x-nc-bds-token',secret)];
