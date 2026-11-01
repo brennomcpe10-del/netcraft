@@ -27,6 +27,8 @@ jobs:
         # bun.lock predates esbuild dependency update. Update only the
         # temporary runner lockfile; never commit dependency changes here.
         run: bun install
+      - name: Core v0.3.1 BDS clone executor idempotency (no Minecraft/server)
+        run: node --test tests/delivery-core-v031-clone.test.mjs
       - name: TypeScript typecheck
         run: npm run lint
       - name: Automated tests
