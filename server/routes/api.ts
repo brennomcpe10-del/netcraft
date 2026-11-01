@@ -270,7 +270,7 @@ apiRouter.delete('/admin/vips/:id',requireAdmin,async(req,res)=>{
 // Read-only cart quote. Payment and fulfillment remain disabled for grouped carts.
 apiRouter.post('/cart/quote', async (req,res)=>{
  try {
-  validateCartRequest(req.body.lines);
+  validateCartRequest(req.body?.lines);
   if(req.body.couponCode) return res.status(409).json({error:'Cupons indisponíveis para cobranças fixas.'});
   // The cart quote must use the same server-side Firestore Admin connection as Pix.
   // The browser Firebase SDK cannot reliably access Firestore from Vercel functions.
