@@ -43,6 +43,18 @@ jobs:
           MERCADOPAGO_ACCESS_TOKEN: ""
           FIREBASE_SERVICE_ACCOUNT_JSON: ""
         run: node scripts/test-gate-c2-local-server.mjs
+      - name: Gate C.2 - PowerShell Windows lab syntax safety preflight
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile('scripts/gate-c2-windows-lab.ps1', [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw ('PowerShell syntax errors: ' + ($errors | Out-String)) }
+          $source = Get-Content scripts/gate-c2-windows-lab.ps1 -Raw
+          foreach ($required in @('GateC2_Local', 'nc_gate_c2_synthetic_token', 'CurrentUser', 'force_tls', 'Cleanup', 'NetCraftGateC2')) {
+            if (!$source.Contains($required)) { throw ('Gate C.2 Windows safety guard missing: ' + $required) }
+          }
+          Write-Host 'PASS: Gate C.2 Windows lab PowerShell parsed; scope and cleanup guards present'
       - name: Package and inspect OFF BDS preflight without deployment
         run: |
           set -euo pipefail
