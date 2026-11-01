@@ -31,6 +31,12 @@ jobs:
         run: npm run lint
       - name: Automated tests
         run: NODE_ENV=test npm test
+      - name: Gate C - isolated verified HTTPS loopback (no external endpoint)
+        env:
+          NODE_ENV: test
+          MERCADOPAGO_ACCESS_TOKEN: ""
+          FIREBASE_SERVICE_ACCOUNT_JSON: ""
+        run: node scripts/test-delivery-gate-c-https-loopback.mjs
       - name: Package and inspect OFF BDS preflight without deployment
         run: |
           set -euo pipefail
