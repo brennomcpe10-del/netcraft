@@ -17,7 +17,8 @@ function createVerifiedOutboxServer({key,cert,pfx,passphrase,token,gamertag,ids,
     ids.length<1 || ids.length>4 ||
     ids.some(id=>!VALID_ID.test(id)) || new Set(ids).size!==ids.length ||
     !bridge || typeof bridge.offer!=='function' ||
-    typeof bridge.acknowledge!=='function')
+    typeof bridge.acknowledge!=='function' ||
+    typeof bridge.releaseBeforeGrant!=='function')
    throw Error('invalid_verified_outbox_config');
  const issued=new Map(), used=new Map(), offered=new Set();
  const respond=(res,status,data)=>{
@@ -28,7 +29,7 @@ function createVerifiedOutboxServer({key,cert,pfx,passphrase,token,gamertag,ids,
   try {
    if(!['127.0.0.1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress))
      return respond(res,403,{error:'loopback_only'});
-   if(req.method!=='POST'|| !['/delivery/challenge','/delivery/poll','/delivery/ack'].includes(req.url))
+   if(req.method!=='POST'|| !['/delivery/challenge','/delivery/poll','/delivery/nack','/delivery/ack'].includes(req.url))
      return respond(res,404,{error:'route_denied'});
    if(!String(req.headers['content-type']||'').startsWith('application/json'))
      return respond(res,415,{error:'content_type'});
@@ -79,6 +80,19 @@ function createVerifiedOutboxServer({key,cert,pfx,passphrase,token,gamertag,ids,
     }
     return respond(res,200,{simulation:true,environment:'verified_pix_emulator',
       dispatchEnabled:false,deliveries});
+   }
+   if(req.url==='/delivery/nack'){
+    if(Object.keys(body).length!==3||!VALID_ID.test(body.deliveryId)||
+       !ids.includes(body.deliveryId)||!offered.has(body.deliveryId)||
+       body.receipt!=='none'||
+       !['inventory_full','inventory_unavailable','player_offline',
+         'vip_not_configured','vip_not_loaded','invalid_item'].includes(body.reason))
+      return respond(res,409,{error:'not_safe_to_retry'});
+    const released=await bridge.releaseBeforeGrant(body.deliveryId,body.reason,'none');
+    if(released.status!=='retryable')return respond(res,409,{error:'retry_held'});
+    offered.delete(body.deliveryId);
+    return respond(res,200,{simulation:true,environment:'verified_pix_emulator',
+      deliveryId:body.deliveryId,retryable:true});
    }
    if(Object.keys(body).length!==2||!VALID_ID.test(body.deliveryId)||
       body.result!=='applied'||!ids.includes(body.deliveryId)||

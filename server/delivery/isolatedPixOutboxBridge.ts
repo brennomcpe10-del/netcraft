@@ -31,6 +31,10 @@ const validName = (s: unknown): s is string =>
 const digest = (o: unknown) => crypto.createHash("sha256")
   .update(JSON.stringify(o)).digest("hex");
 const hold = (reason: string) => ({status:"held" as const, reason});
+const PRE_GRANT_RETRY = new Set([
+  "inventory_full","inventory_unavailable","player_offline",
+  "vip_not_configured","vip_not_loaded","invalid_item",
+]);
 
 export function createIsolatedPixOutboxBridge(
   db: Pick<Firestore, "collection" | "runTransaction">,
@@ -139,6 +143,12 @@ export function createIsolatedPixOutboxBridge(
             prior?.state === "refund_after_grant_review") return hold("blocked");
         if (prior?.fingerprint !== fingerprint) return hold("receipt_conflict");
         if (prior?.state === "acknowledged") return hold("already_acknowledged");
+        if (prior?.state === "safe_retry" &&
+            Number.isSafeInteger(prior.attempts) && prior.attempts < 20) {
+          tx.update(ref,{state:"offered",attempts:prior.attempts+1,
+            offeredAt:new Date(clock()).toISOString()});
+          return {status:"offered" as const,payload};
+        }
         // Ambiguous grant/ACK must not be silently retried. Core may have
         // applied it before the connection was interrupted.
         return hold(prior?.state === "offered" ? "manual_review_required" : "blocked");
@@ -147,6 +157,30 @@ export function createIsolatedPixOutboxBridge(
         fingerprint,state:"offered",createdAt:new Date(clock()).toISOString(),
         attempts:1,source:"provider_reverified_test_order"});
       return {status:"offered" as const,payload};
+    });
+  }
+  async function releaseBeforeGrant(id: string, reason: string, receiptStatus: string) {
+    localOnly();
+    // A retry is safe only when the Core explicitly confirms that it wrote NO
+    // write-ahead receipt. Any ambiguous or applied receipt is quarantined.
+    if (!validId(id) || !PRE_GRANT_RETRY.has(reason) || receiptStatus !== "none")
+      return hold("manual_review_required");
+    return db.runTransaction(async tx => {
+      const ref=leases.doc(id), current=await tx.get(ref);
+      if (!current.exists || current.data()?.state !== "offered")
+        return hold("not_active_offer");
+      const data=current.data()!;
+      const [o,j]=await Promise.all([
+        tx.get(orders.doc(data.orderId)),tx.get(jobs.doc(id)),
+      ]);
+      if (o.data()?.state !== "approved" || j.data()?.state !== "pending" ||
+          j.data()?.dispatchEnabled !== false) {
+        tx.update(ref,{state:"blocked",reason:"order_changed_or_refunded"});
+        return hold("order_changed_or_refunded");
+      }
+      tx.update(ref,{state:"safe_retry",lastSafeReason:reason,
+        retryReleasedAt:new Date(clock()).toISOString()});
+      return {status:"retryable" as const};
     });
   }
   async function acknowledge(id: string, result: string) {
@@ -200,5 +234,5 @@ export function createIsolatedPixOutboxBridge(
     // Do not expose order/provider details or the gamertag in diagnostics.
     return {status:data?.state || "not_offered",attempts:data?.attempts || 0};
   }
-  return {verify,offer,acknowledge,block,inspect};
+  return {verify,offer,releaseBeforeGrant,acknowledge,block,inspect};
 }

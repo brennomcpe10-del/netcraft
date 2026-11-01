@@ -37,3 +37,8 @@ Production blockers remain: approved real-money orders must not flow via this te
 
 ## Operator actions
 None now. Original Windows lab was cleaned. Do **not** rerun v2.2.9 or change MagnoHost/Production. A future full end-to-end provider TEST → BDS run requires a *separate*, reviewed, non-production deployment and an explicit test-world installation.
+
+## v0.3.1: Safe retry for inventory-full before receipt
+- The previous isolated lease protocol held every post-offer failure for manual review, including guaranteed pre-receipt `inventory_full`.
+- New `releaseBeforeGrant` requires authenticated BDS `/delivery/nack`, a strict safe-result allowlist and explicit `engine.receiptStatus(id) === 'none'`. A lease returns to `safe_retry`, then the independently reverified provider GET is performed again before issuing the same deterministic job. Maximum 20 offers; no silent retry after an ambiguous receipt.
+- Any `manual_review`, written receipt, payment cancellation or refund still blocks a retry. This is a laboratory feature, not commercial dispatch. Tests cover NACK rejection, second offer, durable ACK and restart.

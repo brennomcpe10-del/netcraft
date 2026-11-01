@@ -59,6 +59,11 @@ test('trusted local Pix outbox HTTPS: BDS protocol, nonce, ACK and restart repla
     if(!issued.has(jobId))return {status:'held'};
     acked.add(jobId);return {status:'acknowledged'};
    },
+   releaseBeforeGrant:async (jobId,reason,receipt)=>{
+    if(!issued.has(jobId)||reason!=='inventory_full'||receipt!=='none')
+      return {status:'held'};
+    issued.delete(jobId);return {status:'retryable'};
+   },
   };
   const config={key,cert,token,gamertag:player,ids:[id],bridge};
   let server=createVerifiedOutboxServer(config);await start(server);
@@ -76,6 +81,15 @@ test('trusted local Pix outbox HTTPS: BDS protocol, nonce, ACK and restart repla
    assert.equal(poll.status,200);
    assert.equal(poll.body.environment,'verified_pix_emulator');
    assert.deepEqual(validateVerifiedOutboxResponse(poll.body,player),[fixture]);
+   const rejected=await request(server,cert,'/delivery/nack',token,
+     {deliveryId:id,reason:'manual_review',receipt:'started'},await challenge());
+   assert.equal(rejected.status,409);
+   const full=await request(server,cert,'/delivery/nack',token,
+     {deliveryId:id,reason:'inventory_full',receipt:'none'},await challenge());
+   assert.equal(full.status,200);assert.equal(full.body.retryable,true);
+   const repoll=await request(server,cert,'/delivery/poll',token,
+     {gamertag:player},await challenge());
+   assert.equal(repoll.body.deliveries.length,1);
    const ackNonce=await challenge();
    const ack=await request(server,cert,'/delivery/ack',token,{deliveryId:id,result:'applied'},ackNonce);
    assert.equal(ack.status,200);assert.equal(ack.body.acknowledged,true);

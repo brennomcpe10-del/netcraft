@@ -14,7 +14,7 @@ function enabled(){
  catch{return false;}
 }
 function post(route,body,secret,nonce){
- if(!['/delivery/challenge','/delivery/poll','/delivery/ack'].includes(route))
+ if(!['/delivery/challenge','/delivery/poll','/delivery/nack','/delivery/ack'].includes(route))
   throw Error('route_denied');
  const req=new HttpRequest(ORIGIN+route);
  req.method=HttpRequestMethod.Post;req.timeout=5;req.body=JSON.stringify(body);
@@ -52,7 +52,22 @@ async function sync(player,secret,engine){
    if(!enabled()||!player.isValid)return;
    const result=engine.execute(job);
    if(!ackable(result)){
-    console.warn('[NETCRAFT_PIX_EMULATOR] HOLD_'+String(result?.status||'UNKNOWN').toUpperCase());
+    // Only a proven pre-receipt failure can be placed back on the queue.
+    // If the Core has an uncertain write-ahead receipt, leave it quarantined.
+    const safe = new Set(['inventory_full','inventory_unavailable','player_offline',
+      'vip_not_configured','vip_not_loaded','invalid_item']);
+    if(safe.has(result?.status) && engine.receiptStatus(job.id)==='none'){
+      try{
+        const releaseNonce=await challenge(secret);
+        const response=await http.request(post('/delivery/nack',
+          {deliveryId:job.id,reason:result.status,receipt:'none'},secret,releaseNonce));
+        if(response.status!==200||JSON.parse(response.body||'{}')?.retryable!==true)
+          throw Error('nack_rejected');
+        console.warn('[NETCRAFT_PIX_EMULATOR] SAFE_RETRY_'+String(result.status).toUpperCase());
+      }catch{console.warn('[NETCRAFT_PIX_EMULATOR] RETRY_HELD');}
+    }else{
+      console.warn('[NETCRAFT_PIX_EMULATOR] HOLD_'+String(result?.status||'UNKNOWN').toUpperCase());
+    }
     continue;
    }
    const fresh=await challenge(secret);
