@@ -50,6 +50,14 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_JSON: ""
         run: |
           node --test minecraft/delivery-e2e-local/test-local-server.cjs minecraft/delivery-e2e-local/test-protocol.mjs
+      - name: Isolated Pix TEST outbox HTTPS to BDS contract (no real provider or server)
+        env:
+          NODE_ENV: test
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+          MERCADOPAGO_ACCESS_TOKEN: ""
+          FIREBASE_SERVICE_ACCOUNT_JSON: ""
+        run: node --test minecraft/delivery-e2e-local/test-verified-outbox.mjs
+
       - name: Phone UDP relay integration tests without BDS firewall changes
         run: |
           node --test minecraft/delivery-e2e-local/test-phone-udp-relay.cjs
