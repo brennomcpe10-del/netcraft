@@ -135,6 +135,8 @@ export function createIsolatedPixOutboxBridge(
         return hold("order_changed_or_refunded");
       if (existing.exists) {
         const prior = existing.data();
+        if (prior?.state === "blocked" || prior?.state === "refunded_after_ack" ||
+            prior?.state === "refund_after_grant_review") return hold("blocked");
         if (prior?.fingerprint !== fingerprint) return hold("receipt_conflict");
         if (prior?.state === "acknowledged") return hold("already_acknowledged");
         // Ambiguous grant/ACK must not be silently retried. Core may have
@@ -157,6 +159,15 @@ export function createIsolatedPixOutboxBridge(
       const data=current.data();
       if (data?.state==="acknowledged") return {status:"acknowledged" as const,duplicate:true};
       if (data?.state!=="offered") return hold("blocked");
+      const [order,job]=await Promise.all([
+        tx.get(orders.doc(data.orderId)),tx.get(jobs.doc(id)),
+      ]);
+      if (order.data()?.state !== "approved" || job.data()?.state !== "pending" ||
+          job.data()?.dispatchEnabled !== false) {
+        tx.update(ref,{state:"refund_after_grant_review",
+          reason:"refund_or_order_changed_after_offer"});
+        return hold("refund_after_grant_review");
+      }
       tx.update(ref,{state:"acknowledged",ackResult:result,
         acknowledgedAt:new Date(clock()).toISOString()});
       return {status:"acknowledged" as const,duplicate:false};
