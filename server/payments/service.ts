@@ -10,6 +10,7 @@ import crypto from "node:crypto";
 import type { Firestore } from "firebase-admin/firestore";
 import { validateRewardDraft } from "../../src/lib/rewardDraft.ts";
 import { previewDeliveryPlan } from "../delivery/rewardPlan.ts";
+import { draftCoreDelivery } from "../delivery/coreJobContract.ts";
 import { quoteCart, validateCartRequest } from "../../src/lib/cartQuote.ts";
 import { readCatalogItem } from "../services/previewCatalog.ts";
 import {
@@ -294,6 +295,11 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
               gamertag: o.gamertag,
               line,
               previewPlan: previewDeliveryPlan(line),
+              coreDraft: draftCoreDelivery({
+                deliveryId: jobRefs[i].id, orderId: id, gamertag: o.gamertag,
+                orderState: state, environment: "test",
+                plan: previewDeliveryPlan(line),
+              }),
               approvedAt,
               approvalObservedAt,
               requiresApprovalTimestamp: !approvedAt,

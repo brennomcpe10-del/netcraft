@@ -70,6 +70,17 @@ for (const j of jobs.docs) {
   assert.equal(j.data().requiresApprovalTimestamp, true);
   assert.ok(j.data().approvalObservedAt);
   assert.equal(j.data().dispatchEnabled, false);
+  const coreDraft = j.data().coreDraft;
+  assert.equal(coreDraft.schema, 1);
+  assert.equal(coreDraft.executable, false);
+  assert.equal(coreDraft.dispatchEnabled, false);
+  if (j.data().line.productType === "product") {
+    assert.equal(coreDraft.payload.contract, "netcraft.delivery.v1");
+    assert.deepEqual(coreDraft.payload.items, [{ itemId: "minecraft:diamond", quantity: 4 }]);
+  } else {
+    assert.equal(coreDraft.payload, null);
+    assert.equal(coreDraft.reason, "vip_mapping_required");
+  }
   // Paid mixed-cart lines now carry a server-compiled but non-executable plan.
   const plan = j.data().previewPlan;
   assert.equal(plan?.readyForDispatch, false);
