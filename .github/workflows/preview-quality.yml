@@ -10,6 +10,29 @@ permissions:
   contents: read
 
 jobs:
+  fixture_workerd_sqlite:
+    name: Local Cloudflare fixture DO SQLite (no deploy, no payments)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout isolated Preview branch
+        uses: actions/checkout@v4
+      - name: Install Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Wrangler for localhost-only test
+        run: npm install --global wrangler@4
+      - name: Test real local SQLite-backed Durable Object with ephemeral token
+        env:
+          NC_FIXTURE_LOCAL_TEST: '1'
+          VERCEL_ENV: ''
+          MERCADOPAGO_ACCESS_TOKEN: ''
+          FIREBASE_SERVICE_ACCOUNT_JSON: ''
+        run: node scripts/test-cloudflare-fixture-workerd-local.mjs
+
   quality:
     name: TypeScript, tests and build
     runs-on: ubuntu-latest
