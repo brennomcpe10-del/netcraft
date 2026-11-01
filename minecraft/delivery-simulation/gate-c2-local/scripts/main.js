@@ -70,7 +70,8 @@ async function runOnce() {
 
     // Replay is expected to be denied by the local test server.
     // No reward/ACK is ever attempted, even if the server misbehaves.
-    const replay = await http.request(poll);
+    const replay = await http.request(makePost("/delivery/poll", { gamertag: "SyntheticLabOnly" },
+      token, issued.nonce, Date.now()));
     if (replay.status !== 401)
       throw new Error("replay_not_denied");
     console.warn("[GATE_C2_BDS] AUTHENTICATED_EMPTY_POLL_AND_REPLAY_PASS");
