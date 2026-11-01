@@ -45,7 +45,9 @@ export function createPixRouter(
     try {
       dependencies.assertEnvironment();
       stage = "provider";
-      await dependencies.gateway().me();
+      const receiver = await dependencies.gateway().me();
+      if (receiver.netcraftTestAccount !== true)
+        throw new PixError("O recebedor não foi identificado como conta de teste. Pix indisponível.", 503);
       stage = "persistence";
       dependencies.database();
       return res.json({
