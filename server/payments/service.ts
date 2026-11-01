@@ -233,8 +233,15 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
     if (!saved) return;
     if (saved.apiVersion !== "orders-v1") return reconcileLegacy(id, saved);
     if (!saved.providerOrderId) return;
-    const receiver = await gateway.me(),
-      resource = await gateway.get(saved.providerOrderId);
+    const receiver = await gateway.me();
+    // The same verified TEST collector that created the order must still own
+    // it at reconciliation time. A swapped/real account must not transition
+    // any private order to approved or prepare a delivery job.
+    if (receiver.netcraftTestAccount !== true ||
+        String(receiver.id) !== saved.collector ||
+        saved.receiverIsTestAccount !== true)
+      throw new PixError("Conta recebedora de teste não corresponde ao pedido.", 503);
+    const resource = await gateway.get(saved.providerOrderId);
     const payment = verifyOrder(resource, saved, String(receiver.id));
     let qrCode = payment?.payment_method?.qr_code || "",
       qrBase64 = payment?.payment_method?.qr_code_base64 || "";
