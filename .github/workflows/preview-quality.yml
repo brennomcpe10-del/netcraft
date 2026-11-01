@@ -50,6 +50,23 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_JSON: ""
         run: |
           node --test minecraft/delivery-e2e-local/test-local-server.cjs minecraft/delivery-e2e-local/test-protocol.mjs
+      - name: Delivery E2E downloadable Windows script parser and fail-closed guards
+        shell: pwsh
+        run: |
+          $file = 'scripts/netcraft-delivery-e2e-windows.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($file, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw ('E2E PS1 parse failed: ' + ($errors | Out-String)) }
+          $source = Get-Content $file -Raw
+          foreach ($required in @('NETCRAFT_DELIVERY_E2E_PREPARED','NETCRAFT_DELIVERY_E2E_CLEANED',
+                'Get-NetFirewallRule','force_tls','Get-FileHash','Cleanup',
+                'NetCraftDeliveryE2E','CurrentUser','raw.githubusercontent.com')) {
+            if (!$source.Contains($required)) { throw ('E2E missing guard: ' + $required) }
+          }
+          if ((Get-Item $file).Length -lt 4000) { throw 'E2E PS1 is truncated or empty' }
+          Write-Host 'PASS: E2E PowerShell has valid syntax and mandatory safeguards'
+
       - name: Gate C.2 - PowerShell Windows lab syntax safety preflight
         shell: pwsh
         run: |
