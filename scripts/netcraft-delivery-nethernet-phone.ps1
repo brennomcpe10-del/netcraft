@@ -21,7 +21,7 @@ function OriginalRule([string]$name) {
  return $rules[0]
 }
 function NewRule($name,$direction,$action,$proto,$remote,$port) {
- $options=@{Name=$name;Direction=$direction;Action=$action;Program=$Bds;
+ $options=@{Name=$name;DisplayName=$name;Direction=$direction;Action=$action;Program=$Bds;
   RemoteAddress=$remote;Profile='Private';ErrorAction='Stop';Enabled='True'}
  if($proto){$options.Protocol=$proto}
  if($port){$options.LocalPort=$port}
