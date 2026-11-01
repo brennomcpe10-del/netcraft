@@ -43,6 +43,26 @@ jobs:
           MERCADOPAGO_ACCESS_TOKEN: ""
           FIREBASE_SERVICE_ACCOUNT_JSON: ""
         run: node scripts/test-gate-c2-local-server.mjs
+      - name: NetCraftCore BDS E2E synthetic HTTPS to executor contract (no production)
+        env:
+          NODE_ENV: test
+          MERCADOPAGO_ACCESS_TOKEN: ""
+          FIREBASE_SERVICE_ACCOUNT_JSON: ""
+        run: |
+          node --test minecraft/delivery-e2e-local/test-local-server.cjs minecraft/delivery-e2e-local/test-protocol.mjs
+      - name: NetCraftCore BDS E2E Windows script syntax and guard checks
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile('minecraft/delivery-e2e-local/prepare-windows.ps1', [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw ($errors | Out-String) }
+          $source = Get-Content minecraft/delivery-e2e-local/prepare-windows.ps1 -Raw
+          foreach ($required in @('NETCRAFT_DELIVERY_E2E_PREPARED','NETCRAFT_DELIVERY_E2E_CLEANED','Get-NetFirewallRule','force_tls','Cleanup','NetCraftDeliveryE2E','CurrentUser','Get-FileHash')) {
+            if (!$source.Contains($required)) { throw ('Missing lab guard: ' + $required) }
+          }
+          Write-Host 'PASS: E2E Windows script syntax and lab guards'
+
       - name: Gate C.2 - PowerShell Windows lab syntax safety preflight
         shell: pwsh
         run: |
