@@ -182,7 +182,7 @@ test("transport creates and queries ORD IDs; legacy is read-only; errors never e
   const calls: any[] = [];
   const g = new MercadoPago("TEST-fixture", async (url, options) => {
     calls.push({ url, options });
-    return new Response(JSON.stringify({ id: 42 }));
+    return new Response(JSON.stringify({ id: 42, tags: ["test_user"] }));
   });
   await g.create({ type: "online" }, "fixture-key");
   await g.get(ORD);
