@@ -3,6 +3,7 @@ import {
   Product,
   Order,
   PixTestOrderSummary,
+  PixTestDeliverySummary,
   ServerEvent,
   NewsArticle,
   ServerSettings,
@@ -272,6 +273,15 @@ export const api = {
       cache: 'no-store'
     });
     return handleAdminFetch<PixTestOrderSummary[]>(res, 'Não foi possível consultar os Pix de teste.');
+  },
+
+  async getPixTestDeliveries(adminToken: string): Promise<PixTestDeliverySummary[]> {
+    const res = await fetch(`${API_BASE}/admin/pix-test-deliveries`, {
+      headers: getHeaders(adminToken),
+      cache: 'no-store'
+    });
+    return handleAdminFetch<PixTestDeliverySummary[]>(res,
+      'Não foi possível consultar a fila de entregas de teste.');
   },
 
   async getAllOrders(adminToken: string): Promise<Order[]> {
