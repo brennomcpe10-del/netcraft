@@ -261,3 +261,38 @@ jobs:
             --project demo-netcraft-admin-test \
             --config .firebase-emulator-ci.json \
             'node --import tsx tests/pix-emulator.integration.ts'
+
+  nethernet_phone_lab_firewall_preflight:
+    name: NetherNet lab firewall compatibility (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate script syntax, guardrails and Windows Internet keyword
+        shell: pwsh
+        run: |
+          $script = 'scripts/netcraft-delivery-nethernet-phone.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($script,[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw ($errors | Out-String) }
+          $src = Get-Content $script -Raw
+          foreach($required in @('NCBR_NETHERNET_PHONE_READY','NCBR_NETHERNET_PHONE_CLEANED',
+            '192.168.1.2','192.168.1.9','19142','RestoreOriginal','RemoveCreated',
+            'Internet','Disable-NetFirewallRule','Get-NetFirewallApplicationFilter')) {
+            if (!$src.Contains($required)) { throw ("Missing safeguard: " + $required) }
+          }
+          foreach($forbidden in @('Set-NetFirewallProfile','Disable-NetFirewallProfile',
+            'netsh advfirewall set','Set-NetFirewallAddressFilter')) {
+            if ($src.Contains($forbidden)) { throw ("Forbidden operation: " + $forbidden) }
+          }
+          $name = 'NCBR-NetherNet-CI-Test'
+          try {
+            New-NetFirewallRule -Name $name -DisplayName 'NetCraft temporary runner test' -Direction Inbound -Action Block -Program "$env:WINDIR\System32\notepad.exe" -RemoteAddress Internet -Profile Private -ErrorAction Stop | Out-Null
+            $rule = Get-NetFirewallRule -Name $name -ErrorAction Stop
+            $remote = ($rule | Get-NetFirewallAddressFilter).RemoteAddress
+            if($remote -ne 'Internet') { throw "Internet keyword not accepted on Windows runner: $remote" }
+            Write-Host 'PASS: NetherNet script parses and Windows firewall accepts Internet scope'
+          } finally {
+            Get-NetFirewallRule -Name $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+          }
