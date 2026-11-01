@@ -81,7 +81,14 @@ export class MercadoPago {
   ) {}
   async request(path: string, body?: unknown, key?: string) {
     // Check the account BEFORE any payment mutation, even for direct callers.
-    if (body) await this.me();
+    if (body) {
+      const receiver = await this.me();
+      if (receiver.netcraftTestAccount !== true)
+        throw new PixError(
+          "Uma conta recebedora não verificada como test_user não pode criar cobranças neste ambiente.",
+          503,
+        );
+    }
     const response = await this.transport(
       `https://api.mercadopago.com${path}`,
       {
