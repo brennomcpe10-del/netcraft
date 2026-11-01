@@ -15,6 +15,7 @@ import {
   Product,
   Order,
   PixTestOrderSummary,
+  PixTestDeliverySummary,
   Player,
   ServerEvent,
   EventStatus,
@@ -99,6 +100,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [pixTestOrders, setPixTestOrders] = useState<PixTestOrderSummary[]>([]);
+  const [pixTestDeliveries, setPixTestDeliveries] = useState<PixTestDeliverySummary[]>([]);
   const [pixTestLoading, setPixTestLoading] = useState(false);
   const [pixTestError, setPixTestError] = useState('');
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -157,7 +159,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     setPixTestLoading(true);
     setPixTestError('');
     try {
-      setPixTestOrders(await api.getPixTestOrders(adminToken));
+      const [ordersList, deliveriesList] = await Promise.all([
+        api.getPixTestOrders(adminToken),
+        api.getPixTestDeliveries(adminToken),
+      ]);
+      setPixTestOrders(ordersList);
+      setPixTestDeliveries(deliveriesList);
     } catch (error) {
       setPixTestError(error instanceof Error ? error.message : 'Não foi possível consultar as simulações.');
     } finally {
@@ -979,6 +986,55 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-xl border border-emerald-500/20 bg-white/[0.02] p-4 sm:p-5 space-y-3" aria-label="Fila de entregas Pix de teste">
+              <div>
+                <h3 className="text-sm font-bold text-white">Fila de entregas · homologação</h3>
+                <p className="text-zinc-400 text-xs mt-1">
+                  Registros gerados após conciliação Pix. Apenas leitura: nenhuma recompensa será entregue.
+                  Todas as entregas continuam desligadas.
+                </p>
+              </div>
+              {pixTestError ? (
+                <p role="alert" className="text-amber-300 text-xs">{pixTestError}</p>
+              ) : pixTestLoading && pixTestDeliveries.length === 0 ? (
+                <p role="status" className="text-zinc-400 text-xs">Consultando entregas de teste…</p>
+              ) : pixTestDeliveries.length === 0 ? (
+                <p className="text-zinc-400 text-xs">Nenhuma entrega de teste registrada.</p>
+              ) : (
+                <div className="divide-y divide-white/[0.06]">
+                  <p className="text-amber-300 text-xs pb-2">{pixTestDeliveries.length} registro(s) de teste · execução Minecraft OFF.</p>
+                  {pixTestDeliveries.map(job => {
+                    const labels: Record<PixTestDeliverySummary['hold'], string> = {
+                      payment_not_verified: 'Pagamento não confirmado ou registro inválido',
+                      refunded: 'Bloqueado: estorno/cancelamento',
+                      missing_approval_timestamp: 'Pendente: data de aprovação do VIP',
+                      reward_review_required: 'Pendente: revisar recompensas do kit',
+                      vip_mapping_required: 'Pendente: integrar cargo VIP ao Core',
+                      reward_missing: 'Pendente: configurar recompensa',
+                      reward_invalid: 'Pendente: corrigir recompensa',
+                      quantity_invalid: 'Pendente: quantidade inválida',
+                      product_invalid: 'Pendente: produto inválido',
+                      plan_missing: 'Pendente: preparar plano de entrega',
+                      dispatch_disabled: 'Entrega automática desligada',
+                    };
+                    return (
+                      <div key={job.id} className="py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-white">
+                            {job.gamertag} · {job.kind === 'vip' ? 'VIP' : job.kind === 'items' ? 'Itens/kit' : 'Não configurado'} · {job.units} un.
+                          </div>
+                          <div className="font-mono text-zinc-500 text-[10px] break-all">
+                            Entrega #{job.id.slice(0, 16)}
+                          </div>
+                        </div>
+                        <div className="text-amber-300 font-medium">{labels[job.hold]}</div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </section>
