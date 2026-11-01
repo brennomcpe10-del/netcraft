@@ -59,7 +59,7 @@ test("All absent, invalid and overly large reward plans are blocked, never execu
   assert.equal(previewDeliveryPlan({ ...kit, reward: {
     version: 1, items: [{ itemId: "minecraft:diamond", quantity: 2000 },
       { itemId: "minecraft:diamond", quantity: 2000 }],
-  }}).blocker, "reward_review_required");
+  }}).blocker, "reward_invalid"); // 12,000 units exceeds v0.3.1 Core ceiling.
 });
 test("Admin summary requires a matching approved order, no mutation and no sensitive fields", () => {
   const plan = previewDeliveryPlan(kit);
