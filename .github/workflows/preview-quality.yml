@@ -50,6 +50,42 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_JSON: ""
         run: |
           node --test minecraft/delivery-e2e-local/test-local-server.cjs minecraft/delivery-e2e-local/test-protocol.mjs
+      - name: Redmi LAN firewall helper — syntax and IPv4 complement safety
+        shell: pwsh
+        run: |
+          $path = 'scripts/netcraft-delivery-phone-lan.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count) { throw ($errors | Out-String) }
+          $source = Get-Content $path -Raw
+          foreach ($required in @('NETCRAFT_PHONE_ACCESS_READY', 'NETCRAFT_PHONE_ACCESS_CLEANED', '192.168.1.2',
+                                   '192.168.1.9', '19142', "Set-Remote `$out", "Set-Remote `$in",
+                                   "Set-Remote `$out @('Any')", "Set-Remote `$in @('Any')")) {
+            if (!$source.Contains($required)) { throw ('Missing firewall guard: ' + $required) }
+          }
+          foreach ($forbidden in @('Disable-NetFirewallRule', 'Set-NetFirewallProfile', 'Disable-NetFirewallProfile', 'netsh advfirewall set')) {
+            if ($source.Contains($forbidden)) { throw ('Forbidden firewall operation: ' + $forbidden) }
+          }
+          Write-Host 'PASS: LAN helper syntax and rollback guards'
+      - name: Redmi LAN firewall helper — IPv4 excludes phone and nothing else
+        run: |
+          python3 - <<'PY'
+          import ipaddress,re
+          text=open('scripts/netcraft-delivery-phone-lan.ps1').read()
+          arr=text.split('$networks=@(',1)[1].split(')',1)[0]
+          networks=re.findall(r"'([^']+)'",arr)
+          assert len(networks)==33, networks
+          ipv4=[ipaddress.ip_network(n) for n in networks if ':' not in n]
+          assert len(ipv4)==32 and '::/0' in networks
+          remaining=[ipaddress.ip_network('0.0.0.0/0')]
+          phone=ipaddress.ip_address('192.168.1.2')
+          expected=set(ipaddress.ip_network('0.0.0.0/0').address_exclude(ipaddress.ip_network('192.168.1.2/32')))
+          assert set(ipv4)==expected, 'non-phone IPv4 coverage must be exact'
+          assert all(phone not in n for n in ipv4), 'phone IP must not be explicitly blocked'
+          print('PASS: only 192.168.1.2 is excepted from the BDS lab block rules')
+          PY
+
       - name: Delivery E2E downloadable Windows script parser and fail-closed guards
         shell: pwsh
         run: |
