@@ -5,21 +5,26 @@ const https = require('node:https');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const path = require('node:path');
-const ORDER_ID='d'.repeat(64), ITEM_ID=ORDER_ID+'-0', VIP_ID=ORDER_ID+'-1';
+const ORDER_ID='d'.repeat(64), ITEM_ID=ORDER_ID+'-0', VIP_ID=ORDER_ID+'-1', KIT_ID=ORDER_ID+'-2', RENEW_ID=ORDER_ID+'-3';
+const EXPLORER='ncbr:vip_explorer';
 function createLocalServer({pfx,passphrase,key,cert,token,gamertag,kind='items',rankTag,receiptPath}) {
  if (!/^[a-f0-9]{64}$/.test(token||'')) throw Error('synthetic_token_invalid');
  if (!/^[A-Za-z0-9_ ]{1,32}$/.test(gamertag||'') || gamertag.trim()!==gamertag) throw Error('lab_gamertag_invalid');
- if (!['items','vip'].includes(kind)) throw Error('lab_kind_invalid');
- if (kind==='vip' && !/^ncbr:vip_[a-z0-9_]{1,32}$/.test(rankTag||'')) throw Error('lab_rank_invalid');
+ if (!['items','vip','kit','suite'].includes(kind)) throw Error('lab_kind_invalid');
+ if ((kind==='vip'||kind==='suite') && rankTag!==EXPLORER) throw Error('lab_rank_invalid');
  if (!receiptPath) throw Error('receipt_path_required');
  const issued=new Map(),used=new Map();
  const disk = (()=>{try {return JSON.parse(fs.readFileSync(receiptPath,'utf8'));}catch(e){if(e.code==='ENOENT')return {};throw e;}})();
  if (!disk||typeof disk!=='object'||Array.isArray(disk)) throw Error('invalid_receipts');
- const id=kind==='items'?ITEM_ID:VIP_ID;
- const job=kind==='items'?{contract:'netcraft.delivery.v1',labFixture:true,id,orderId:ORDER_ID,
-   gamertag,kind:'items',items:[{itemId:'minecraft:iron_ingot',quantity:2}]}:
-   {contract:'netcraft.delivery.v1',labFixture:true,id,orderId:ORDER_ID,gamertag,
-     kind:'vip',rankTag,days:1};
+ const common={contract:'netcraft.delivery.v1',labFixture:true,orderId:ORDER_ID,gamertag};
+ const fixtures={
+  items:{...common,id:ITEM_ID,kind:'items',items:[{itemId:'minecraft:iron_ingot',quantity:2}]},
+  vip:{...common,id:VIP_ID,kind:'vip',rankTag:EXPLORER,days:1},
+  vip_renew:{...common,id:RENEW_ID,kind:'vip',rankTag:EXPLORER,days:1},
+  kit:{...common,id:KIT_ID,kind:'items',items:[{itemId:'minecraft:diamond',quantity:3},{itemId:'minecraft:iron_ingot',quantity:6}]}
+ };
+ const selected=kind==='suite'?['vip','vip_renew','kit']:[kind], ids=new Set(selected.map(x=>fixtures[x].id));
+ const offered=new Set();
  const send=(res,status,obj)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(obj));};
  const persist=()=>{
   const tmp=receiptPath+'.tmp';fs.writeFileSync(tmp,JSON.stringify(disk),{flag:'w',mode:0o600});fs.renameSync(tmp,receiptPath);
@@ -51,11 +56,12 @@ function createLocalServer({pfx,passphrase,key,cert,token,gamertag,kind='items',
     if (req.url==='/delivery/poll'){
       if(Object.keys(body).length!==1||body.gamertag!==gamertag)return send(res,400,{error:'wrong_player'});
       return send(res,200,{simulation:true,environment:'synthetic_local',dispatchEnabled:false,
-        deliveries:disk[id]?.acknowledged?[]:[job]});
+        deliveries:selected.filter(x=>!disk[fixtures[x].id]?.acknowledged).map(x=>{offered.add(fixtures[x].id);return fixtures[x];})});
     }
-    if(Object.keys(body).length!==2||body.deliveryId!==id||body.result!=='applied')return send(res,400,{error:'invalid_ack'});
-    if(!disk[id]?.acknowledged){disk[id]={acknowledged:true,at:new Date().toISOString(),kind};persist();}
-    return send(res,200,{simulation:true,environment:'synthetic_local',deliveryId:id,acknowledged:true});
+    if(Object.keys(body).length!==2||!ids.has(body.deliveryId)||body.result!=='applied')return send(res,400,{error:'invalid_ack'});
+    if(!offered.has(body.deliveryId)&&!disk[body.deliveryId]?.acknowledged)return send(res,409,{error:'not_offered'});
+    if(!disk[body.deliveryId]?.acknowledged){disk[body.deliveryId]={acknowledged:true,at:new Date().toISOString(),kind:fixtures[selected.find(x=>fixtures[x].id===body.deliveryId)].kind};persist();}
+    return send(res,200,{simulation:true,environment:'synthetic_local',deliveryId:body.deliveryId,acknowledged:true});
   }catch{if(!res.headersSent)send(res,500,{error:'internal'});else res.destroy();}
  });
 }

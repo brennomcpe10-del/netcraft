@@ -29,3 +29,20 @@ test('VIP test job may only name existing Core-defined tag with fixed single day
  for(const change of [{rankTag:'admin'},{days:3650},{rankTag:'ncbr:vip_explorer;op @p'}])
   assert.equal(validateLabResponse(wrap([{...vip,...change}]),gamertag),null);
 });
+
+test('VIP renewal and multi-item kit use unique allowlisted receipts only',()=>{
+ const common={...good,kind:'vip',id:E2E_LAB_VIP_ID,rankTag:'ncbr:vip_explorer',days:1};
+ delete common.items;
+ const renewal={...common,id:'d'.repeat(64)+'-3'};
+ const kit={...good,id:'d'.repeat(64)+'-2',
+   items:[{itemId:'minecraft:diamond',quantity:3},{itemId:'minecraft:iron_ingot',quantity:6}]};
+ const result=validateLabResponse(wrap([common,renewal,kit]),gamertag);
+ assert.deepEqual(result.map(x=>x.id),[common.id,renewal.id,kit.id]);
+ assert.equal(result[2].items.length,2);
+ for(const bad of [
+   {...common,rankTag:'ncbr:vip_supreme'},
+   {...renewal,days:30},
+   {...kit,items:[{itemId:'minecraft:diamond',quantity:64},{itemId:'minecraft:iron_ingot',quantity:6}]},
+   {...kit,items:[{itemId:'minecraft:diamond',quantity:3},{itemId:'minecraft:iron_ingot',quantity:6}],command:'op'},
+ ]) assert.equal(validateLabResponse(wrap([bad]),gamertag),null);
+});
