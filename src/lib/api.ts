@@ -4,6 +4,7 @@ import {
   Order,
   PixTestOrderSummary,
   PixTestDeliverySummary,
+  DeliveryCatalogAudit,
   ServerEvent,
   NewsArticle,
   ServerSettings,
@@ -273,6 +274,12 @@ export const api = {
       cache: 'no-store'
     });
     return handleAdminFetch<PixTestOrderSummary[]>(res, 'Não foi possível consultar os Pix de teste.');
+  },
+
+  async getDeliveryCatalogAudit(adminToken: string): Promise<DeliveryCatalogAudit> {
+    return adminRequest<DeliveryCatalogAudit>('/admin/delivery-catalog-audit', {
+      headers: getHeaders(adminToken),
+    });
   },
 
   async getPixTestDeliveries(adminToken: string): Promise<PixTestDeliverySummary[]> {

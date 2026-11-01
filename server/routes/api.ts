@@ -1,4 +1,5 @@
 import {pixRouter} from './pix.ts';
+import { auditDeliveryCatalog } from '../delivery/catalogAudit.ts';
 import {identityRouter} from './identity.ts';
 import {paymentStatusPatch} from '../../src/lib/paymentStatus.ts';
 import {revenueReport,brasiliaPeriod} from '../../src/lib/revenue.ts';
@@ -36,6 +37,15 @@ apiRouter.get('/admin/environment', requireAdmin, (_req,res)=>{
   sharedStoreData:stage==='preview',
   storeWritesBlocked:stage==='preview',
  });
+});
+// Preview-only, authenticated and read-only. Never creates a payment or grants items.
+apiRouter.get('/admin/delivery-catalog-audit',requireAdmin,async(_req,res)=>{
+ res.setHeader('Cache-Control','no-store');
+ if(!isPreviewEnvironment())return res.status(409).json({error:'Auditoria disponível somente na Preview isolada.'});
+ try {
+  const [products,vips]=await Promise.all([listCatalog('products'),listCatalog('vips')]);
+  return res.json(auditDeliveryCatalog(products,vips));
+ }catch{return res.status(503).json({error:'Não foi possível verificar o catálogo de entregas.'});}
 });
 apiRouter.get('/admin/revenue',requireAdmin,async(req,res)=>{
  try{const period=typeof req.query.period==='string'?req.query.period:brasiliaPeriod(new Date())!;if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(period))return res.status(400).json({error:'Selecione mês e ano válidos.'});

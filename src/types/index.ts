@@ -61,6 +61,25 @@ export interface Product {
   pixUrl?: string;
 }
 
+// Preview-only, authenticated delivery-catalog checks. Not a release authorization.
+export interface DeliveryCatalogAudit {
+  environment: 'preview';
+  realPaymentsEnabled: false;
+  minecraftDispatchEnabled: false;
+  totalActive: number;
+  truncated: boolean;
+  counts: Record<'reward_invalid' | 'reward_missing' | 'quantity_exceeds_executor' |
+    'vip_mapping_required' | 'kit_lab_only', number>;
+  items: Array<{
+    id: string;
+    name: string;
+    kind: 'product' | 'vip';
+    maxQuantity: number;
+    status: 'reward_invalid' | 'reward_missing' | 'quantity_exceeds_executor' |
+      'vip_mapping_required' | 'kit_lab_only';
+  }>;
+}
+
 // Admin-only, read-only inspection of simulated sandbox transactions.
 export interface PixTestOrderSummary {
   id: string;

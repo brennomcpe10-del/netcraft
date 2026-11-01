@@ -16,6 +16,7 @@ import {
   Order,
   PixTestOrderSummary,
   PixTestDeliverySummary,
+  DeliveryCatalogAudit,
   Player,
   ServerEvent,
   EventStatus,
@@ -101,6 +102,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const [orders, setOrders] = useState<Order[]>([]);
   const [pixTestOrders, setPixTestOrders] = useState<PixTestOrderSummary[]>([]);
   const [pixTestDeliveries, setPixTestDeliveries] = useState<PixTestDeliverySummary[]>([]);
+  const [deliveryCatalogAudit, setDeliveryCatalogAudit] = useState<DeliveryCatalogAudit | null>(null);
   const [pixTestLoading, setPixTestLoading] = useState(false);
   const [pixTestError, setPixTestError] = useState('');
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -159,12 +161,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
     setPixTestLoading(true);
     setPixTestError('');
     try {
-      const [ordersList, deliveriesList] = await Promise.all([
+      const [ordersList, deliveriesList, catalogAudit] = await Promise.all([
         api.getPixTestOrders(adminToken),
         api.getPixTestDeliveries(adminToken),
+        api.getDeliveryCatalogAudit(adminToken),
       ]);
       setPixTestOrders(ordersList);
       setPixTestDeliveries(deliveriesList);
+      setDeliveryCatalogAudit(catalogAudit);
     } catch (error) {
       setPixTestError(error instanceof Error ? error.message : 'Não foi possível consultar as simulações.');
     } finally {
@@ -940,6 +944,45 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                 </div>
               </div>
             </div>
+
+            <section className="rounded-xl border border-white/10 bg-white/[0.02] p-4 sm:p-5 space-y-3" aria-label="Auditoria de produtos para entrega">
+              <div>
+                <h3 className="text-sm font-bold text-white">Preparação da entrega automática · produtos</h3>
+                <p className="text-zinc-400 text-xs mt-1">
+                  Auditoria somente leitura da Preview. Uma recompensa configurada não autoriza Pix real nem entrega no BDS.
+                </p>
+              </div>
+              {!deliveryCatalogAudit ? (
+                <p className="text-zinc-400 text-xs">Auditoria não carregada. Atualize os testes Pix para verificar o catálogo.</p>
+              ) : (
+                <>
+                  <p role="status" className="text-amber-300 text-xs">
+                    {deliveryCatalogAudit.totalActive} produtos/VIPs ativos · {deliveryCatalogAudit.counts.reward_missing} kits sem recompensa · {deliveryCatalogAudit.counts.reward_invalid} recompensas incompatíveis · {deliveryCatalogAudit.counts.quantity_exceeds_executor} limites de quantidade incompatíveis · {deliveryCatalogAudit.counts.vip_mapping_required} VIPs sem mapeamento de produção.
+                  </p>
+                  <p className="text-xs text-zinc-400">Cobranças reais e entregas Minecraft continuam OFF.</p>
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-emerald-300">Ver situação por produto</summary>
+                    <div className="divide-y divide-white/10 mt-3">
+                      {deliveryCatalogAudit.items.map(item => (
+                        <div key={item.kind + ':' + item.id} className="flex flex-wrap justify-between gap-2 py-2">
+                          <span className="text-zinc-200">{item.name}</span>
+                          <span className={item.status === 'kit_lab_only' ? 'text-emerald-300' : 'text-amber-300'}>
+                            {{
+                              reward_missing: 'Sem recompensa',
+                              reward_invalid: 'Recompensa incompatível',
+                              quantity_exceeds_executor: 'Reduzir quantidade máxima',
+                              vip_mapping_required: 'VIP requer mapeamento',
+                              kit_lab_only: 'Kit validado para testes; entrega real OFF',
+                            }[item.status]}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {deliveryCatalogAudit.truncated && <p className="text-amber-300">Lista limitada a 100 registros; os totais incluem todos.</p>}
+                  </details>
+                </>
+              )}
+            </section>
 
             <section className="rounded-xl border border-emerald-500/20 bg-white/[0.02] p-4 sm:p-5 space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
