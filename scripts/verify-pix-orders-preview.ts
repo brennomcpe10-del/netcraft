@@ -78,17 +78,14 @@ try {
     receiverIsTestAccount: true,
   };
   const payment = verifyOrder(resource, expected, String(receiver.id));
-  const fetched = await gateway.get(resource.id);
-  const verified = verifyOrder(
-    fetched,
-    {
-      ...expected,
-      providerOrderId: resource.id,
-      ...(payment ? { paymentId: payment.id } : {}),
-    },
-    String(receiver.id),
-  );
-  const state = ordersState(
+  let fetched = await gateway.get(resource.id);
+  const verifiedOrder = {
+    ...expected,
+    providerOrderId: resource.id,
+    ...(payment ? { paymentId: payment.id } : {}),
+  };
+  let verified = verifyOrder(fetched, verifiedOrder, String(receiver.id));
+  const stateOf = () => ordersState(
     fetched,
     verified,
     orderExpiry(
@@ -97,11 +94,27 @@ try {
       new Date(Date.now() + 86400000).toISOString(),
     ),
   );
+  let state = stateOf();
+  let approvalChecks = 1;
+  // The official APRO Pix test may begin as waiting_transfer and later
+  // auto-approve. Observe only with authenticated GETs, never a mock webhook
+  // or a real bank payment. Bound polling to keep Preview builds predictable.
+  for (let attempt = 0; attempt < 4 && ["pending", "processing"].includes(state); attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    fetched = await gateway.get(resource.id);
+    verified = verifyOrder(fetched, verifiedOrder, String(receiver.id));
+    state = stateOf();
+    approvalChecks++;
+  }
+  if (["cancelled", "expired", "refunded"].includes(state))
+    throw new PixError("Teste oficial Pix terminou em estado incompatível.", 502);
   const result = {
     ...metadata,
     api: "orders-v1",
     result: "valid_authenticated_response",
     state,
+    approvalObserved: state === "approved",
+    approvalChecks,
     // Test order identifier only; no credentials or Pix QR contents.
     testOrderId: resource.id,
     qrCodeReturned: !!verified?.payment_method?.qr_code,
