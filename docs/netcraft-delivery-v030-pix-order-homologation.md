@@ -17,6 +17,15 @@ Date: 2026-11-01. Branch: `redesign-mobile-solaris` **only**.
 - `tests/delivery-isolated-pix-bridge.test.tsx`: offline, pending, wrong receiver, altered reward, mapping, duplicate, ACK, refund race, and environment gates.
 - `tests/pix-emulator.integration.ts`: complete **emulated** test purchase: quote → mocked Orders provider GET approval → existing private Pix TEST outbox → independently verified bridge → concurrent kit/VIP leases → ACK → restart/replay → refund. The *Firestore* is a real local emulator; the Mercado Pago provider is intentionally mocked and the Minecraft executor is not called.
 
+## Off-by-default BDS transport prepared
+- `minecraft/delivery-e2e-local/verified_outbox_server.cjs`: separate HTTPS loopback adapter. Only preselected deterministic test order-line IDs can be offered, and only by the injected verified emulator bridge. Scoped opaque BDS token, single-use server-issued nonce, timestamp, bounded body and strict ACK.
+- `minecraft/delivery-e2e-local/verified_outbox_protocol.js`: separate canonical validator accepting ONLY `simulation:true`, `environment:'verified_pix_emulator'`, `dispatchEnabled:false`, matching player/order and vanilla items or the explicit Explorer rank. All unknown executable fields are rejected. This is not the old hardcoded synthetic fixture validator.
+- `minecraft/delivery-e2e-local/delivery_verified_outbox_bds.js`: optional BDS-only script targeting `127.0.0.1:18443`. Requires the new `ncbr_pix_emulator_enabled` toggle and `ncbr_pix_emulator_token` SecretString; refuses running alongside the old synthetic lab toggle. No code is installed or activated on MagnoHost.
+- `minecraft/delivery-e2e-local/test-verified-outbox.mjs`: TLS challenge/poll/ACK/restart simulation and payload forgery rejection, run by Preview CI.
+- `tests/delivery-pix-emulator-bds-gates.test.tsx`: static isolation guards.
+
+The optional BDS source has **not** been packaged or live-installed into the user's server; it is deliberately separate from the proven v2.2.9 pack. A successful Node/mock transport test does not count as a real BDS-to-verified-Pix-grant run.
+
 ## Evidence and limits
 The Mercado Pago Orders developer test procedure uses predefined data (including `first_name: APRO`) and may subsequently report test approval on GET. A GET verifying a test provider status is **not** a bank settlement or authorization for production sales. See:
 - https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/integration-test/pix
