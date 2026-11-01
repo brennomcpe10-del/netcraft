@@ -73,6 +73,9 @@ test('trusted local Pix outbox HTTPS: BDS protocol, nonce, ACK and restart repla
     const r=await request(server,cert,'/delivery/challenge',token);
     assert.equal(r.status,200);return r.body.nonce;
    }
+   // A syntactically valid ACK must still require an actual durable lease.
+   assert.equal((await request(server,cert,'/delivery/ack',token,
+     {deliveryId:id,result:'applied'},await challenge())).status,409);
    const n=await challenge();
    assert.equal((await request(server,cert,'/delivery/poll',token,{gamertag:'Other'},n)).status,400);
    assert.equal((await request(server,cert,'/delivery/poll',token,{gamertag:player},n)).status,401);
@@ -84,12 +87,20 @@ test('trusted local Pix outbox HTTPS: BDS protocol, nonce, ACK and restart repla
    const rejected=await request(server,cert,'/delivery/nack',token,
      {deliveryId:id,reason:'manual_review',receipt:'started'},await challenge());
    assert.equal(rejected.status,409);
+   // Restart the HTTPS gateway mid-offer: safe NACK authorization comes
+   // from the injected durable bridge, never its transient process Set.
+   await close(server);server=createVerifiedOutboxServer(config);await start(server);
    const full=await request(server,cert,'/delivery/nack',token,
      {deliveryId:id,reason:'inventory_full',receipt:'none'},await challenge());
    assert.equal(full.status,200);assert.equal(full.body.retryable,true);
    const repoll=await request(server,cert,'/delivery/poll',token,
      {gamertag:player},await challenge());
    assert.equal(repoll.body.deliveries.length,1);
+   const staleNonce=await challenge();
+   await close(server);server=createVerifiedOutboxServer(config);await start(server);
+   // Server-issued challenges must not survive a gateway restart.
+   assert.equal((await request(server,cert,'/delivery/ack',token,
+     {deliveryId:id,result:'applied'},staleNonce)).status,401);
    const ackNonce=await challenge();
    const ack=await request(server,cert,'/delivery/ack',token,{deliveryId:id,result:'applied'},ackNonce);
    assert.equal(ack.status,200);assert.equal(ack.body.acknowledged,true);

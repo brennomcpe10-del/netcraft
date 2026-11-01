@@ -144,3 +144,22 @@ test("inventory-full NACK retries only with proof that Core wrote no receipt",as
  assert.equal((await bridge.acknowledge(ref(0),"applied")).status,"acknowledged");
  assert.equal((await bridge.releaseBeforeGrant(ref(0),"inventory_full","none")).status,"held");
 });
+
+test("a provider-side refund not yet mirrored locally blocks a clean ACK",async()=>{
+ const f=fixture();await f.seed();const bridge=f.bridge();
+ assert.equal((await bridge.offer(ref(0),true)).status,"offered");
+ f.provider.get=async()=>ordersFixture(id,"25.00","refunded");
+ const ack=await bridge.acknowledge(ref(0),"applied");
+ assert.equal((ack as any).reason,"refund_after_grant_review");
+ assert.equal((await bridge.inspect(ref(0))).status,"refund_after_grant_review");
+});
+test("outbox mutation during provider GET cannot create an authorized lease",async()=>{
+ const f=fixture();await f.seed();const bridge=f.bridge();
+ f.provider.get=async()=>{
+  await f.update("pixTestOrders",id,{lines:[vip,kit]});
+  return ordersFixture(id,"25.00","approved");
+ };
+ const offer=await bridge.offer(ref(0),true);
+ assert.equal((offer as any).reason,"order_changed_or_refunded");
+ assert.equal((await bridge.inspect(ref(0))).status,"not_offered");
+});

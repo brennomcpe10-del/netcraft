@@ -20,7 +20,9 @@ function createVerifiedOutboxServer({key,cert,pfx,passphrase,token,gamertag,ids,
     typeof bridge.acknowledge!=='function' ||
     typeof bridge.releaseBeforeGrant!=='function')
    throw Error('invalid_verified_outbox_config');
- const issued=new Map(), used=new Map(), offered=new Set();
+ // The verified Firestore lease is the authority for ACK/NACK, not process
+ // memory: an in-flight Core receipt must remain acknowledgeable after restart.
+ const issued=new Map(), used=new Map();
  const respond=(res,status,data)=>{
   res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});
   res.end(JSON.stringify(data));
@@ -53,6 +55,8 @@ function createVerifiedOutboxServer({key,cert,pfx,passphrase,token,gamertag,ids,
     if(Object.keys(body).length!==0)return respond(res,400,{error:'bad_challenge'});
     for(const [n,t] of issued)if(now-t>60000)issued.delete(n);
     for(const [n,t] of used)if(now-t>120000)used.delete(n);
+    // Bound outstanding challenges even if a lab credential is misused.
+    if(issued.size>=128)return respond(res,429,{error:'challenge_capacity'});
     const nonce=crypto.randomBytes(16).toString('hex');
     issued.set(nonce,now);
     return respond(res,200,{simulation:true,environment:'verified_pix_emulator',nonce});
@@ -75,7 +79,6 @@ function createVerifiedOutboxServer({key,cert,pfx,passphrase,token,gamertag,ids,
      if(next.payload?.gamertag!==gamertag ||
         next.payload?.id!==id || next.payload?.orderId!==id.split('-')[0])
        throw Error('untrusted_payload');
-     offered.add(id);
      deliveries.push({...next.payload,labFixture:true});
     }
     return respond(res,200,{simulation:true,environment:'verified_pix_emulator',
@@ -83,25 +86,22 @@ function createVerifiedOutboxServer({key,cert,pfx,passphrase,token,gamertag,ids,
    }
    if(req.url==='/delivery/nack'){
     if(Object.keys(body).length!==3||!VALID_ID.test(body.deliveryId)||
-       !ids.includes(body.deliveryId)||!offered.has(body.deliveryId)||
+       !ids.includes(body.deliveryId)||
        body.receipt!=='none'||
        !['inventory_full','inventory_unavailable','player_offline',
          'vip_not_configured','vip_not_loaded','invalid_item'].includes(body.reason))
       return respond(res,409,{error:'not_safe_to_retry'});
     const released=await bridge.releaseBeforeGrant(body.deliveryId,body.reason,'none');
     if(released.status!=='retryable')return respond(res,409,{error:'retry_held'});
-    offered.delete(body.deliveryId);
     return respond(res,200,{simulation:true,environment:'verified_pix_emulator',
       deliveryId:body.deliveryId,retryable:true});
    }
    if(Object.keys(body).length!==2||!VALID_ID.test(body.deliveryId)||
-      body.result!=='applied'||!ids.includes(body.deliveryId)||
-      !offered.has(body.deliveryId))
+      body.result!=='applied'||!ids.includes(body.deliveryId))
      return respond(res,409,{error:'ack_not_offered'});
    const acknowledged=await bridge.acknowledge(body.deliveryId,'applied');
    if(acknowledged.status!=='acknowledged')
      return respond(res,409,{error:'ack_held'});
-   offered.delete(body.deliveryId);
    return respond(res,200,{simulation:true,environment:'verified_pix_emulator',
      deliveryId:body.deliveryId,acknowledged:true});
   }catch {

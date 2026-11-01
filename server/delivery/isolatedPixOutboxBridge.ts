@@ -131,10 +131,22 @@ export function createIsolatedPixOutboxBridge(
         tx.get(orders.doc(order.id)),tx.get(jobs.doc(id)),tx.get(ref),
       ]);
       const o = currentOrder.data(), j = currentJob.data();
+      // Close the gap between independent provider GET verification and lease
+      // creation: every material field used to authorize this offer must
+      // still match the documents verified immediately before this transaction.
       if (!o || !j || o.state !== "approved" || j.state !== "pending" ||
           j.dispatchEnabled !== false || o.providerOrderId !== order.providerOrderId ||
           o.paymentId !== order.paymentId || o.receiverIsTestAccount !== true ||
+          o.id !== order.id || o.apiVersion !== order.apiVersion ||
+          o.environment !== order.environment || o.collector !== order.collector ||
+          o.currency !== order.currency || o.totalCents !== order.totalCents ||
+          o.expiresAt !== order.expiresAt || o.gamertag !== order.gamertag ||
+          JSON.stringify(o.lines) !== JSON.stringify(order.lines) ||
+          j.id !== job.id || j.orderId !== job.orderId ||
+          j.lineIndex !== job.lineIndex || j.environment !== job.environment ||
           JSON.stringify(j.line) !== JSON.stringify(job.line) ||
+          JSON.stringify(j.previewPlan) !== JSON.stringify(job.previewPlan) ||
+          JSON.stringify(j.coreDraft) !== JSON.stringify(job.coreDraft) ||
           j.gamertag !== job.gamertag)
         return hold("order_changed_or_refunded");
       if (existing.exists) {
@@ -187,17 +199,39 @@ export function createIsolatedPixOutboxBridge(
     localOnly();
     if (!validId(id) || !["applied","already_applied"].includes(result))
       return hold("executor_receipt_required");
+    // The local payment record may lag behind the provider. A Core receipt
+    // proves a grant, not that the independently queried Pix order is still
+    // approved. Never record a clean ACK on stale provider evidence.
+    const verified = await verify(id);
     return db.runTransaction(async tx => {
       const ref=leases.doc(id), current=await tx.get(ref);
       if (!current.exists) return hold("offer_missing");
       const data=current.data();
       if (data?.state==="acknowledged") return {status:"acknowledged" as const,duplicate:true};
       if (data?.state!=="offered") return hold("blocked");
+      if (!verified.ok || data.fingerprint !== digest(verified.payload)) {
+        tx.update(ref,{state:"refund_after_grant_review",
+          reason:"provider_or_reward_changed_after_offer"});
+        return hold("refund_after_grant_review");
+      }
       const [order,job]=await Promise.all([
         tx.get(orders.doc(data.orderId)),tx.get(jobs.doc(id)),
       ]);
-      if (order.data()?.state !== "approved" || job.data()?.state !== "pending" ||
-          job.data()?.dispatchEnabled !== false) {
+      const o=order.data(), j=job.data();
+      if (!o || !j || o.state !== "approved" || j.state !== "pending" ||
+          j.dispatchEnabled !== false || o.id !== verified.order.id ||
+          o.paymentId !== verified.order.paymentId ||
+          o.providerOrderId !== verified.order.providerOrderId ||
+          o.collector !== verified.order.collector ||
+          o.gamertag !== verified.order.gamertag ||
+          o.totalCents !== verified.order.totalCents ||
+          o.expiresAt !== verified.order.expiresAt ||
+          JSON.stringify(o.lines) !== JSON.stringify(verified.order.lines) ||
+          j.orderId !== verified.job.orderId ||
+          j.gamertag !== verified.job.gamertag ||
+          JSON.stringify(j.line) !== JSON.stringify(verified.job.line) ||
+          JSON.stringify(j.previewPlan) !== JSON.stringify(verified.job.previewPlan) ||
+          JSON.stringify(j.coreDraft) !== JSON.stringify(verified.job.coreDraft)) {
         tx.update(ref,{state:"refund_after_grant_review",
           reason:"refund_or_order_changed_after_offer"});
         return hold("refund_after_grant_review");
