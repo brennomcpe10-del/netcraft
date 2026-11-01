@@ -53,6 +53,10 @@ export function previewDeliveryPlan(line: unknown): PreviewDeliveryPlan {
     const grants = new Map<string, number>();
     let totalUnits = 0;
     for (const item of reward.items) {
+      // v0.3.1 Core executor currently supports only vanilla Minecraft IDs.
+      // Custom addon items need an explicitly tested executor before sale.
+      if (!/^minecraft:[a-z0-9_]+$/.test(item.itemId))
+        return { ...base, blocker: "reward_invalid" };
       const total = item.quantity * (units as number);
       const next = (grants.get(item.itemId) ?? 0) + total;
       totalUnits += total;
