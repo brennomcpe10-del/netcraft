@@ -70,6 +70,18 @@ for (const j of jobs.docs) {
   assert.equal(j.data().requiresApprovalTimestamp, true);
   assert.ok(j.data().approvalObservedAt);
   assert.equal(j.data().dispatchEnabled, false);
+  // Paid mixed-cart lines now carry a server-compiled but non-executable plan.
+  const plan = j.data().previewPlan;
+  assert.equal(plan?.readyForDispatch, false);
+  assert.equal(plan?.schema, 1);
+  if (j.data().line.productType === "product") {
+    assert.equal(plan?.kind, "items");
+    assert.equal(plan?.blocker, "reward_review_required");
+    assert.deepEqual(plan?.items, [{ itemId: "minecraft:diamond", quantity: 4 }]);
+  } else {
+    assert.equal(plan?.kind, "vip");
+    assert.equal(plan?.blocker, "vip_mapping_required");
+  }
 }
 assert.equal((await db.doc("coupons/fixture").get()).data()!.usedCount, 0);
 assert.equal(
@@ -87,6 +99,13 @@ jobs = await db
   .where("orderId", "==", id)
   .get();
 for (const j of jobs.docs) assert.equal(j.data().state, "blocked");
+const { testDeliverySummary } = await import("../server/payments/adminTestDeliveries.ts");
+for (const j of jobs.docs) {
+  const summary = testDeliverySummary(j.id, j.data(), (await db.doc("pixTestOrders/" + id).get()).data());
+  assert.equal(summary.hold, "refunded");
+  assert.equal(summary.dispatchEnabled, false);
+  assert.equal("line" in summary, false);
+}
 // REST client without credentials must not read or mutate private financial records.
 for (const collection of [
   "pixTestOrders",
