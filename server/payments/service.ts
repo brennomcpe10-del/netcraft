@@ -51,7 +51,13 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
   const orders = db.collection("pixTestOrders"),
     jobs = db.collection("pixTestDeliveries");
   async function create(input: any, key: string) {
-    validateCartRequest(input.lines);
+    if (!input || typeof input !== "object" || Array.isArray(input))
+      throw new PixError("Dados do checkout inválidos.", 400);
+    try {
+      validateCartRequest(input.lines);
+    } catch {
+      throw new PixError("Itens do carrinho inválidos.", 400);
+    }
     const cpf = normalizeCpf(input.cpf);
     if (!/^[a-zA-Z0-9-]{20,80}$/.test(key))
       throw new PixError("Identificador da compra inválido.");
@@ -81,7 +87,11 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
         }),
       )
       .digest("hex");
+    // Verify the sandbox receiver before reserving coupons or creating any
+    // Firestore order. A failed account check must have ZERO write effects.
     const receiver = await gateway.me();
+    if (receiver.netcraftTestAccount !== true)
+      throw new PixError("Recebedor não identificado como conta de teste. Nenhum pedido foi gravado.", 503);
     const collector = String(receiver.id);
     if (!/^\d+$/.test(collector))
       throw new PixError("Recebedor de teste inválido.", 503);
