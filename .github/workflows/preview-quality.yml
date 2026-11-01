@@ -56,6 +56,17 @@ jobs:
         run: node --check minecraft/delivery-v031-core-lab/start-v031-bds-clone-local.mjs
       - name: TypeScript typecheck
         run: npm run lint
+      - name: Package clone-only fixture bridge source v0.3.2 (not installable)
+        run: node scripts/package-bds-fixture-bridge-v032.mjs
+      - name: Upload clone-only bridge source for eventual BDS lab review
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcraft-delivery-fixture-bridge-source-v032
+          path: |
+            dist/bds-off/NetCraft_Delivery_Fixture_Bridge_Source_v0.3.2.zip
+            dist/bds-off/fixture-bridge-v032-manifest.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Automated tests
         run: NODE_ENV=test npm test
       - name: Gate C - isolated verified HTTPS loopback (no external endpoint)
