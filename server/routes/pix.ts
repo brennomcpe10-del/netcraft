@@ -49,7 +49,11 @@ export function createPixRouter(
       if (receiver.netcraftTestAccount !== true)
         throw new PixError("O recebedor não foi identificado como conta de teste. Pix indisponível.", 503);
       stage = "persistence";
-      dependencies.database();
+      // Instantiate AND read from the isolated TEST collection. Constructing an
+      // Admin SDK client alone does not establish that checkout persistence works.
+      // A read of a deliberately absent fixed document never mutates user data.
+      const database = dependencies.database();
+      await database.collection("pixTestOrders").doc("__netcraft_preview_readiness__").get();
       return res.json({
         available: true,
         environment: "test",
