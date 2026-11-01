@@ -119,7 +119,22 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
           readCatalogItem(line.productType==="vip"?"vips":"products",line.productId,tx,db)),
       );
       const quote=quoteCart(input.lines,items);
-      items.forEach((item: any) => validateRewardDraft(item?.rewardDraft));
+      items.forEach((item: any, index: number) => {
+        validateRewardDraft(item?.rewardDraft);
+        // If the merchant configured a reward, do not accept even a TEST
+        // charge for a kit which the current Bedrock executor cannot deliver.
+        // Products without a reward remain Preview-only editorial tests.
+        if (quote.lines[index].productType === "product" && item?.rewardDraft) {
+          const plan = previewDeliveryPlan({
+            ...quote.lines[index], reward: item.rewardDraft,
+          });
+          if (plan.kind !== "items" || plan.blocker !== "reward_review_required")
+            throw new PixError(
+              "Este kit precisa de uma recompensa compatível com o executor Minecraft antes de gerar Pix.",
+              409,
+            );
+        }
+      });
       let coupon: any = null,
         couponRef: any = null,
         couponReservations = 0;
