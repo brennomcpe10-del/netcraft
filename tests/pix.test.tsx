@@ -99,6 +99,18 @@ test("Pix returns validation errors for malformed cart inputs without opening a 
   assert.equal([...s.db.records.keys()].some(k => k.startsWith("pixTestOrders/")), false);
 });
 
+test("checkout accepts only gamertags the Bedrock executor can actually deliver to", async () => {
+  const s = setup();
+  for (const gamertag of ["bad/command", "name✨", "user\\tag", "x", "A".repeat(33)]) {
+    await assert.rejects(
+      () => s.api.create({ ...input, gamertag }, "invalid-bedrock-player-123456"),
+      (error: any) => error.status === 400,
+    );
+  }
+  assert.equal(s.creates(), 0);
+  assert.equal([...s.db.records.keys()].some(k => k.startsWith("pixTestOrders/")), false);
+});
+
 test("Orders Pix request explicitly uses automatic processing with the documented method", () => {
   const request = orderRequest(
     { id: "local-order", totalCents: 2500 },
