@@ -140,7 +140,7 @@ test("inventory-full NACK retries only with proof that Core wrote no receipt",as
  assert.equal((await bridge.releaseBeforeGrant(ref(0),"inventory_full","none")).status,"retryable");
  assert.equal((await bridge.inspect(ref(0))).status,"safe_retry");
  assert.equal((await bridge.offer(ref(0),true)).status,"offered");
- assert.equal((await bridge.inspect(ref(0))).attempts,2);
+ assert.equal((await bridge.inspect(ref(0)) as any).attempts,2);
  assert.equal((await bridge.acknowledge(ref(0),"applied")).status,"acknowledged");
  assert.equal((await bridge.releaseBeforeGrant(ref(0),"inventory_full","none")).status,"held");
 });
