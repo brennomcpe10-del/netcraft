@@ -31,7 +31,7 @@ function createVerifiedOutboxServer({key,cert,pfx,passphrase,token,gamertag,ids,
   try {
    if(!['127.0.0.1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress))
      return respond(res,403,{error:'loopback_only'});
-   if(req.method!=='POST'|| !['/delivery/challenge','/delivery/poll','/delivery/nack','/delivery/ack'].includes(req.url))
+   if(req.method!=='POST'|| !['/delivery/challenge','/delivery/preflight','/delivery/poll','/delivery/nack','/delivery/ack'].includes(req.url))
      return respond(res,404,{error:'route_denied'});
    if(!String(req.headers['content-type']||'').startsWith('application/json'))
      return respond(res,415,{error:'content_type'});
@@ -68,6 +68,14 @@ function createVerifiedOutboxServer({key,cert,pfx,passphrase,token,gamertag,ids,
       !issued.has(nonce)||now-issued.get(nonce)>60000)
      return respond(res,401,{error:'nonce_invalid'});
    issued.delete(nonce);used.set(nonce,now);
+   // Read-only lab probe: NEVER calls bridge.offer, allocates leases, or ACKs.
+   // A real BDS can verify opaque SecretString + HTTPS without holding a grant.
+   if(req.url==='/delivery/preflight'){
+    if(Object.keys(body).length!==1||body.gamertag!==gamertag)
+      return respond(res,400,{error:'wrong_player'});
+    return respond(res,200,{simulation:true,environment:'verified_pix_emulator',
+      dispatchEnabled:false,grantsEnabled:false,ackEnabled:false,ready:true});
+   }
    if(req.url==='/delivery/poll'){
     if(Object.keys(body).length!==1||body.gamertag!==gamertag)
      return respond(res,400,{error:'wrong_player'});

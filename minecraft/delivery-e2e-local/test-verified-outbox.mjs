@@ -50,8 +50,10 @@ test('trusted local Pix outbox HTTPS: BDS protocol, nonce, ACK and restart repla
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ncbr-verified-'));
  try{
   const {key,cert}=certs(dir),issued=new Set(),acked=new Set();
+  let offers=0;
   const bridge={
    offer:async jobId=>{
+    offers++;
     if(acked.has(jobId))return {status:'held'};
     issued.add(jobId);return {status:'offered',payload:fixture};
    },
@@ -76,6 +78,15 @@ test('trusted local Pix outbox HTTPS: BDS protocol, nonce, ACK and restart repla
    // A syntactically valid ACK must still require an actual durable lease.
    assert.equal((await request(server,cert,'/delivery/ack',token,
      {deliveryId:id,result:'applied'},await challenge())).status,409);
+   const preflightNonce=await challenge();
+   assert.equal((await request(server,cert,'/delivery/preflight',token,
+     {gamertag:player},preflightNonce)).status,200);
+   assert.equal((await request(server,cert,'/delivery/preflight',token,
+     {gamertag:player},preflightNonce)).status,401);
+   assert.equal(offers,0,'read-only BDS preflight must not reserve a Pix lease');
+   assert.equal((await request(server,cert,'/delivery/preflight',token,
+     {gamertag:'Wrong'},await challenge())).status,400);
+   assert.equal(offers,0);
    const n=await challenge();
    assert.equal((await request(server,cert,'/delivery/poll',token,{gamertag:'Other'},n)).status,400);
    assert.equal((await request(server,cert,'/delivery/poll',token,{gamertag:player},n)).status,401);

@@ -210,6 +210,33 @@ jobs:
           path: dist/bds-off/NetCraft_Delivery_GateA_Minimal_OFF_v0.2.1.mcpack
           if-no-files-found: error
           retention-days: 7
+      - name: Build and inspect NetCraft Delivery v0.3.1 BDS read-only OFF preflight
+        run: |
+          set -euo pipefail
+          node scripts/build-bds-pix-preflight-v031.mjs
+          python3 - <<'PY'
+          import json,zipfile
+          p="dist/bds-off/NetCraft_Delivery_Pix_Preflight_OFF_v0.3.1.mcpack"
+          with zipfile.ZipFile(p) as z:
+              assert sorted(z.namelist())==["manifest.json","scripts/main.js"]
+              m=json.loads(z.read("manifest.json"))
+              script=z.read("scripts/main.js").decode("utf-8")
+              assert m["header"]["version"]==[0,3,1]
+              assert m["modules"][0]["version"]==[0,3,1]
+              assert "variables.get(ENABLE) === true" in script
+              assert "AUTHENTICATED_READ_ONLY_PREFLIGHT_PASS" in script
+              assert "/delivery/poll" not in script
+              assert "/delivery/ack" not in script
+              assert "/delivery/nack" not in script
+          print("PASS: v0.3.1 isolated OFF read-only BDS pack")
+          PY
+      - name: Publish NetCraft Delivery v0.3.1 BDS OFF preflight archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcraft-delivery-pix-preflight-off-v031
+          path: dist/bds-off/NetCraft_Delivery_Pix_Preflight_OFF_v0.3.1.mcpack
+          if-no-files-found: error
+          retention-days: 14
       - name: Build storefront
         run: npm run build
 
