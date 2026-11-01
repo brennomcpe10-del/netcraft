@@ -76,6 +76,22 @@ export interface PixTestOrderSummary {
   expiresAt: string | null;
 }
 
+// Admin-only read-only status for synthetic Pix deliveries. No dispatch controls.
+export interface PixTestDeliverySummary {
+  id: string;
+  orderId: string;
+  gamertag: string;
+  kind: 'items' | 'vip' | 'unconfigured';
+  units: number;
+  state: 'pending' | 'blocked' | 'unknown';
+  hold: 'payment_not_verified' | 'refunded' | 'missing_approval_timestamp' |
+    'reward_review_required' | 'vip_mapping_required' | 'reward_missing' |
+    'reward_invalid' | 'quantity_invalid' | 'product_invalid' |
+    'plan_missing' | 'dispatch_disabled';
+  dispatchEnabled: false;
+  createdAt: string | null;
+}
+
 export interface Order {
   id: string;
   buyerNickname: string;
