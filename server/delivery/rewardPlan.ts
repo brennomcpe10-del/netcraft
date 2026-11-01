@@ -51,14 +51,20 @@ export function previewDeliveryPlan(line: unknown): PreviewDeliveryPlan {
     if (!Array.isArray(reward.items) || reward.items.length === 0)
       return { ...base, blocker: "reward_missing" };
     const grants = new Map<string, number>();
+    let totalUnits = 0;
     for (const item of reward.items) {
       const total = item.quantity * (units as number);
       const next = (grants.get(item.itemId) ?? 0) + total;
-      // Keep plans bounded, even when catalog permits a larger editorial draft.
-      if (!Number.isSafeInteger(next) || next > 2304 * 64)
+      totalUnits += total;
+      // Match the actual v0.3.1 Bedrock executor contract exactly.
+      // A paid job that is larger than the executor can grant is not safe.
+      if (!Number.isSafeInteger(next) || next > 2304 ||
+          !Number.isSafeInteger(totalUnits) || totalUnits > 2304 ||
+          grants.size > 36)
         return { ...base, blocker: "reward_invalid" };
       grants.set(item.itemId, next);
     }
+    if (grants.size > 36) return { ...base, blocker: "reward_invalid" };
     return {
       ...base, kind: "items", blocker: "reward_review_required",
       items: [...grants].map(([itemId, quantity]) => ({ itemId, quantity })),
