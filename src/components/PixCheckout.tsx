@@ -148,9 +148,14 @@ export function PixCheckout({
       previousFingerprint =
         sessionStorage.getItem("netcraft-pix-request") || "";
     } catch {}
-    // A previously reserved order must be retried with the same key.
-    // Never create a second provider order while the first is unresolved.
-    const k = key && previousFingerprint === fingerprint ? key : crypto.randomUUID();
+    // A pending order may already exist at the provider even when POST timed
+    // out. Never silently create a second charge because form data changed.
+    if (key && previousFingerprint !== fingerprint) {
+      setBusy(false);
+      setError("Já existe uma tentativa Pix com outros dados. Consulte a tentativa anterior ou descarte-a conscientemente antes de começar outra. Descartar não cancela uma cobrança no Mercado Pago.");
+      return;
+    }
+    const k = key || crypto.randomUUID();
     setKey(k);
     setOrder(null);
     try {
@@ -328,9 +333,14 @@ export function PixCheckout({
         </div>
       )}
       {error && (
-        <p role="alert" className="text-amber-300 text-sm">
-          {error}
-        </p>
+        <div className="space-y-2">
+          <p role="alert" className="text-amber-300 text-sm">{error}</p>
+          {key && !busy && !order && (
+            <button type="button" className="text-link" onClick={resetCheckout}>
+              Descartar apenas a tentativa local (não cancela Pix no Mercado Pago)
+            </button>
+          )}
+        </div>
       )}
     </section>
   );
