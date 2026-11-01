@@ -17,7 +17,14 @@ import { validateVerifiedOutboxResponse } from "../minecraft/delivery-e2e-local/
 const require = createRequire(import.meta.url);
 const { createVerifiedOutboxServer } = require("../minecraft/delivery-e2e-local/verified_outbox_server.cjs");
 
-test("full OFF lab: mixed-cart Pix -> verified HTTPS -> Core kit/VIP -> ACK -> restart/replay/refund", async () => {
+const isolatedTestRunner = ![
+  "VERCEL_ENV", "MERCADOPAGO_ACCESS_TOKEN",
+  "FIREBASE_SERVICE_ACCOUNT_JSON", "GOOGLE_APPLICATION_CREDENTIALS",
+].some(name => Boolean(process.env[name]));
+
+test("full OFF lab: mixed-cart Pix -> verified HTTPS -> Core kit/VIP -> ACK -> restart/replay/refund",
+  { skip: isolatedTestRunner ? false : "Only in isolated CI without Vercel or payment credentials" },
+  async () => {
   // Fail closed: this test cannot use the user's project, real provider or production.
   for (const key of ["VERCEL_ENV", "MERCADOPAGO_ACCESS_TOKEN",
     "FIREBASE_SERVICE_ACCOUNT_JSON", "GOOGLE_APPLICATION_CREDENTIALS"]) {
