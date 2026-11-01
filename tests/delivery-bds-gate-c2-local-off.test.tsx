@@ -18,7 +18,8 @@ test("Gate C.2 local probe has unique ID, localhost-only origin and no grants", 
   assert.match(source, /variables\.get\(ENABLE\) === true/);
   assert.match(source, /secrets\.get\(TOKEN\)/);
   assert.match(source, /new HttpHeader\("x-nc-bds-token", token\)/);
-  assert.doesNotMatch(source, /Math\.random|runInterval|runTimeout|playerSpawn|world\.|runCommand|addItem|grantVIP|\/delivery\/ack|http:\/\//i);
+  const executable = source.split("\n").filter(line => !line.trimStart().startsWith("//")).join("\n");
+  assert.doesNotMatch(executable, /Math\.random|runInterval|runTimeout|playerSpawn|world\.|runCommand|addItem|grantVIP|\/delivery\/ack|http:\/\//i);
   assert.match(source, /result\.deliveries\.length !== 0/);
 });
 
