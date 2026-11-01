@@ -296,4 +296,131 @@ assert.equal((await bridge.block(vipId)).status, "refunded_after_ack");
 console.log("PASS isolated emulator Pix order → authenticated approval GET → durable kit/VIP leases → ACK/restart → refund review, no real dispatch");
 
 
+
+// Full local-only integration: real Firestore emulator -> mock provider approval
+// -> authenticated TLS -> verified bridge lease -> simulated BDS receipt.
+// This intentionally does NOT launch BDS, call the live provider, or grant items.
+const fsTLS = await import("node:fs");
+const osTLS = await import("node:os");
+const pathTLS = await import("node:path");
+const httpsTLS = await import("node:https");
+const { execFileSync: execTLS } = await import("node:child_process");
+const { createRequire: createRequireTLS } = await import("node:module");
+const requireTLS = createRequireTLS(import.meta.url);
+const {createVerifiedOutboxServer} =
+  requireTLS("../minecraft/delivery-e2e-local/verified_outbox_server.cjs");
+const labKey = crypto.randomUUID();
+const labId = crypto.createHash("sha256").update(labKey).digest("hex");
+const labOrder = await api.create(nextInput,labKey);
+assert.equal(labOrder.id,labId);
+assert.equal(labOrder.state,"pending");
+provider=ordersFixture(labId,"29.99","approved");
+await api.reconcile(labId);
+const labBridge=mkBridge();
+const labItem=labId+"-0",labVip=labId+"-1";
+const labToken="c".repeat(64);
+const labDir=fsTLS.mkdtempSync(pathTLS.join(osTLS.tmpdir(),"ncbr-pix-tls-"));
+let tlsServer: any;
+try {
+  execTLS("openssl",["req","-x509","-newkey","rsa:2048","-nodes",
+    "-keyout",pathTLS.join(labDir,"key.pem"),
+    "-out",pathTLS.join(labDir,"cert.pem"),
+    "-days","1","-subj","/CN=localhost",
+    "-addext","subjectAltName=IP:127.0.0.1,DNS:localhost"],{stdio:"ignore"});
+  const tlsKey=fsTLS.readFileSync(pathTLS.join(labDir,"key.pem"));
+  const tlsCert=fsTLS.readFileSync(pathTLS.join(labDir,"cert.pem"));
+  const tlsConfig={key:tlsKey,cert:tlsCert,token:labToken,
+    gamertag:"Local Tester",ids:[labItem,labVip],bridge:labBridge};
+  async function startServer() {
+    tlsServer=createVerifiedOutboxServer(tlsConfig);
+    await new Promise<void>((resolve,reject)=>{
+      tlsServer.once("error",reject);
+      tlsServer.listen(0,"127.0.0.1",resolve);
+    });
+  }
+  async function restartServer() {
+    await new Promise<void>(resolve=>tlsServer.close(()=>resolve()));
+    await startServer();
+  }
+  async function tlsPost(route:string,body:object,nonce?:string,secret=labToken) {
+    return await new Promise<{status:number;body:any}>((resolve,reject)=>{
+      const payload=JSON.stringify(body);
+      const req=httpsTLS.request({
+        hostname:"127.0.0.1",port:tlsServer.address().port,
+        path:route,method:"POST",ca:tlsCert,minVersion:"TLSv1.2",
+        headers:{"Content-Type":"application/json",
+          "x-nc-bds-token":secret,
+          ...(nonce?{"x-nc-nonce":nonce,"x-nc-timestamp":String(Date.now())}:{}),
+          "Content-Length":String(Buffer.byteLength(payload))},
+      },res=>{
+        let raw="";
+        res.on("data",chunk=>{raw+=chunk.toString();});
+        res.on("end",()=>{
+          try{resolve({status:res.statusCode||0,body:JSON.parse(raw)});}
+          catch(err){reject(err);}
+        });
+      });
+      req.on("error",reject);req.end(payload);
+    });
+  }
+  async function tlsChallenge(){
+    const response=await tlsPost("/delivery/challenge",{});
+    assert.equal(response.status,200);
+    assert.match(response.body.nonce,/^[a-f0-9]{32}$/);
+    return response.body.nonce as string;
+  }
+  await startServer();
+  assert.equal((await tlsPost("/delivery/challenge",{},"","0".repeat(64))).status,401);
+  assert.equal((await tlsPost("/delivery/ack",
+    {deliveryId:labItem,result:"applied"},await tlsChallenge())).status,409);
+  const firstPoll=await tlsPost("/delivery/poll",
+    {gamertag:"Local Tester"},await tlsChallenge());
+  assert.equal(firstPoll.status,200);
+  assert.equal(firstPoll.body.dispatchEnabled,false);
+  assert.equal(firstPoll.body.environment,"verified_pix_emulator");
+  assert.deepEqual(firstPoll.body.deliveries.map((d:any)=>d.kind),["items","vip"]);
+  assert.deepEqual(firstPoll.body.deliveries[0].items,
+    [{itemId:"minecraft:diamond",quantity:2}]);
+  assert.equal(firstPoll.body.deliveries[1].rankTag,"ncbr:vip_explorer");
+  assert.equal(firstPoll.body.deliveries[1].days,30);
+
+  // An actual Core would only report inventory_full before writing a receipt.
+  // The simulated executor sends that safe pre-receipt result here.
+  await restartServer();
+  const nack=await tlsPost("/delivery/nack",
+    {deliveryId:labItem,reason:"inventory_full",receipt:"none"},
+    await tlsChallenge());
+  assert.equal(nack.status,200);
+  assert.equal(nack.body.retryable,true);
+  const secondPoll=await tlsPost("/delivery/poll",
+    {gamertag:"Local Tester"},await tlsChallenge());
+  assert.equal(secondPoll.status,200);
+  assert.deepEqual(secondPoll.body.deliveries.map((d:any)=>d.id),[labItem]);
+
+  const staleNonce=await tlsChallenge();
+  await restartServer();
+  assert.equal((await tlsPost("/delivery/ack",
+    {deliveryId:labItem,result:"applied"},staleNonce)).status,401);
+  const kitAck=await tlsPost("/delivery/ack",
+    {deliveryId:labItem,result:"applied"},await tlsChallenge());
+  assert.equal(kitAck.status,200);
+  assert.equal((await labBridge.inspect(labItem)).status,"acknowledged");
+  // Provider-side refund BEFORE local reconciliation cannot become a clean ACK.
+  provider=ordersFixture(labId,"29.99","refunded");
+  const vipAck=await tlsPost("/delivery/ack",
+    {deliveryId:labVip,result:"applied"},await tlsChallenge());
+  assert.equal(vipAck.status,409);
+  assert.equal((await labBridge.inspect(labVip)).status,"refund_after_grant_review");
+  const postRefund=await tlsPost("/delivery/poll",
+    {gamertag:"Local Tester"},await tlsChallenge());
+  assert.equal(postRefund.status,200);
+  assert.deepEqual(postRefund.body.deliveries,[]);
+  await api.reconcile(labId);
+  assert.equal((await labBridge.block(labItem)).status,"refunded_after_ack");
+  console.log("PASS real local Firestore + mocked approved Pix GET + TLS BDS protocol + safe inventory retry + restart ACK + refund review; no live grant");
+} finally {
+  if(tlsServer?.listening)await new Promise<void>(resolve=>tlsServer.close(()=>resolve()));
+  fsTLS.rmSync(labDir,{recursive:true,force:true});
+}
+
 await db.terminate();
