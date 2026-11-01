@@ -75,6 +75,30 @@ function setup() {
     gets: () => gets,
   };
 }
+test("Pix refuses unverified receiver before ANY Firestore write, coupon reservation or provider POST", async () => {
+  const s = setup();
+  const before = [...s.db.records.entries()].map(([k, v]) => [k, structuredClone(v)]);
+  s.gateway.me = async () => ({ id: 42, netcraftTestAccount: false });
+  await assert.rejects(
+    () => s.api.create(input, "reject-real-account-before-write-123"),
+    /Recebedor não identificado como conta de teste/,
+  );
+  assert.equal(s.creates(), 0);
+  assert.deepEqual([...s.db.records.entries()], before);
+});
+
+test("Pix returns validation errors for malformed cart inputs without opening a provider request", async () => {
+  const s = setup();
+  for (const body of [null, {}, { ...input, lines: [] }, { ...input, lines: [{ productType: "product", productId: "kit", quantity: 0 }] }]) {
+    await assert.rejects(
+      () => s.api.create(body, "invalid-carts-must-not-create-123"),
+      (error: any) => error.status === 400,
+    );
+  }
+  assert.equal(s.creates(), 0);
+  assert.equal([...s.db.records.keys()].some(k => k.startsWith("pixTestOrders/")), false);
+});
+
 test("Orders Pix request explicitly uses automatic processing with the documented method", () => {
   const request = orderRequest(
     { id: "local-order", totalCents: 2500 },
