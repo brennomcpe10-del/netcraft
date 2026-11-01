@@ -236,4 +236,64 @@ console.log("PASS signed localhost delivery client: offline, authenticated poll,
   await new Promise<void>(resolve => server.close(() => resolve()));
 }
 
+
+// Fase v0.3: the real private Pix TEST outbox created by pixService is
+// independently reverified against a simulated Orders GET and leased locally.
+// This is an emulator-only integration, never a commercial BDS dispatcher.
+const { createIsolatedPixOutboxBridge } =
+  await import("../server/delivery/isolatedPixOutboxBridge.ts");
+const nextKey = crypto.randomUUID();
+const nextId = crypto.createHash("sha256").update(nextKey).digest("hex");
+const nextInput = {
+  lines: [
+    { productId: "pix-fixture", productType: "product", quantity: 1 },
+    { productId: "pix-vip", productType: "vip", quantity: 1 },
+  ],
+  gamertag: "Local Tester",
+  email: "local@testuser.com",
+  cpf: "12345678909",
+};
+const nextOrder = await api.create(nextInput, nextKey);
+assert.equal(nextOrder.state, "pending");
+const mkBridge = () => createIsolatedPixOutboxBridge(db, gateway, {
+  vipMappings: { "pix-vip": {
+    rankTag: "ncbr:vip_explorer", duration: "30 dias", days: 30,
+  } },
+});
+let bridge = mkBridge();
+assert.equal((await bridge.offer(nextId + "-0", true)).status, "held");
+provider = ordersFixture(nextId, "29.99", "approved");
+await api.reconcile(nextId);
+const pendingJobs = await db.collection("pixTestDeliveries")
+  .where("orderId", "==", nextId).get();
+assert.equal(pendingJobs.size, 2);
+const itemId = nextId + "-0", vipId = nextId + "-1";
+const firstOffer = await bridge.offer(itemId, false);
+assert.equal(firstOffer.status, "held");
+const concurrentOffers = await Promise.all([
+  bridge.offer(itemId, true), bridge.offer(itemId, true),
+]);
+assert.equal(concurrentOffers.filter(o => o.status === "offered").length, 1);
+assert.deepEqual(
+  (concurrentOffers.find(o => o.status === "offered") as any).payload.items,
+  [{ itemId: "minecraft:diamond", quantity: 2 }],
+);
+assert.equal((await bridge.acknowledge(itemId, "inventory_full")).status, "held");
+assert.equal((await bridge.acknowledge(itemId, "applied")).status, "acknowledged");
+const vipOffer = await bridge.offer(vipId, true);
+assert.equal(vipOffer.status, "offered");
+assert.equal((vipOffer as any).payload.days, 30);
+assert.equal((await bridge.acknowledge(vipId, "applied")).status, "acknowledged");
+bridge = mkBridge();
+assert.equal((await bridge.offer(itemId, true)).status, "held");
+assert.equal((await bridge.offer(vipId, true)).status, "held");
+assert.equal((await bridge.inspect(itemId)).status, "acknowledged");
+provider = ordersFixture(nextId, "29.99", "refunded");
+await api.reconcile(nextId);
+assert.equal((await bridge.offer(itemId, true)).status, "held");
+assert.equal((await bridge.block(itemId)).status, "refunded_after_ack");
+assert.equal((await bridge.block(vipId)).status, "refunded_after_ack");
+console.log("PASS isolated emulator Pix order → authenticated approval GET → durable kit/VIP leases → ACK/restart → refund review, no real dispatch");
+
+
 await db.terminate();
