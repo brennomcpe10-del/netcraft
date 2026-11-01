@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import crypto from "node:crypto";
+import { createVerifiedCoreLabEngine } from "../minecraft/delivery-v031-core-lab/core_delivery_lab_v031.js";
+import { validateVerifiedOutboxResponse } from "../minecraft/delivery-e2e-local/verified_outbox_protocol.js";
 
 if(process.env.NC_FIXTURE_LOCAL_TEST!=="1"||process.env.VERCEL_ENV||
    process.env.MERCADOPAGO_ACCESS_TOKEN||process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
@@ -83,6 +85,37 @@ async function challenge(){
  return response.data.nonce;
 }
 const assert=(value,label)=>{if(!value)throw Error(label);};
+// The real Core executor runs with a synthetic world / player, not a BDS
+// binary. This complements (does not replace) the cloned-world runtime test.
+const receipts=new Map(), inventory=[];
+let freeSlots=0, vipGrants=0;
+const fakePlayer={
+ isValid:true,name:player,
+ getComponent:()=>({container:{
+  isValid:true,
+  get emptySlotsCount(){return freeSlots-inventory.length;},
+  addItem:(stack)=>{inventory.push(stack);return undefined;},
+ }})
+};
+const world={
+ getAllPlayers:()=>[fakePlayer],
+ getDynamicProperty:(id)=>receipts.get(id),
+ setDynamicProperty:(id,value)=>{receipts.set(id,value);}
+};
+class ItemStack {
+ maxAmount=64;
+ constructor(typeId,amount){
+  if(!["minecraft:diamond","minecraft:iron_ingot"].includes(typeId))
+    throw Error("unsupported_fixture_item");
+  this.typeId=typeId;this.amount=amount;
+ }
+}
+const Server={VIPSystem:{
+ vipRanks:{get:(id)=>id==="ncbr:vip_explorer"?{}:null},
+ getVIP:()=>null,
+ grantDeliveryVIPLab:()=>{vipGrants++;return "applied";},
+}};
+const core=()=>createVerifiedCoreLabEngine({world,ItemStack,Server});
 try{
  await launch();
  const health=await fetch(root+"/health").then(r=>r.json());
@@ -96,6 +129,15 @@ try{
    first.data.deliveries.length===2,"two_fixture_offers_missing");
  assert(first.data.deliveries[0].id===kit&&first.data.deliveries[1].id===vip,
    "fixture_identity_mismatch");
+ const jobs=validateVerifiedOutboxResponse(first.data,player);
+ assert(jobs?.length===2,"bedrock_rejects_untrusted_payload");
+ assert(core().execute(jobs[0]).status==="inventory_full",
+   "inventario_cheio_must_not_write_receipt");
+ assert(core().receiptStatus(kit)==="none","inventory_full_has_no_receipt");
+ assert(core().execute(jobs[1]).status==="applied","vip_lab_grant_failed");
+ assert(vipGrants===1,"vip_grant_count_invalid");
+ assert((await post("/delivery/ack",{deliveryId:vip,result:"applied"},await challenge())).status===200,
+   "vip_ack_failed");
  assert((await post("/delivery/poll",{gamertag:player},n)).status===401,"nonce_replay");
  const pending=await challenge();
  await stop();
@@ -107,14 +149,27 @@ try{
  const retry=await post("/delivery/poll",{gamertag:player},await challenge());
  assert(retry.status===200&&retry.data.deliveries.length===1&&retry.data.deliveries[0].id===kit,
    "safe_retry_not_exact");
+ freeSlots=2;
+ const verifiedRetry=validateVerifiedOutboxResponse(retry.data,player);
+ assert(verifiedRetry?.length===1,"bedrock_retry_payload_invalid");
+ assert(core().execute(verifiedRetry[0]).status==="applied","kit_lab_grant_failed");
+ assert(inventory.length===2&&
+   inventory[0].typeId==="minecraft:diamond"&&inventory[0].amount===3&&
+   inventory[1].typeId==="minecraft:iron_ingot"&&inventory[1].amount===6,
+   "kit_inventory_incorrect");
  assert((await post("/delivery/ack",{deliveryId:kit,result:"applied"},await challenge())).status===200,
    "kit_ack_failed");
- assert((await post("/delivery/ack",{deliveryId:vip,result:"applied"},await challenge())).status===200,
-   "vip_ack_failed");
+ assert(core().execute(jobs[0]).status==="already_applied","duplicate_kit_receipt");
+ assert(core().execute(jobs[1]).status==="already_applied","duplicate_vip_receipt");
+ assert(vipGrants===1,"duplicate_vip_grant");
  await stop();await launch();
  const replay=await post("/delivery/poll",{gamertag:player},await challenge());
  assert(replay.status===200&&replay.data.deliveries.length===0,"acks_lost_on_restart");
- console.log("PASS: real LOCAL workerd SQLite fixture: two grants, nonce, TLS-ready protocol, ACK, NACK, restart and replay. NO real Pix or Minecraft.");
+ assert(core().execute(jobs[0]).status==="already_applied"&&
+   core().execute(jobs[1]).status==="already_applied",
+   "persistent_bedrock_receipts_missing");
+ assert(inventory.length===2&&vipGrants===1,"duplicate_grant_after_restart");
+ console.log("PASS: real LOCAL workerd SQLite + Core executor sandbox: kit, VIP, inventory full, safe retry, ACK, restart and zero duplicate grants. NO real Pix or BDS.");
 }finally{
  await stop();
  rmSync(folder,{recursive:true,force:true});
