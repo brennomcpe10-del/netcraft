@@ -113,7 +113,7 @@ if (require.main === module) {
   const token = JSON.parse(fs.readFileSync(path.join(dir, "synthetic.json"), "utf8"))
     .nc_gate_c_synthetic;
   const server = createGateC2Server({
-    pfx: fs.readFileSync(path.join(dir, "cert.pfx")),
+    pfx: fs.readFileSync(path.join(dir, "gate-c2-cert.pfx")),
     passphrase: process.env.NC_GATE_C_PFX_PASSWORD,
     token,
   });
