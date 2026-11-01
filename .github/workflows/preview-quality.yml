@@ -296,3 +296,39 @@ jobs:
           } finally {
             Get-NetFirewallRule -Name $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
           }
+      - name: Validate all four NetherNet firewall rule shapes without interactive prompts
+        shell: pwsh
+        run: |
+          $source = Get-Content scripts/netcraft-delivery-nethernet-phone.ps1 -Raw
+          if (-not $source.Contains('Name=$name;DisplayName=$name;')) {
+            throw 'NewRule must pass mandatory DisplayName; otherwise PowerShell hangs prompting the user'
+          }
+          $prefix = 'NCBR-NetherNet-ShapeCI-'
+          $app = "$env:WINDIR\System32\notepad.exe"
+          $specs = @(
+            @{Name='In';Dir='Inbound';Action='Block';Remote='Internet';Protocol=$null;Port=$null},
+            @{Name='Out';Dir='Outbound';Action='Block';Remote='Internet';Protocol=$null;Port=$null},
+            @{Name='PhoneTCP';Dir='Inbound';Action='Allow';Remote='192.168.1.2';Protocol='TCP';Port=19142},
+            @{Name='PhoneUDP';Dir='Inbound';Action='Allow';Remote='192.168.1.2';Protocol='UDP';Port=$null}
+          )
+          try {
+            foreach ($spec in $specs) {
+              $name = "$prefix$($spec.Name)"
+              $opts = @{Name=$name;DisplayName=$name;Direction=$spec.Dir;
+                Action=$spec.Action;Program=$app;RemoteAddress=$spec.Remote;
+                Profile='Private';Enabled='True';ErrorAction='Stop'}
+              if ($spec.Protocol) { $opts.Protocol = $spec.Protocol }
+              if ($spec.Port) { $opts.LocalPort = $spec.Port }
+              if ($spec.Action -eq 'Allow') { $opts.LocalAddress = '127.0.0.1' }
+              New-NetFirewallRule @opts | Out-Null
+              $created = Get-NetFirewallRule -Name $name -ErrorAction Stop
+              $remote = ($created | Get-NetFirewallAddressFilter).RemoteAddress
+              if ($remote -ne $spec.Remote) { throw "Unexpected remote scope: $name => $remote" }
+            }
+            Write-Host 'PASS: all four firewall rule shapes were created without prompts on Windows'
+          } finally {
+            foreach ($spec in $specs) {
+              Get-NetFirewallRule -Name "$prefix$($spec.Name)" -ErrorAction SilentlyContinue |
+                Remove-NetFirewallRule -ErrorAction SilentlyContinue
+            }
+          }
