@@ -46,12 +46,16 @@ export function draftCoreDelivery(input: {
       !Array.isArray(p.items) || p.items.length < 1 || p.items.length > 36)
     return no("reward_review_required");
   const items = new Map<string, number>();
+  let totalUnits = 0;
   for (const item of p.items) {
     if (!item || !/^minecraft:[a-z0-9_]+$/.test(item.itemId) ||
         !Number.isSafeInteger(item.quantity) || item.quantity < 1 ||
         item.quantity > 2304) return no("reward_review_required");
     const count = (items.get(item.itemId) ?? 0) + item.quantity;
-    if (count > 2304) return no("reward_review_required");
+    totalUnits += item.quantity;
+    // Same 2,304-item ceiling as the BDS clone executor.
+    if (count > 2304 || totalUnits > 2304)
+      return no("reward_review_required");
     items.set(item.itemId, count);
   }
   if (items.size > 36) return no("reward_review_required");
