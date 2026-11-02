@@ -106,6 +106,78 @@ assert.equal(first.discountCents, 500);
 assert.equal(first.state, "pending");
 await api.create(input, key);
 assert.equal(calls, 1);
+// Real Firestore transaction test: while worker A is waiting for Mercado Pago,
+// workers B/C must return the SAME reserved order without issuing another POST.
+{
+  const concurrentKey=crypto.randomUUID();
+  const duplicateInput={...input,couponCode:""};
+  let createCalls=0, providerKeys:string[]=[];
+  let unblock!:()=>void, entered!:()=>void;
+  const hold=new Promise<void>(resolve=>{unblock=resolve;});
+  const providerStarted=new Promise<void>(resolve=>{entered=resolve;});
+  const reservedResource=ordersFixture(
+    crypto.createHash("sha256").update(concurrentKey).digest("hex"),
+    "49.98",
+  );
+  reservedResource.id="ORD"+"Q".repeat(26);
+  reservedResource.transactions.payments[0].id="PAY"+"Q".repeat(26);
+  let currentResource=structuredClone(reservedResource);
+  const concurrentGateway:any={
+    me: async()=>({id:42,netcraftTestAccount:true}),
+    create: async(_body:any,providerKey:string)=>{
+      createCalls++;
+      providerKeys.push(providerKey);
+      entered();
+      await hold;
+      return structuredClone(reservedResource);
+    },
+    get: async(providerId:string)=>{
+      assert.equal(providerId,reservedResource.id);
+      return structuredClone(currentResource);
+    },
+  };
+  const concurrentApi=pixService(db,concurrentGateway);
+  const ongoing=concurrentApi.create(duplicateInput,concurrentKey);
+  await providerStarted;
+  const duplicates=await Promise.all([
+    concurrentApi.create(duplicateInput,concurrentKey),
+    concurrentApi.create(duplicateInput,concurrentKey),
+  ]);
+  assert.ok(duplicates.every(x=>x.state==="creating"));
+  assert.equal(new Set(duplicates.map(x=>x.id)).size,1);
+  assert.equal(createCalls,1,"only one provider POST before first response");
+  unblock();
+  const confirmed=await ongoing;
+  assert.equal(confirmed.state,"pending");
+  await Promise.all([
+    concurrentApi.create(duplicateInput,concurrentKey),
+    concurrentApi.create(duplicateInput,concurrentKey),
+  ]);
+  assert.equal(createCalls,1,"retries must not re-create paid/order resources");
+  assert.equal(new Set(providerKeys).size,1);
+  const concurrentId=confirmed.id;
+  const binding=await db.doc("pixTestProviderOrderBindings/"+reservedResource.id).get();
+  assert.equal(binding.data()?.orderId,concurrentId);
+  currentResource=ordersFixture(concurrentId,"49.98","approved");
+  currentResource.id=reservedResource.id;
+  currentResource.transactions.payments[0].id=reservedResource.transactions.payments[0].id;
+  await Promise.all(Array.from({length:5},()=>concurrentApi.reconcile(concurrentId)));
+  const related=await db.collection("pixTestDeliveries").where("orderId","==",concurrentId).get();
+  assert.equal(related.size,2,"one deterministic reward job per line");
+  for(const job of related.docs) assert.equal(job.data().dispatchEnabled,false);
+  const paymentBinding=await db.doc("pixTestProviderPaymentBindings/"+
+    reservedResource.transactions.payments[0].id).get();
+  assert.equal(paymentBinding.data()?.orderId,concurrentId);
+  currentResource={...currentResource,status:"refunded",status_detail:"refunded",
+    transactions:{payments:[{...currentResource.transactions.payments[0],
+      status:"refunded",status_detail:"refunded"}]}};
+  await Promise.all([concurrentApi.reconcile(concurrentId),concurrentApi.reconcile(concurrentId)]);
+  const blocked=await db.collection("pixTestDeliveries").where("orderId","==",concurrentId).get();
+  assert.equal(blocked.size,2);
+  for(const job of blocked.docs) assert.equal(job.data().state,"blocked");
+  assert.equal((await concurrentApi.view(concurrentId)).state,"refunded");
+  console.log("PASS real Firestore concurrent checkout lease, unique provider bindings, repeat GETs and refund isolation");
+}
 provider = ordersFixture(first.id, "44.98", "approved");
 await Promise.all([api.reconcile(id), api.reconcile(id), api.reconcile(id)]);
 let jobs = await db
