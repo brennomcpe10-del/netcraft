@@ -12,12 +12,12 @@ export type CommercialGatewayReader={
  get(providerId:string):Promise<any>;
 };
 export type CommercialInspection={
- state:"pending"|"processing"|"approved"|"expired"|"cancelled"|"refunded";
+ state:"pending"|"processing"|"approved"|"expired"|"cancelled"|"refunded"|"disputed";
  providerVerified:true;
  canDispatch:false;
  requiresReview:boolean;
  reason:"payment_not_approved"|"release_not_authorized"|"refund_or_chargeback"|
-  "payment_cancelled"|"payment_expired";
+  "payment_cancelled"|"payment_expired"|"payment_disputed";
 };
 export async function inspectCommercialOrder(
  order:CommercialStoredOrder,reader:CommercialGatewayReader,
@@ -52,12 +52,22 @@ export async function inspectCommercialOrder(
     payment.payment_method?.type!=="bank_transfer"))
   throw new PixError("Transação comercial incompatível.",409);
  const expiry=payment?.date_of_expiration??"2099-01-01T00:00:00Z";
- const state=ordersState(resource,payment,expiry) as CommercialInspection["state"];
+ // "in_mediation" and related dispute states are not a confirmed
+ // settlement or a safe reason to create/restore deliveries.
+ // Full/partial refunds and chargebacks always take precedence.
+ const disputeStatus = ["in_mediation","disputed","under_review","in_dispute"];
+ const disputeDetail = ["pending_contestation","contested","in_mediation","disputed"];
+ const stateBeforeDispute=ordersState(resource,payment,expiry);
+ const state = stateBeforeDispute==="refunded" ? "refunded" :
+   [resource.status,payment?.status].some(s=>disputeStatus.includes(s)) ||
+   [resource.status_detail,payment?.status_detail].some(s=>disputeDetail.includes(s))
+   ? "disputed" : stateBeforeDispute;
  const reason=state==="refunded"?"refund_or_chargeback"
   :state==="cancelled"?"payment_cancelled"
   :state==="expired"?"payment_expired"
+  :state==="disputed"?"payment_disputed"
   :state==="approved"?"release_not_authorized"
   :"payment_not_approved";
  return {state,providerVerified:true,canDispatch:false,
-   requiresReview:state==="refunded"||state==="cancelled",reason};
+   requiresReview:state==="refunded"||state==="cancelled"||state==="disputed",reason};
 }
