@@ -64,7 +64,7 @@ test("category deletion cannot silently hide active products or VIPs",async()=>{
   const products=[{id:"kit",name:"Kit",category:"kits",active:true}];
   const vips=[{id:"vip",categoryId:"vips",active:true}];
   assert.deepEqual(activeCategoryOrphans(current,removed,products as any,vips as any),["kits","vips"]);
-  assert.deepEqual(activeCategoryOrphans(current,removed,[{...products[0],active:false}] as any,[]),["vips"]);
+  assert.deepEqual(activeCategoryOrphans(current,removed,[{...products[0],active:false}] as any,vips as any),["vips"]);
   assert.deepEqual(activeCategoryOrphans(current,current,products as any,vips as any),[]);
 });
 test("categories reject unsafe local traversal, malformed HTTPS hosts and SVG uploads",()=>{
