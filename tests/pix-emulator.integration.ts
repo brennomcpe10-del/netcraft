@@ -471,4 +471,81 @@ try {
   fsTLS.rmSync(labDir,{recursive:true,force:true});
 }
 
+
+/* Isolated Preview coupon regression: tests only Firestore Emulator data.
+ * No base coupons/products are modified; Pix grant dispatch remains OFF. */
+{
+ const previousStage=process.env.VERCEL_ENV;
+ try {
+  process.env.VERCEL_ENV="preview";
+  const {readCoupon,listCoupons,findCouponByCode,couponWriteReference}=
+    await import("../server/services/previewCoupons.ts");
+  await db.doc("previewCoupons/preview-test").set({
+   id:"preview-test",code:"PREVIEW20",active:true,
+   discountType:"percentage",discountValue:20,
+   minOrderValue:0,maxUses:2,usedCount:0,
+  });
+  await db.doc("previewCoupons/fixture").set({
+   id:"fixture",code:"LOCALTEST",active:false,
+   discountType:"percentage",discountValue:10,
+   minOrderValue:0,maxUses:1,usedCount:0,
+  });
+  assert.equal(couponWriteReference("preview-test",db).path,"previewCoupons/preview-test");
+  assert.equal((await readCoupon("fixture",undefined,db))?.active,false,
+   "Preview override must hide live coupon availability");
+  assert.equal((await db.doc("coupons/fixture").get()).data()?.active,true,
+   "Production baseline must remain unchanged");
+  assert.equal((await findCouponByCode("PREVIEW20",undefined,db))?.id,"preview-test");
+  const previewList=await listCoupons(db);
+  assert.equal(previewList.filter(x=>x.code==="PREVIEW20").length,1);
+
+  const previewApp=expressQuote();
+  previewApp.use(expressQuote.json());
+  previewApp.use("/api",apiRouter);
+  const previewHttp=previewApp.listen(0,"127.0.0.1");
+  await new Promise<void>((resolve,reject)=>{
+   previewHttp.once("listening",resolve);
+   previewHttp.once("error",reject);
+  });
+  try {
+   const url="http://127.0.0.1:"+(previewHttp.address() as any).port+"/api/cart/quote";
+   const reply=await fetch(url,{method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({lines:[{productId:"pix-fixture",productType:"product",quantity:1}],
+     couponCode:"PREVIEW20"})});
+   assert.equal(reply.status,200);
+   const quoted=await reply.json();
+   assert.equal(quoted.subtotalCents,1999);
+   assert.equal(quoted.discountCents,400);
+   assert.equal(quoted.totalCents,1599);
+  }finally{
+   previewHttp.closeAllConnections();
+   await new Promise<void>(resolve=>previewHttp.close(()=>resolve()));
+  }
+  const previewKey=crypto.randomUUID();
+  const previewPix=await pixService(db,gateway).create({
+   ...input,
+   couponCode:"PREVIEW20",
+   lines:[{productId:"pix-fixture",productType:"product",quantity:1}],
+  },previewKey);
+  assert.equal(previewPix.totalCents,1599);
+  assert.equal(previewPix.discountCents,400);
+  assert.equal(previewPix.environment,"test");
+  assert.equal((await db.doc("pixTestCouponUsage/preview-test").get())
+   .data()?.reservedCount,1);
+  assert.equal((await db.doc("coupons/fixture").get()).data()?.usedCount,0);
+
+  await db.doc("previewCoupons/preview-test").set({
+   id:"preview-test",__previewDeleted:true,
+  });
+  assert.equal(await readCoupon("preview-test",undefined,db),null);
+  assert.equal(await findCouponByCode("PREVIEW20",undefined,db),null);
+  assert.equal((await db.doc("coupons/fixture").get()).data()?.active,true);
+  console.log("PASS Preview coupon copy-on-write, server quote and Pix Test price agreement; baseline unchanged");
+ }finally{
+  if(previousStage===undefined)delete process.env.VERCEL_ENV;
+  else process.env.VERCEL_ENV=previousStage;
+ }
+}
+
 await db.terminate();
