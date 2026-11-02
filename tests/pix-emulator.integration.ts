@@ -28,6 +28,51 @@ await db.doc("coupons/fixture").set({
   maxUses: 1,
   usedCount: 0,
 });
+// HTTP cart quote must agree with the same authoritative catalog and
+// coupon used by the transactional Pix creator. This is an isolated emulator.
+const { default: express } = await import("express");
+const { apiRouter } = await import("../server/routes/api.ts");
+const { once: serverReady } = await import("node:events");
+const quoteApp = express();
+quoteApp.use(express.json());
+quoteApp.use("/api",apiRouter);
+const quoteServer=quoteApp.listen(0,"127.0.0.1");
+await serverReady(quoteServer,"listening");
+const quoteBase="http://127.0.0.1:"+(quoteServer.address() as any).port;
+const getQuote=async (body:unknown)=>{
+ const response=await fetch(quoteBase+"/api/cart/quote",{
+  method:"POST",headers:{"content-type":"application/json"},
+  body:JSON.stringify(body),
+ });
+ return {status:response.status,body:await response.json()};
+};
+const quoteLines=[
+ {productId:"pix-fixture",productType:"product",quantity:2},
+ {productId:"pix-vip",productType:"vip",quantity:1},
+];
+try {
+ const quoted=await getQuote({lines:quoteLines,couponCode:" localtest "});
+ assert.equal(quoted.status,200);
+ assert.equal(quoted.body.subtotalCents,4998);
+ assert.equal(quoted.body.discountCents,500);
+ assert.equal(quoted.body.totalCents,4498);
+ assert.equal(quoted.body.couponCode,"LOCALTEST");
+ assert.equal(quoted.body.combinedPaymentAvailable,true);
+ assert.equal((await db.doc("pixTestCouponUsage/fixture").get()).exists,false,
+   "read-only quote must never reserve coupon");
+ const invalid=await getQuote({lines:[{...quoteLines[0],quantity:99}]});
+ assert.equal(invalid.status,400);
+ const fakeDiscount=await getQuote({lines:quoteLines,discountCents:4000});
+ assert.equal(fakeDiscount.status,200);
+ assert.equal(fakeDiscount.body.totalCents,4998,
+   "client cannot forge the total/discount");
+ const nonexisting=await getQuote({lines:quoteLines,couponCode:"UNKNOWN"});
+ assert.equal(nonexisting.status,400);
+} finally {
+ quoteServer.closeAllConnections();
+ await new Promise<void>(resolve=>quoteServer.close(()=>resolve()));
+}
+
 let provider: any;
 let calls = 0;
 const gateway: any = {
