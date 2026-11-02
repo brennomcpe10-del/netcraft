@@ -14,6 +14,7 @@ function harness() {
     get:(key:string)=>data.get(key),
     put:(key:string,value:unknown)=>{data.set(key,value);},
     delete:(key:string)=>{data.delete(key);},
+    list:({prefix}:{prefix:string})=>[...data.entries()].filter(([key])=>key.startsWith(prefix)),
   }}};
   let gate = new FixtureDeliveryGate(ctx);
   const env = {
@@ -114,4 +115,20 @@ test("replay, stale timestamps and unsafe NACK cannot release a previously offer
   assert.equal(unsafe.status,409);
   const unconfirmed=await h.post("/delivery/poll",{gamertag:player},await h.nonce());
   assert.deepEqual(unconfirmed.data.deliveries,[]);
+});
+
+test("nonce storage prunes stale records and caps outstanding challenges",async()=>{
+  const h=harness();
+  let oldest="";
+  for(let i=0;i<128;i++){
+    const response=await h.post("/delivery/challenge");
+    assert.equal(response.status,200,"legitimate challenge "+i);
+    if(i===0)oldest=response.data.nonce;
+  }
+  const full=await h.post("/delivery/challenge");
+  assert.equal(full.status,503,"no extra challenge when DO is at capacity");
+  const claim=await h.post("/delivery/poll",{gamertag:player},oldest);
+  assert.equal(claim.status,200,"existing valid challenge must still work");
+  assert.equal((await h.post("/delivery/challenge")).status,200,
+    "consuming one challenge must free capacity without restarting");
 });
