@@ -517,11 +517,24 @@ function couponDraft(input:any,id:string,previous?:any) {
  const minOrderValue=Number(input?.minOrderValue ?? previous?.minOrderValue ?? 0);
  const maxUsesRaw=input?.maxUses ?? previous?.maxUses;
  const maxUses=maxUsesRaw===null||maxUsesRaw===undefined||maxUsesRaw===''?null:Number(maxUsesRaw);
+ const expiresAt=input?.expiresAt ?? previous?.expiresAt ?? null;
+ if(input?.active!==undefined && typeof input.active!=='boolean')
+  throw new ProductCatalogError('Estado do cupom inválido.',400);
+ if(expiresAt!==null && (typeof expiresAt!=='string' ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(expiresAt) ||
+    !Number.isFinite(Date.parse(expiresAt))))
+  throw new ProductCatalogError('Data de validade do cupom inválida.',400);
+ if(input?.description!==undefined && (typeof input.description!=='string' ||
+    input.description.length>1000))
+  throw new ProductCatalogError('Descrição do cupom inválida.',400);
  if(!/^[a-zA-Z0-9_-]{2,128}$/.test(id) || !/^[A-Z0-9_-]{2,50}$/.test(code) ||
    !['percentage','fixed'].includes(discountType) ||
    !Number.isFinite(discountValue)||discountValue<=0||
    (discountType==='percentage'&&discountValue>100) ||
-   !Number.isFinite(minOrderValue)||minOrderValue<0 ||
+   !Number.isFinite(minOrderValue)||minOrderValue<0||minOrderValue>10000 ||
+   Math.abs(minOrderValue*100-Math.round(minOrderValue*100))>0.000001 ||
+   (discountType==='fixed' && (discountValue>10000 ||
+     Math.abs(discountValue*100-Math.round(discountValue*100))>0.000001)) ||
    (maxUses!==null&&(!Number.isSafeInteger(maxUses)||maxUses<1)))
   throw new ProductCatalogError('Confira o código e as regras do cupom.',400);
  const now=new Date().toISOString();
@@ -529,7 +542,7 @@ function couponDraft(input:any,id:string,previous?:any) {
   ...previous,
   id,code,discountType,discountValue,minOrderValue,maxUses,
   usedCount:Number(previous?.usedCount || 0),
-  expiresAt:input?.expiresAt ?? previous?.expiresAt ?? null,
+  expiresAt,
   active:input?.active !== undefined ? input.active === true : previous?.active !== false,
   description:String(input?.description ?? previous?.description ?? '').slice(0,1000),
   createdAt:previous?.createdAt || now,updatedAt:now
