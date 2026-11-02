@@ -102,7 +102,10 @@ export function normalizeProduct(
   }
   if (data.livepixUrl?.trim() && !/^https?:\/\//i.test(data.livepixUrl.trim()))
     throw new Error("O link LivePix deve começar com http:// ou https://.");
-  validateRewardDraft(data.rewardDraft);
+  // An empty editor draft is not a configured Minecraft reward. Saving it
+  // as a reward would block an otherwise valid TEST checkout.
+  const rewardDraft = data.rewardDraft?.items?.length ? data.rewardDraft : undefined;
+  validateRewardDraft(rewardDraft);
   const result: Product = {
     ...data,
     id: data.id,
@@ -117,6 +120,7 @@ export function normalizeProduct(
     featured: data.featured === true,
     allowQuantity: data.allowQuantity !== false,
     maxQuantity: data.allowQuantity === false ? 1 : max,
+    rewardDraft,
     livepixUrl:
       typeof data.livepixUrl === "string" ? data.livepixUrl.trim() : "",
     pixUrl: typeof data.pixUrl === "string" ? data.pixUrl.trim() : "",
@@ -144,7 +148,7 @@ export function draftProduct(category: string, products: Product[]): Product {
       ) + 1,
     allowQuantity: true,
     maxQuantity: 64,
-    rewardDraft: { version: 1, items: [] },
+    // No reward exists until the administrator configures at least one item.
   };
 }
 export function adminProductList(
