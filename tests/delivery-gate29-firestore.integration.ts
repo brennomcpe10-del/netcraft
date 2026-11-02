@@ -198,7 +198,6 @@ try{
  assert.equal(fullWorld.engine().execute(after.payload).status,"already_applied");
  assert.equal(fullWorld.stacks.length,2);
  // Every queued job was explicitly OFF. No public dispatch route or worker.
- for(const current of [first.item0,first.id]){void current;}
  for(const target of [first.job(0),first.job(1),lost.job(0),held.job(0)]){
   const snap=await db.doc("pixCommercialDeliveries/"+target).get();
   assert.equal(snap.data()?.dispatchEnabled,false);
