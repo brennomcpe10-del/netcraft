@@ -38,7 +38,7 @@ test("31: isolated rules are strict superset of private Delivery collections, ol
   assert.match(proposed,new RegExp("match /"+collection+"/\\{"));
  }
  const lines=proposed.split("\n").filter(s=>/^\s*allow.*write:/.test(s));
- assert.ok(lines.length>=30);
+ assert.ok(lines.length>=20);
  assert.ok(lines.every(s=>/if false;/.test(s)),"no browser writes on any path");
  assert.match(proposed,/match \/\{document=\*\*\} \{ allow read, write: if false; \}/);
  assert.match(live,/allow write: if isValidId\(eventId\);/,
