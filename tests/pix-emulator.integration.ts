@@ -508,7 +508,45 @@ try {
    previewHttp.once("error",reject);
   });
   try {
-   const url="http://127.0.0.1:"+(previewHttp.address() as any).port+"/api/cart/quote";
+   const base="http://127.0.0.1:"+(previewHttp.address() as any).port+"/api";
+   const prevAdminKey=process.env.ADMIN_KEYWORD;
+   process.env.ADMIN_KEYWORD="local-emulator-admin-only";
+   try {
+    const {generateAdminToken}=await import("../server/auth/admin.ts");
+    const token=generateAdminToken();
+    const adminCall=async(path:string,method:string,body?:unknown,authorized=true)=>{
+     const response=await fetch(base+path,{
+      method,headers:{"content-type":"application/json",
+       ...(authorized?{authorization:"Bearer "+token}:{})},
+      ...(body===undefined?{}:{body:JSON.stringify(body)}),
+     });
+     return {status:response.status,data:await response.json()};
+    };
+    const doc={id:"preview-crud",code:"CRUD15",discountType:"percentage",
+     discountValue:15,minOrderValue:0,maxUses:3,active:true};
+    assert.equal((await adminCall("/admin/coupons","POST",doc,false)).status,401);
+    const created=await adminCall("/admin/coupons","POST",doc);
+    assert.equal(created.status,201);
+    assert.equal((await db.doc("coupons/preview-crud").get()).exists,false,
+     "Preview coupon creation MUST NOT write baseline");
+    assert.equal((await db.doc("previewCoupons/preview-crud").get()).exists,true);
+    const loaded=await adminCall("/admin/coupons","GET");
+    assert.equal(loaded.status,200);
+    assert.equal(loaded.data.filter((c:any)=>c.id==="preview-crud").length,1);
+    const modified=await adminCall("/admin/coupons/preview-crud","PUT",{
+     ...doc,code:"CRUD18",discountValue:18,active:false
+    });
+    assert.equal(modified.status,200);
+    assert.equal((await findCouponByCode("CRUD18",undefined,db))?.active,false);
+    assert.equal(await findCouponByCode("CRUD15",undefined,db),null);
+    assert.equal((await adminCall("/admin/coupons/preview-crud","DELETE")).status,200);
+    assert.equal((await db.doc("previewCoupons/preview-crud").get()).data()?.__previewDeleted,true);
+    assert.equal((await db.doc("coupons/preview-crud").get()).exists,false);
+   }finally{
+    if(prevAdminKey===undefined)delete process.env.ADMIN_KEYWORD;
+    else process.env.ADMIN_KEYWORD=prevAdminKey;
+   }
+   const url=base+"/cart/quote";
    const reply=await fetch(url,{method:"POST",
     headers:{"content-type":"application/json"},
     body:JSON.stringify({lines:[{productId:"pix-fixture",productType:"product",quantity:1}],
