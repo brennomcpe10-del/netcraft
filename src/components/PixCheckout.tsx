@@ -18,9 +18,12 @@ const money = (v: number) =>
 export function PixCheckout({
   lines,
   disabled,
+  couponCode: quotedCoupon,
 }: {
   lines: CartLine[];
   disabled: boolean;
+  /** Applied coupon from CartView's server-authoritative quote. */
+  couponCode?: string;
 }) {
   const [available, setAvailable] = useState(false),
     [configChecking, setConfigChecking] = useState(true),
@@ -28,7 +31,7 @@ export function PixCheckout({
     [gamertag, setGamertag] = useState(""),
     [email, setEmail] = useState(""),
     [cpf, setCpf] = useState(""),
-    [couponCode, setCoupon] = useState(""),
+    [couponInput, setCoupon] = useState(""),
     [order, setOrder] = useState<Order | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -134,7 +137,7 @@ export function PixCheckout({
       gamertag: gamertag.trim(),
       email: email.trim(),
       cpf: cpf.replace(/\D/g, ""),
-      couponCode: couponCode.trim(),
+      couponCode: (quotedCoupon ?? couponInput).trim(),
     };
     const digest = await crypto.subtle.digest(
       "SHA-256",
@@ -279,8 +282,8 @@ export function PixCheckout({
             ["Gamertag Bedrock", gamertag, setGamertag, "text"],
             ["E-mail de teste", email, setEmail, "email"],
             ["CPF do comprador de teste", cpf, setCpf, "text"],
-            ["Cupom (opcional)", couponCode, setCoupon, "text"],
-          ].map(([label, value, set, type]) => (
+            ["Cupom (opcional)", couponInput, setCoupon, "text"],
+          ].filter(([label]) => quotedCoupon === undefined || label !== "Cupom (opcional)").map(([label, value, set, type]) => (
             <label key={String(label)} className="block text-sm">
               {String(label)}
               <input
