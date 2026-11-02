@@ -10,6 +10,7 @@ import {
 import { paymentDatabase } from "../payments/database.ts";
 import { pixService } from "../payments/service.ts";
 import {claimWebhook,completeWebhook,releaseWebhook} from "../payments/webhookReplay.ts";
+import {commercialReadiness,assertCommercialCheckoutDisabled} from "../payments/commercialBoundary.ts";
 export function createPixRouter(
   dependencies = {
     database: paymentDatabase,
@@ -40,6 +41,17 @@ export function createPixRouter(
           : "Não foi possível confirmar a operação. Seu pedido não foi marcado como pago.",
     });
   }
+  // Commercial endpoints are distinct from the sandbox Orders checkout.
+  // They never share pixTestOrders, test tokens or sandbox webhook secrets.
+  // Hard-stop all payment mutations until the release gates have been reviewed.
+  pixRouter.get("/pix/commercial/config", (_req,res)=>
+    res.status(503).json(commercialReadiness()));
+  pixRouter.post("/pix/commercial/orders", (_req,res)=>{
+    try{assertCommercialCheckoutDisabled();}
+    catch(error){return failure(res,error);}
+  });
+  pixRouter.post("/pix/commercial/webhook", (_req,res)=>
+    res.status(503).json({error:"Notificações comerciais não ativadas."}));
   pixRouter.get("/pix/config", async (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     let stage = "environment";
