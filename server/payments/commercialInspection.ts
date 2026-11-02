@@ -57,11 +57,17 @@ export async function inspectCommercialOrder(
  // Full/partial refunds and chargebacks always take precedence.
  const disputeStatus = ["in_mediation","disputed","under_review","in_dispute"];
  const disputeDetail = ["pending_contestation","contested","in_mediation","disputed"];
- const stateBeforeDispute=ordersState(resource,payment,expiry);
- const state = stateBeforeDispute==="refunded" ? "refunded" :
-   [resource.status,payment?.status].some(s=>disputeStatus.includes(s)) ||
-   [resource.status_detail,payment?.status_detail].some(s=>disputeDetail.includes(s))
-   ? "disputed" : stateBeforeDispute;
+ const statuses=[resource.status,payment?.status];
+ const details=[resource.status_detail,payment?.status_detail];
+ const isRefund= statuses.some(s=>["refunded","charged_back","chargeback"].includes(s)) ||
+   details.some(s=>["partially_refunded","refunded","charged_back","chargeback"].includes(s));
+ const isDisputed=statuses.some(s=>disputeStatus.includes(s)) ||
+   details.some(s=>disputeDetail.includes(s));
+ // Disputes must be caught even when "processed" appears beside a
+ // non-accredited status_detail: ordersState intentionally throws on such
+ // contradictory approval reports, which cannot authorize any grant.
+ const state = isRefund ? "refunded" : isDisputed ? "disputed" :
+   ordersState(resource,payment,expiry);
  const reason=state==="refunded"?"refund_or_chargeback"
   :state==="cancelled"?"payment_cancelled"
   :state==="expired"?"payment_expired"
