@@ -2,6 +2,7 @@ import {IdentityManager} from "../components/IdentityManager.tsx";
 import {RevenuePanel} from "../components/RevenuePanel.tsx";
 import {revenueReport,brasiliaPeriod} from "../lib/revenue.ts";
 import {formatStoredMoney} from '../lib/adminDisplay.ts';
+import {filterLegacyOrders,legacyOrderOverview,type LegacyFilter} from '../lib/legacyOrderMonitor.ts';
 import {ProductManager} from "../components/ProductManager.tsx";
 import {PixTestMonitor} from "../components/PixTestMonitor.tsx";
 import {CategoryManager} from "../components/CategoryManager.tsx";
@@ -108,6 +109,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
 
   // Search & filter
   const [searchQuery, setSearchQuery] = useState('');
+  const [legacyOrderFilter,setLegacyOrderFilter]=useState<LegacyFilter>("all");
+  const legacyOverview=legacyOrderOverview(orders);
   const [couponFilter, setCouponFilter] = useState<'all' | 'active' | 'inactive' | 'expired'>('all');
   const [copiedCouponCode, setCopiedCouponCode] = useState<string | null>(null);
 
@@ -914,7 +917,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-base font-bold text-white">Todos os Pedidos</h2>
-                <p className="text-zinc-500 text-[11px]">Altere status de entrega ou exclua pedidos cancelados/duplicados</p>
+                <p className="text-zinc-500 text-[11px]">
+                  Histórico legado · estados registrados no sistema, não comprovantes independentes de pagamento ou entrega.
+                  Pix de teste está separado logo abaixo.
+                </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -937,6 +943,38 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                   <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
                 </div>
               </div>
+            </div>
+
+
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2" aria-label="Estados dos pedidos históricos">
+              {([
+                ['Pedidos históricos',legacyOverview.total],
+                ['Pendentes',legacyOverview.pending],
+                ['Marcados como pagos',legacyOverview.paid],
+                ['Marcados como entregues',legacyOverview.delivered],
+                ['Cancelados/estornados',legacyOverview.closed],
+              ] as [string,number][]).map(([label,count])=>(
+                <div key={label} className="min-w-0 p-3 rounded-lg bg-white/[0.02] border border-white/10">
+                  <p className="text-zinc-400 text-[11px]">{label}</p>
+                  <strong className="text-lg font-semibold text-white tabular-nums">{count}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2 items-center">
+              <label className="text-xs text-zinc-300">
+                Filtrar pedidos históricos
+                <select aria-label="Filtrar pedidos históricos" value={legacyOrderFilter}
+                  onChange={event=>setLegacyOrderFilter(event.target.value as LegacyFilter)}
+                  className="mt-1 block min-w-0 rounded-lg bg-zinc-900 border border-white/10 text-xs text-white px-3 py-2">
+                  <option value="all">Todos</option>
+                  <option value="pending">Pendentes</option>
+                  <option value="paid">Pagos (registro)</option>
+                  <option value="delivered">Entregues (registro)</option>
+                  <option value="closed">Cancelados/reembolsados</option>
+                </select>
+              </label>
+              <button type="button" className="self-end text-xs px-3 py-2 border border-white/10 rounded-lg text-emerald-300"
+                onClick={() => void loadData()}>Atualizar pedidos históricos</button>
             </div>
 
             <section className="rounded-xl border border-white/10 bg-white/[0.02] p-4 sm:p-5 space-y-3" aria-label="Auditoria de produtos para entrega">
@@ -988,17 +1026,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
             />
 
             <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
-              {orders
-                .filter(o => {
-                  if (!searchQuery) return true;
-                  const s = searchQuery.toLowerCase();
-                  return (
-                    o.id.toLowerCase().includes(s) ||
-                    o.recipientNickname.toLowerCase().includes(s) ||
-                    o.buyerNickname.toLowerCase().includes(s) ||
-                    o.productName.toLowerCase().includes(s)
-                  );
-                })
+              {filterLegacyOrders(orders,legacyOrderFilter,searchQuery)
                 .map(order => (
                   <div key={order.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                     <div>
