@@ -54,6 +54,7 @@ jobs:
           done
           curl -fsS http://127.0.0.1:3000/ >/dev/null
           node tests/store-mobile-browser.e2e.cjs
+          node tests/admin-pix-monitor.browser.cjs
 
   fixture_workerd_sqlite:
     name: Local Cloudflare fixture DO SQLite (no deploy, no payments)
