@@ -108,9 +108,11 @@ test("15: pending, rejected and forged provider identities never enqueue candida
 test("17/18: signed TLS-only BDS messages use durable nonce, lease, ACK and safe inventory-full retry",async()=>{
  const f=fixture();
  await f.service.reconcileAndQueue(id);
+ const recordsBeforeInsecureRequest=f.db.records.size;
  await assert.rejects(()=>f.service.authenticatedRequest(
    f.signed("poll",{gamertag:"Lab Tester",online:true}),false),/verified_https_required/);
- assert.equal(f.db.records.size,3,"insecure request must not claim a nonce");
+ assert.equal(f.db.records.size,recordsBeforeInsecureRequest,
+   "insecure request must not claim a nonce or record any audit entry");
  const offline=await f.service.authenticatedRequest(
    f.signed("poll",{gamertag:"Lab Tester",online:false}),true) as any;
  assert.deepEqual(offline.deliveries,[]);
