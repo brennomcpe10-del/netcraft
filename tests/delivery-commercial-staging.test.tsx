@@ -6,6 +6,8 @@ import {createCommercialStagingService} from "../server/delivery/commercialStagi
 import {
   bdsSignature,BdsAuthError,type BdsSignedMessage,
 } from "../server/delivery/bdsSignedRequest.ts";
+// @ts-ignore -- pure JS Bedrock signing helper intentionally has no TS declarations.
+import {makeCommercialCandidateSignature} from "../minecraft/delivery-simulation/commercialCandidateSigner.js";
 
 process.env.NODE_ENV="test";
 process.env.FIRESTORE_EMULATOR_HOST="127.0.0.1:8085";
@@ -219,4 +221,19 @@ test("16: commercial candidate does not activate in Production, Preview or with 
     else process.env[name]=val;
   }
  }
+});
+
+test("17: Bedrock pure-JS signer and backend HMAC agree byte for byte",()=>{
+ const payload=JSON.stringify({gamertag:"Lab Tester",online:true});
+ const timestamp="1793620800000",nonce="1".repeat(32);
+ const js=makeCommercialCandidateSignature({
+   action:"poll",body:payload,keyId,timestamp,nonce,readSecret:()=>secret,
+ });
+ const backend=bdsSignature(secret,{action:"poll",body:payload},
+   timestamp,nonce,keyId);
+ assert.equal(js,backend);
+ assert.match(js,/^[a-f0-9]{64}$/);
+ assert.throws(()=>makeCommercialCandidateSignature({
+   action:"poll",body:payload,keyId,timestamp,nonce,readSecret:()=>"",
+ }),/missing_server_only_secret/);
 });
