@@ -78,6 +78,53 @@ await db.doc("coupons/fixture").set({
  console.log("PASS commercial-candidate local Firestore approval -> unique queue -> one lease -> idempotent ACK -> refund review; NO real dispatch");
 }
 
+// Real Firestore Emulator: process reboot while Core receipt may be lost.
+// No automatic release and no duplicate offer, even after TTL.
+{
+ const {createCommercialStagingService} =
+   await import("../server/delivery/commercialStagingService.ts");
+ const restartId="f".repeat(64), restartJobId=restartId+"-0";
+ const remote=ordersFixture(restartId,"25.00","approved");
+ remote.live_mode=true;
+ let testClock=Date.now();
+ await db.doc("pixCommercialOrders/"+restartId).set({
+   id:restartId,environment:"commercial",catalogValidated:true,
+   providerOrderId:remote.id,collector:"42",currency:"BRL",
+   totalCents:2500,gamertag:"Reboot Tester",state:"pending",
+   lines:[{productType:"product",productId:"kit",quantity:1,
+     reward:{version:1,items:[{itemId:"minecraft:diamond",quantity:3}]}}],
+ });
+ const factory=()=>createCommercialStagingService(db,{
+   me:async()=>({id:42,netcraftTestAccount:false}),
+   get:async()=>structuredClone(remote),
+ },{keyring:{"bds_emulator":"not-real-hmac-secret-1234567890123456789"},
+   now:()=>testClock});
+ await factory().reconcileAndQueue(restartId);
+ const first=await factory().offer(restartJobId,"Reboot Tester",true) as any;
+ assert.equal(first.status,"offered");
+ testClock+=121000;
+ const restarted=factory();
+ assert.equal((await restarted.recoverAfterRestart()).awaitingReceipt,1);
+ assert.equal((await factory().diagnose(restartJobId)).state,"awaiting_receipt");
+ assert.equal((await factory().offer(restartJobId,"Reboot Tester",true)).status,"held");
+ assert.equal((await restarted.acknowledge(restartJobId,first.leaseToken,
+   "already_applied")).status,"acknowledged");
+ assert.equal((await factory().acknowledge(restartJobId,first.leaseToken,
+   "already_applied") as any).duplicate,true);
+ assert.equal((await factory().diagnose(restartJobId)).attempts,1);
+ const history=(await db.collection("pixCommercialDeliveryAudit")
+   .where("orderHash","==",crypto.createHash("sha256")
+     .update(restartId).digest("hex")).get());
+ assert.ok(history.docs.length>=3);
+ for (const row of history.docs) {
+   assert.equal(row.data()?.dispatchEnabled,false);
+   assert.equal("leaseToken" in row.data(),false);
+   assert.equal("gamertag" in row.data(),false);
+   assert.equal("payload" in row.data(),false);
+ }
+ console.log("PASS Firestore Emulator restart recovery: durable lease, same-token receipt ACK, no duplicate offer, sanitized execution journal");
+}
+
 // HTTP cart quote must agree with the same authoritative catalog and
 // coupon used by the transactional Pix creator. This is an isolated emulator.
 const expressQuote = (await import("express")).default;
