@@ -29,10 +29,10 @@ if(bp.modules[0].type!=="script" || bp.modules[0].language!=="javascript" ||
  throw Error("invalid_bp_rp_dependency");
 const entry=fs.readFileSync(path.join(root,"bp/scripts/main.js"),"utf8");
 const engine=fs.readFileSync(path.join(root,"core_delivery_engine.js"),"utf8");
+// Check executable behavior rather than benign source comments.
 if(!entry.includes("CLONE_PACKAGE_OFF_NO_GRANTS") ||
-   /http|grant|delivery_engine|runInterval|setDynamicProperty|@minecraft\/server-net/.test(
-    entry.replaceAll("NO_GRANTS","").replaceAll("grants","")) &&
-   /http\.request|\.execute\(|core_delivery_engine|runInterval|setDynamicProperty|@minecraft\/server-net/.test(entry))
+   /(?:http\.request|runInterval|setDynamicProperty|secrets\.get|\.execute\()/.test(entry) ||
+   /^\s*import\s+.*(?:core_delivery_engine|@minecraft\/server-net)/m.test(entry))
   throw Error("entrypoint_not_inert");
 for(const marker of ["ncbr:vip_explorer","ncbr:vip_elite","ncbr:vip_supreme",
  "identity_unverified","already_applied","vip_upgrade_review_required"])
