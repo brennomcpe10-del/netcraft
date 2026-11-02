@@ -390,7 +390,7 @@ jobs:
           npx --yes firebase-tools@14 emulators:exec --only firestore \
             --project demo-netcraft-admin-test \
             --config .firebase-emulator-ci.json \
-            'node --import tsx tests/pix-emulator.integration.ts'
+            'node --import tsx tests/delivery-gate29-firestore.integration.ts && node --import tsx tests/pix-emulator.integration.ts'
 
   nethernet_phone_lab_firewall_preflight:
     name: NetherNet lab firewall compatibility (Windows)
