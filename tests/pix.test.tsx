@@ -539,7 +539,7 @@ test("HTTP webhook verifies signature and re-queries Orders API instead of trust
         data: { id: ORD, status: "processed" },
       }),
     });
-    assert.equal(response.status, 204);
+    assert.equal(response.status, 200);
     assert.equal((await s.api.view(first.id)).state, "pending");
     s.setResource(ordersFixture(first.id, "25.00", "approved"));
     // The exact notification retry cannot re-query provider or re-grant.
@@ -548,16 +548,16 @@ test("HTTP webhook verifies signature and re-queries Orders API instead of trust
     const approvedHeaders=signHeaders("req-2");
     assert.equal(
       (await fetch(url, { method: "POST", headers:approvedHeaders, body: "{}" })).status,
-      204,
+      200,
     );
     assert.equal((await s.api.view(first.id)).state, "approved");
-    assert.equal((await fetch(url, { method: "POST", headers:approvedHeaders, body: "{}" })).status, 204);
+    assert.equal((await fetch(url, { method: "POST", headers:approvedHeaders, body: "{}" })).status, 200);
     const jobs = [...s.db.records.entries()].filter(([key]) => key.startsWith("pixTestDeliveries/"));
     assert.equal(jobs.length, 1);
     assert.equal(jobs[0][1].dispatchEnabled, false);
     // A forged approval in the body cannot override the authenticated provider GET.
     s.setResource(ordersFixture(first.id, "25.00", "refunded"));
-    assert.equal((await fetch(url, { method: "POST", headers:signHeaders("req-3"), body: JSON.stringify({ type: "order", data: { id: ORD, status: "processed" } }) })).status, 204);
+    assert.equal((await fetch(url, { method: "POST", headers:signHeaders("req-3"), body: JSON.stringify({ type: "order", data: { id: ORD, status: "processed" } }) })).status, 200);
     assert.equal((await s.api.view(first.id)).state, "refunded");
     assert.equal(s.db.records.get(jobs[0][0]).state, "blocked");
     assert.equal(

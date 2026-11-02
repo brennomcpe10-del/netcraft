@@ -227,7 +227,7 @@ export function createPixRouter(
       // successful verified GET + transactional reconciliation.
       const db=dependencies.database();
       const claim=await claimWebhook(db,id,requestId,signature);
-      if(claim?.status==="duplicate")return res.sendStatus(204);
+      if(claim?.status==="duplicate")return res.sendStatus(200);
       if(claim?.status==="busy")return res.status(503).json({error:"Notificação em processamento. Reenvie mais tarde."});
       try {
         const gateway=dependencies.gateway();
@@ -235,12 +235,12 @@ export function createPixRouter(
         const orderId=String(payment.external_reference||"");
         if(!/^[a-f0-9]{64}$/.test(orderId)){
           if(claim)await completeWebhook(db,claim);
-          return res.sendStatus(204);
+          return res.sendStatus(200);
         }
         const order=(await db.collection("pixTestOrders").doc(orderId).get()).data();
         if(!order){
           if(claim)await completeWebhook(db,claim);
-          return res.sendStatus(204);
+          return res.sendStatus(200);
         }
         if(isOrder
           ? order.apiVersion!=="orders-v1"||order.providerOrderId!==id
@@ -251,7 +251,7 @@ export function createPixRouter(
         if(claim)await completeWebhook(db,claim);
         if(process.env.VERCEL_ENV==="preview")
           console.info("[Pix webhook reconciliation]",{outcome:"reconciled_test_order"});
-        return res.sendStatus(204);
+        return res.sendStatus(200);
       }catch(error){
         // The provider may temporarily fail. Release only our own lease so
         // the same signed message can be retried, without granting anything.

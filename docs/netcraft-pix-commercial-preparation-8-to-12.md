@@ -26,7 +26,7 @@ Production/MagnoHost**.
   `pixTestWebhookReceipts`, bloqueio concorrente, resultado concluído e
   liberação segura após erro. O ID do recibo usa somente SHA-256 de valores
   canônicos, sem armazenar a assinatura ou chave secreta.
-- Um reenvio exato de notificação concluída recebe 204 **sem consultar
+- Um reenvio exato de notificação concluída recebe 200 **sem consultar
   novamente o provedor**. Uma nova notificação com request-id próprio
   é reconciliada normalmente. Se o processamento estiver em andamento,
   o servidor retorna 503 para permitir tentativa posterior.
