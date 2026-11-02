@@ -248,9 +248,11 @@ export function webhookSignature(
   secret: string,
   now = Date.now(),
 ) {
-  const parts = Object.fromEntries(
-    signature.split(",").map((p) => p.trim().split("=")),
-  );
+  // Reject repeated or unknown signature fields. Flexible parsing can let
+  // the same authenticated event be replayed using alternate header layouts.
+  const match = /^ts=(\\d{10}|\\d{13}),\\s*v1=([a-f0-9]{64})$/i.exec(signature);
+  if (!match) return false;
+  const parts = {ts:match[1],v1:match[2]};
   if (
     !secret ||
     !requestId ||
