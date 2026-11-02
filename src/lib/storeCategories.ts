@@ -149,3 +149,19 @@ export function storeCategoryTitle(category: StoreCategory) {
     ? "ITENS AVULSOS"
     : category.title;
 }
+
+/** Protect active products/VIPs from disappearing by an accidental category deletion. */
+export function activeCategoryOrphans(
+  previous: StoreCategory[],
+  next: StoreCategory[],
+  products: Product[],
+  vips: VIP[],
+): string[] {
+  const retained = new Set(next.map(c=>c.id));
+  const removed = new Set(previous.filter(c=>!retained.has(c.id)).map(c=>c.id));
+  const orphans = new Set<string>();
+  for(const p of products)if(p.active&&removed.has(p.category))orphans.add(p.category);
+  for(const v of vips)if(v.active&&removed.has(v.categoryId||"vips"))
+    orphans.add(v.categoryId||"vips");
+  return [...orphans].sort();
+}
