@@ -55,6 +55,10 @@ export function normalizeProduct(
       data.category !== existing?.category)
   )
     throw new Error("Selecione uma categoria cadastrada.");
+  // Inactive historical items remain editable after their category is removed,
+  // but cannot silently become invisible active products again.
+  if(data.active===true && !categories.some(category=>category.id===data.category))
+    throw new Error("Reclassifique o produto antes de ativá-lo: categoria removida.");
   if (
     typeof data.price !== "number" ||
     !Number.isFinite(data.price) ||

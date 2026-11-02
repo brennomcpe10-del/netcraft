@@ -251,7 +251,7 @@ apiRouter.put('/admin/vips/:id',requireAdmin,async(req,res)=>{
    const previousCategoryId='categoryId' in existing && typeof existing.categoryId==='string' ? existing.categoryId : 'vips';
    const previousImage=typeof existing.image==='string' ? existing.image : undefined;
    const next=vipDraft({...existing,...req.body},id,previousCategoryId,previousImage);
-   assertVipCategoryExists(next.categoryId,categories,previousCategoryId);
+   assertVipCategoryExists(next.categoryId,categories,next.active?undefined:previousCategoryId);
    tx.set(ref,next);
    return next;
   });

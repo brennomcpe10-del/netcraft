@@ -248,3 +248,12 @@ test("checkout-safe product admin: reject unpurchasable prices and malicious ima
   assert.equal(normalizeProduct({...product,active:false,price:10000.01},defaultStoreCategories).active,false);
   assert.equal(normalizeProduct({...product,rewardDraft:{version:1,items:[]}},defaultStoreCategories).rewardDraft,undefined);
 });
+
+test("inactive historical product cannot reactivate without a surviving category",()=>{
+ const original={...product,category:"categoria-removida",active:false};
+ assert.equal(normalizeProduct(original,defaultStoreCategories,original).active,false);
+ assert.throws(()=>normalizeProduct({...original,active:true},
+  defaultStoreCategories,original),/Reclassifique/);
+ assert.equal(normalizeProduct({...original,category:"kits",active:true},
+  defaultStoreCategories,original).active,true);
+});
