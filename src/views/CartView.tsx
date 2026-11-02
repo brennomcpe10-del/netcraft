@@ -21,7 +21,9 @@ export function CartView({
   const { lines, remove, quantity } = useCart();
   const [quote, setQuote] = useState<CartQuote | null>(null),
     [error, setError] = useState(""),
-    [checking, setChecking] = useState(false);
+    [checking, setChecking] = useState(false),
+    [couponInput, setCouponInput] = useState(""),
+    [couponCode, setCouponCode] = useState("");
   const signature = JSON.stringify(lines);
   useEffect(() => {
     const abort = new AbortController();
@@ -32,7 +34,7 @@ export function CartView({
     fetch("/api/cart/quote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lines }),
+      body: JSON.stringify({ lines, couponCode }),
       signal: abort.signal,
     })
       .then(async (res) => {
@@ -50,7 +52,7 @@ export function CartView({
         if (!abort.signal.aborted) setChecking(false);
       });
     return () => abort.abort();
-  }, [signature]);
+  }, [signature, couponCode]);
   const resolved = resolveCart(lines, products, vips);
   const subtotal = resolved.reduce(
     (sum, line) =>
@@ -138,17 +140,50 @@ export function CartView({
               <span>Subtotal{!quote ? " estimado" : ""}</span>
               <strong>{money(quote?.subtotalCents ?? subtotal)}</strong>
             </div>
+            <form
+              className="space-y-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setCouponCode(couponInput.trim().toUpperCase());
+              }}
+            >
+              <label htmlFor="cart-coupon" className="block text-sm">Cupom de desconto</label>
+              <div className="flex flex-wrap gap-2 min-w-0">
+                <input
+                  id="cart-coupon"
+                  type="text"
+                  maxLength={50}
+                  autoComplete="off"
+                  className="min-w-0 flex-1 rounded-xl bg-zinc-900 border border-white/10 p-3"
+                  placeholder="Código (opcional)"
+                  value={couponInput}
+                  onChange={(event) => setCouponInput(event.target.value)}
+                />
+                <button type="submit" className="nc-button" disabled={checking}>
+                  Conferir cupom
+                </button>
+              </div>
+              {couponCode && (
+                <button type="button" className="text-link" onClick={() => {
+                  setCouponCode("");
+                  setCouponInput("");
+                }}>Remover cupom aplicado</button>
+              )}
+            </form>
             <div>
-              <span>Descontos</span>
-              <strong>{money(0)}</strong>
+              <span>Descontos{quote?.discountCents ? " (conferidos)" : ""}</span>
+              <strong>{quote ? money(-quote.discountCents) : "—"}</strong>
             </div>
             <div className="cart-total">
               <span>Total{!quote ? " estimado" : ""}</span>
               <strong>{money(quote?.totalCents ?? subtotal)}</strong>
             </div>
             {checking && (
-              <p role="status">Conferindo preços e disponibilidade…</p>
+              <p role="status">Conferindo preços, descontos e disponibilidade…</p>
             )}
+            {quote?.discountCents ? (
+              <p className="text-xs text-zinc-400">Valor revalidado no servidor ao gerar o Pix. Um cupom pode esgotar antes da cobrança.</p>
+            ) : null}
             {error && (
               <p role="alert" className="cart-error">
                 {error}
@@ -156,6 +191,7 @@ export function CartView({
             )}
             <PixCheckout
               lines={lines}
+              couponCode={couponCode}
               disabled={
                 !quote || checking || resolved.some((line) => !line.available)
               }
