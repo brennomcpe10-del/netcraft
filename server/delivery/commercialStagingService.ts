@@ -3,6 +3,8 @@
 // The emulator-only gate is non-configurable: a feature flag cannot start sales.
 // Future production activation requires a separate security/release review.
 import crypto from "node:crypto";
+import {makeAuditRecord, publicDeliveryDiagnostic, type DeliveryEvent,
+  type DeliveryReason} from "./deliveryAudit.ts";
 import type {Firestore} from "firebase-admin/firestore";
 import {PixError} from "../payments/mercadoPago.ts";
 import {
@@ -23,6 +25,9 @@ const SAFE_NACK = new Set([
 ]);
 const MAX_OFFERS = 20;
 const RETRY_MS = 5000;
+// A timed-out lease might already have granted rewards in Minecraft.
+// Never automatically release it or issue another lease on restart.
+const LOST_CONNECTION_MS = 120_000;
 
 type Line = {
   productType: "product" | "vip";
@@ -117,6 +122,12 @@ export function createCommercialStagingService(
   const clock = options.now || Date.now;
   const orders = db.collection("pixCommercialOrders");
   const queue = db.collection("pixCommercialDeliveries");
+  const auditRecords = db.collection("pixCommercialDeliveryAudit");
+  function journal(tx:any,event:DeliveryEvent,orderId:string,deliveryId?:string,
+    reason:DeliveryReason="none") {
+    const entry=makeAuditRecord({event,reason,orderId,deliveryId,now:clock()});
+    tx.create(auditRecords.doc(entry.id),entry.record);
+  }
 
   async function providerState(order: StoredOrder) {
     const result = await inspectCommercialOrder(order, reader);
@@ -148,11 +159,14 @@ export function createCommercialStagingService(
         throw new PixError("order_changed_during_provider_check", 409);
       const refs = order.lines.map((_,i)=>queue.doc(orderId + "-" + i));
       const snapshots = await Promise.all(refs.map(ref=>tx.get(ref)));
-      const resolved = current.state === "refunded" ? "refunded" :
-        current.state === "review_required" ? "review_required" :
-        state === "approved" && snapshots.some(s=>s.exists &&
-          ["blocked","review_required","refunded_after_ack"].includes(s.data()?.state))
-          ? "review_required" : state;
+      const resolved = current.state === "refunded" || state === "refunded"
+        ? "refunded" :
+        state === "disputed" ? "disputed" :
+        (current.state === "review_required" ||
+          current.state === "disputed" && state === "approved" ||
+          state === "approved" && snapshots.some(s=>s.exists &&
+           ["blocked","review_required","refunded_after_ack"].includes(s.data()?.state)))
+        ? "review_required" : state;
       if (resolved === "approved") {
         for (let i=0;i<payloads.length;i++) {
           const payload = payloads[i], digest = fingerprint(payload);
@@ -168,22 +182,32 @@ export function createCommercialStagingService(
               fingerprint:digest,payload,state:"queued",
               dispatchEnabled:false,attempts:0,createdAt:new Date(clock()).toISOString(),
             });
+            journal(tx,"order_queued",orderId,payload.id);
           }
         }
       } else {
         for (let i=0;i<snapshots.length;i++) {
           if (!snapshots[i].exists) continue;
           const prior = snapshots[i].data();
-          if (prior?.state === "acknowledged")
+          const holdReason: DeliveryReason = resolved === "refunded"
+            ? "refund_or_chargeback" : resolved === "disputed"
+              ? "payment_disputed" : resolved === "expired"
+                ? "payment_expired" : resolved === "cancelled"
+                  ? "payment_cancelled" : "payment_not_confirmed";
+          if (prior?.state === "acknowledged") {
             tx.update(refs[i],{state:"refunded_after_ack",reason:"manual_refund_review"});
-          else if (!["blocked","refunded_after_ack"].includes(prior?.state))
-            tx.update(refs[i],{state:"blocked",reason:"payment_not_confirmed"});
+            journal(tx,"refund_review",orderId,refs[i].id,"manual_refund_review");
+          } else if (!["blocked","refunded_after_ack"].includes(prior?.state)) {
+            tx.update(refs[i],{state:"blocked",reason:holdReason});
+            journal(tx,"payment_blocked",orderId,refs[i].id,holdReason);
+          }
         }
       }
       tx.update(orderRef,{
         state:resolved,updatedAt:new Date(clock()).toISOString(),
         dispatchEnabled:false,paymentReviewRequired:resolved==="review_required" ||
-          resolved==="refunded" || (state!=="approved" && snapshots.some(s=>s.exists)),
+          resolved==="refunded" || resolved==="disputed" ||
+          (state!=="approved" && snapshots.some(s=>s.exists)),
       });
       return {state:resolved,created:resolved==="approved"?
         snapshots.filter(s=>!s.exists).length:0,dispatchEnabled:false as const};
@@ -223,12 +247,14 @@ export function createCommercialStagingService(
         return {status:"held" as const};
       if (!Number.isSafeInteger(job.attempts) || job.attempts >= MAX_OFFERS) {
         tx.update(queue.doc(deliveryId),{state:"review_required",reason:"max_offers"});
+        journal(tx,"lease_manual_review",order.id,deliveryId,"max_offers");
         return {status:"review_required" as const};
       }
       tx.update(queue.doc(deliveryId),{
         state:"leased",leaseToken,attempts:job.attempts+1,
         leasedAt:new Date(clock()).toISOString(),
       });
+      journal(tx,"lease_offered",order.id,deliveryId);
       // A lease is a simulated offer, NEVER authority to grant on Production.
       return {status:"offered" as const,payload,leaseToken,dispatchEnabled:false as const};
     });
@@ -244,7 +270,8 @@ export function createCommercialStagingService(
       return {status:"held" as const};
     if (job.state === "acknowledged")
       return {status:"acknowledged" as const,duplicate:true};
-    if (job.state !== "leased") return {status:"held" as const};
+    if (!["leased","awaiting_receipt"].includes(job.state))
+      return {status:"held" as const};
     const order = canonicalOrder((await orders.doc(job.orderId).get()).data());
     let approved=false;
     try { approved = order.state === "approved" &&
@@ -258,7 +285,8 @@ export function createCommercialStagingService(
         return {status:"held" as const};
       if (current.state === "acknowledged")
         return {status:"acknowledged" as const,duplicate:true};
-      if (current.state !== "leased") return {status:"held" as const};
+      if (!["leased","awaiting_receipt"].includes(current.state))
+        return {status:"held" as const};
       if (!approved || o?.state !== "approved" ||
           o?.providerOrderId !== order.providerOrderId ||
           o?.totalCents !== order.totalCents ||
@@ -266,12 +294,14 @@ export function createCommercialStagingService(
           o?.gamertag !== order.gamertag ||
           JSON.stringify(o?.lines) !== JSON.stringify(order.lines)) {
         tx.update(queue.doc(deliveryId),{state:"review_required",reason:"payment_changed_after_offer"});
+        journal(tx,"lease_manual_review",order.id,deliveryId,"payment_changed_after_offer");
         return {status:"review_required" as const};
       }
       tx.update(queue.doc(deliveryId),{
         state:"acknowledged",ackResult:result,
         acknowledgedAt:new Date(clock()).toISOString(),
       });
+      journal(tx,"lease_ack",order.id,deliveryId);
       return {status:"acknowledged" as const,duplicate:false};
     });
   }
@@ -283,26 +313,86 @@ export function createCommercialStagingService(
       throw new PixError("invalid_nack",400);
     return db.runTransaction(async tx => {
       const ref=queue.doc(deliveryId),snap=await tx.get(ref),job=snap.data();
-      if (!job || job.state !== "leased" || job.leaseToken !== leaseToken)
+      if (!job || !["leased","awaiting_receipt"].includes(job.state) ||
+          job.leaseToken !== leaseToken)
         return {status:"held" as const};
       // Only the BDS engine's pre-receipt result is demonstrably safe to retry.
       // Any ambiguous or started grant requires manual recovery, never a
       // blind re-delivery that could double items or extend VIP twice.
       if (receipt !== "none" || !SAFE_NACK.has(reason)) {
         tx.update(ref,{state:"review_required",reason:"ambiguous_delivery"});
+        journal(tx,"lease_manual_review",job.orderId,deliveryId,"ambiguous_delivery");
         return {status:"review_required" as const};
       }
       const order=await tx.get(orders.doc(job.orderId));
       if (order.data()?.state !== "approved") {
         tx.update(ref,{state:"blocked",reason:"payment_revoked"});
+        journal(tx,"payment_blocked",job.orderId,deliveryId,"payment_revoked");
         return {status:"held" as const};
       }
       tx.update(ref,{
         state:"queued",leaseToken:null,
         retryAfter:clock()+RETRY_MS,lastNackReason:reason,
       });
+      journal(tx,"lease_nack_retry",job.orderId,deliveryId,reason as DeliveryReason);
       return {status:"retryable" as const,retryAfter:clock()+RETRY_MS};
     });
+  }
+
+  // Supervised recovery scanner; never auto-reissues an expired lease.
+  // Preserve the previous token for a late authenticated BDS receipt.
+  async function recoverAfterRestart(limit = 40) {
+    labOnly();
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
+      throw new PixError("invalid_recovery_limit",400);
+    const found=await queue.where("state","==","leased").get();
+    const totals={examined:0,awaitingReceipt:0,skipped:0,
+      dispatchEnabled:false as const};
+    for (const candidate of found.docs.slice(0,limit)) {
+      const initial=candidate.data();
+      const time=Date.parse(initial?.leasedAt || "");
+      if (!DELIVERY_ID.test(candidate.id) ||
+          !Number.isFinite(time) || clock()-time < LOST_CONNECTION_MS) {
+        totals.skipped++;continue;
+      }
+      totals.examined++;
+      // Failed provider checks require a receipt; they never trigger retries.
+      let providerApproved=false;
+      try {
+        const o=canonicalOrder((await orders.doc(initial.orderId).get()).data());
+        providerApproved=o.state==="approved" &&
+          (await providerState(o))==="approved";
+      } catch { providerApproved=false; }
+      const marked=await db.runTransaction(async tx=>{
+        const ref=queue.doc(candidate.id),snap=await tx.get(ref);
+        const job=snap.data();
+        if (!job || job.state!=="leased" ||
+            job.leaseToken!==initial.leaseToken ||
+            job.leasedAt!==initial.leasedAt)
+          return false;
+        tx.update(ref,{
+          state:"awaiting_receipt",
+          reason:providerApproved?"recovery_receipt_required":"provider_check_failed",
+          recoveryDetectedAt:new Date(clock()).toISOString(),
+        });
+        journal(tx,"lease_recovery",job.orderId,candidate.id,
+          providerApproved?"stale_lease":"provider_check_failed");
+        return true;
+      });
+      if (marked) totals.awaitingReceipt++;
+      else totals.skipped++;
+    }
+    return totals;
+  }
+
+  // Read-only future admin diagnostics: never reveal private payloads,
+  // player names, signatures, payment identifiers or lease tokens.
+  async function diagnose(deliveryId: string) {
+    labOnly();
+    if (!DELIVERY_ID.test(deliveryId))
+      throw new PixError("invalid_delivery_id",400);
+    const snap=await queue.doc(deliveryId).get();
+    return {found:snap.exists,...publicDeliveryDiagnostic(snap.data())};
   }
 
   async function authenticatedRequest(
@@ -337,5 +427,6 @@ export function createCommercialStagingService(
     return nack(body.deliveryId,body.leaseToken,body.reason,body.receipt);
   }
 
-  return {reconcileAndQueue,offer,acknowledge,nack,authenticatedRequest};
+  return {reconcileAndQueue,offer,acknowledge,nack,authenticatedRequest,
+    recoverAfterRestart,diagnose};
 }
