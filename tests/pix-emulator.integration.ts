@@ -76,13 +76,23 @@ try {
  await new Promise<void>(resolve=>quoteServer.close(()=>resolve()));
 }
 
+// Each local checkout must receive its OWN fake provider order/payment IDs.
+// Previously these fixtures reused one ORD/PAY for unrelated checkouts; the
+// production-style uniqueness bindings correctly reject that collision.
+const isolatedOrderFixture=(localId:string,total="25.00",state="pending")=>{
+  const resource=ordersFixture(localId,total,state);
+  const suffix=localId.slice(0,26).toUpperCase();
+  resource.id="ORD"+suffix;
+  resource.transactions.payments[0].id="PAY"+suffix;
+  return resource;
+};
 let provider: any;
 let calls = 0;
 const gateway: any = {
   me: async () => ({ id: 42, netcraftTestAccount: true }),
   create: async (body: any, key: string) => {
     calls++;
-    provider = ordersFixture(body.external_reference, body.total_amount);
+    provider = isolatedOrderFixture(body.external_reference, body.total_amount);
     return structuredClone(provider);
   },
   get: async () => structuredClone(provider),
@@ -178,7 +188,7 @@ assert.equal(calls, 1);
   assert.equal((await concurrentApi.view(concurrentId)).state,"refunded");
   console.log("PASS real Firestore concurrent checkout lease, unique provider bindings, repeat GETs and refund isolation");
 }
-provider = ordersFixture(first.id, "44.98", "approved");
+provider = isolatedOrderFixture(first.id, "44.98", "approved");
 await Promise.all([api.reconcile(id), api.reconcile(id), api.reconcile(id)]);
 let jobs = await db
   .collection("pixTestDeliveries")
@@ -223,7 +233,7 @@ await assert.rejects(() => api.create(input, crypto.randomUUID()));
 provider = { ...provider, total_amount: "0.01" };
 await assert.rejects(() => api.reconcile(id));
 assert.equal((await api.view(id)).state, "approved");
-provider = ordersFixture(first.id, "44.98", "refunded");
+provider = isolatedOrderFixture(first.id, "44.98", "refunded");
 await api.reconcile(id);
 jobs = await db
   .collection("pixTestDeliveries")
@@ -439,7 +449,7 @@ const mkBridge = () => createIsolatedPixOutboxBridge(db, gateway, {
 });
 let bridge = mkBridge();
 assert.equal((await bridge.offer(nextId + "-0", true)).status, "held");
-provider = ordersFixture(nextId, "29.99", "approved");
+provider = isolatedOrderFixture(nextId, "29.99", "approved");
 await api.reconcile(nextId);
 const pendingJobs = await db.collection("pixTestDeliveries")
   .where("orderId", "==", nextId).get();
@@ -465,7 +475,7 @@ bridge = mkBridge();
 assert.equal((await bridge.offer(itemId, true)).status, "held");
 assert.equal((await bridge.offer(vipId, true)).status, "held");
 assert.equal((await bridge.inspect(itemId)).status, "acknowledged");
-provider = ordersFixture(nextId, "29.99", "refunded");
+provider = isolatedOrderFixture(nextId, "29.99", "refunded");
 await api.reconcile(nextId);
 assert.equal((await bridge.offer(itemId, true)).status, "held");
 assert.equal((await bridge.block(itemId)).status, "refunded_after_ack");
@@ -491,7 +501,7 @@ const labId = crypto.createHash("sha256").update(labKey).digest("hex");
 const labOrder = await api.create(nextInput,labKey);
 assert.equal(labOrder.id,labId);
 assert.equal(labOrder.state,"pending");
-provider=ordersFixture(labId,"29.99","approved");
+provider=isolatedOrderFixture(labId,"29.99","approved");
 await api.reconcile(labId);
 const labBridge=mkBridge();
 const labItem=labId+"-0",labVip=labId+"-1";
@@ -583,7 +593,7 @@ try {
   assert.equal(kitAck.status,200);
   assert.equal((await labBridge.inspect(labItem)).status,"acknowledged");
   // Provider-side refund BEFORE local reconciliation cannot become a clean ACK.
-  provider=ordersFixture(labId,"29.99","refunded");
+  provider=isolatedOrderFixture(labId,"29.99","refunded");
   const vipAck=await tlsPost("/delivery/ack",
     {deliveryId:labVip,result:"applied"},await tlsChallenge());
   assert.equal(vipAck.status,409);
