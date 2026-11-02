@@ -74,6 +74,6 @@ test("categories reject unsafe local traversal, malformed HTTPS hosts and SVG up
   "data:image/svg+xml;base64,AAAA",
   "https://cdn.example.com/evil.jpg\" onerror=\"x",
  ]){
-  assert.throws(()=>validateCategories([{...defaultStoreCategories[0],image}]),undefined,image);
+  assert.throws(()=>validateCategories([{...defaultStoreCategories[0],image}]), /Use imagem HTTPS ou caminho local/,image);
  }
 });
