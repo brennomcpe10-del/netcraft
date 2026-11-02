@@ -59,6 +59,18 @@ export class FixtureDeliveryGate {
     if(operation==='issue'){
       if(!NONCE.test(data.nonce||'')||Object.keys(data).length!==2)
         return json({error:'bad_nonce'},400);
+      // Bounded challenge capacity and expired-record pruning. Without this,
+      // even a disposable fixture Worker would leak SQLite rows indefinitely.
+      let outstanding=0;
+      for(const [key,created] of kv.list({prefix:'issued:'})){
+        if(typeof created!=='number'||created>now||now-created>60000)
+          kv.delete(key);
+        else outstanding++;
+      }
+      for(const [key,created] of kv.list({prefix:'spent:'}))
+        if(typeof created!=='number'||created>now||now-created>180000)
+          kv.delete(key);
+      if(outstanding>=128)return json({error:'challenge_capacity'},429);
       if(kv.get('issued:'+data.nonce)!==undefined ||
           kv.get('spent:'+data.nonce)!==undefined)return json({error:'replay'},409);
       kv.put('issued:'+data.nonce,now);
