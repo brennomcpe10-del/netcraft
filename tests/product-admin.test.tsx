@@ -234,3 +234,17 @@ test("existing single-character product IDs remain editable and removable withou
   await service.remove("x");
   assert.equal(data.has("x"), false);
 });
+
+test("checkout-safe product admin: reject unpurchasable prices and malicious image URLs",()=>{
+  for(const patch of [
+    {price:10000.01,active:true},{price:0,active:true},
+    {image:"https://user:pass@evil.example/a.jpg"},
+    {image:"/..%2fadmin"},
+    {image:"/../../secret.png"},
+    {image:"data:image/svg+xml;base64,AAAA"},
+    {image:"http://example.com/tracking.png"},
+  ])assert.throws(()=>normalizeProduct({...product,...patch},defaultStoreCategories));
+  assert.equal(normalizeProduct({...product,price:9999.99},defaultStoreCategories).price,9999.99);
+  assert.equal(normalizeProduct({...product,active:false,price:10000.01},defaultStoreCategories).active,false);
+  assert.equal(normalizeProduct({...product,rewardDraft:{version:1,items:[]}},defaultStoreCategories).rewardDraft,undefined);
+});

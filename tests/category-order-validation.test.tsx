@@ -56,3 +56,24 @@ test("category admin endpoint distinguishes bad input from storage failures", as
   assert.match(route, /catch\s*\{\s*return res\.status\(400\)\.json/);
   assert.match(route, /catch\s*\{\s*return res\.status\(503\)\.json/);
 });
+
+test("category deletion cannot silently hide active products or VIPs",async()=>{
+  const {activeCategoryOrphans}=await import("../src/lib/storeCategories.ts");
+  const current=defaultStoreCategories;
+  const removed=current.filter(x=>x.id!=="kits"&&x.id!=="vips");
+  const products=[{id:"kit",name:"Kit",category:"kits",active:true}];
+  const vips=[{id:"vip",categoryId:"vips",active:true}];
+  assert.deepEqual(activeCategoryOrphans(current,removed,products as any,vips as any),["kits","vips"]);
+  assert.deepEqual(activeCategoryOrphans(current,removed,[{...products[0],active:false}] as any,[]),["vips"]);
+  assert.deepEqual(activeCategoryOrphans(current,current,products as any,vips as any),[]);
+});
+test("categories reject unsafe local traversal, malformed HTTPS hosts and SVG uploads",()=>{
+ for(const image of [
+  "/../../admin.png","/categories/a%2fb.jpg",
+  "https://account:token@host.example/secret.png",
+  "data:image/svg+xml;base64,AAAA",
+  "https://cdn.example.com/evil.jpg\" onerror=\"x",
+ ]){
+  assert.throws(()=>validateCategories([{...defaultStoreCategories[0],image}]),undefined,image);
+ }
+});
