@@ -165,6 +165,63 @@ for (const j of jobs.docs) {
   assert.equal(summary.dispatchEnabled, false);
   assert.equal("line" in summary, false);
 }
+// Read-only admin HTTP projections must link Pix TEST orders and holds
+// without leaking CPF, email, QR codes, provider payloads or reward drafts.
+{
+ const previousKey=process.env.ADMIN_KEYWORD;
+ process.env.ADMIN_KEYWORD=crypto.randomBytes(20).toString("hex");
+ const {generateAdminToken}=await import("../server/auth/admin.ts");
+ const app=expressQuote();
+ app.use(expressQuote.json());app.use("/api",apiRouter);
+ const http=app.listen(0,"127.0.0.1");
+ await new Promise<void>((resolve,reject)=>{http.once("listening",resolve);http.once("error",reject);});
+ const url="http://127.0.0.1:"+(http.address() as any).port+"/api";
+ try {
+  for(const p of ["/admin/pix-test-orders","/admin/pix-test-deliveries"]){
+   const unauthorized=await fetch(url+p);
+   assert.equal(unauthorized.status,401);
+   const invalid=await fetch(url+p,{headers:{Authorization:"Bearer bad-token"}});
+   assert.equal(invalid.status,403);
+  }
+  const token=generateAdminToken();
+  const get=async(p:string)=>fetch(url+p,{headers:{Authorization:"Bearer "+token}});
+  const ordersResponse=await get("/admin/pix-test-orders");
+  assert.equal(ordersResponse.status,200);
+  assert.equal(ordersResponse.headers.get("cache-control"),"no-store");
+  const orderSummaries=await ordersResponse.json();
+  const order=orderSummaries.find((o:any)=>o.id===id);
+  assert.ok(order);
+  assert.equal(order.environment,"test");
+  assert.equal(order.state,"refunded");
+  assert.equal(order.totalCents,4498);
+  assert.equal(order.linesCount,2);
+  assert.equal(order.gamertag,"Local Tester");
+  for(const k of ["email","cpf","qrCode","qrBase64","collector",
+    "payload","receiver","line","reward","payment","buyer"])assert.equal(k in order,false,k);
+  const deliveriesResponse=await get("/admin/pix-test-deliveries");
+  assert.equal(deliveriesResponse.status,200);
+  const deliverySummaries=await deliveriesResponse.json();
+  const related=deliverySummaries.filter((d:any)=>d.orderId===id);
+  assert.equal(related.length,2);
+  for(const item of related){
+   assert.equal(item.hold,"refunded");
+   assert.equal(item.dispatchEnabled,false);
+   for(const k of ["cpf","email","line","rewardDraft","coreDraft",
+      "previewPlan","token","webhook","items","qrBase64"])assert.equal(k in item,false,k);
+  }
+  const {buildPixTestMonitor}=await import("../src/lib/pixTestMonitor.ts");
+  const monitor=buildPixTestMonitor(orderSummaries,deliverySummaries);
+  assert.equal(monitor.entries.find((e:any)=>e.order.id===id)?.deliveries.length,2);
+  assert.equal(monitor.entries.find((e:any)=>e.order.id===id)?.status,"closed");
+  console.log("PASS authenticated read-only admin Pix TEST monitoring, refund hold, payment/job join and no financial PII leaks");
+ } finally {
+  http.closeAllConnections();
+  await new Promise<void>(resolve=>http.close(()=>resolve()));
+  if(previousKey===undefined)delete process.env.ADMIN_KEYWORD;
+  else process.env.ADMIN_KEYWORD=previousKey;
+ }
+}
+
 // REST client without credentials must not read or mutate private financial records.
 for (const collection of [
   "pixTestOrders",
