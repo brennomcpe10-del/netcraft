@@ -3,6 +3,7 @@
 // The emulator-only gate is non-configurable: a feature flag cannot start sales.
 // Future production activation requires a separate security/release review.
 import crypto from "node:crypto";
+import {mappedDelivery, type RewardRegistry} from "./verifiedRewardRegistry.ts";
 import {makeAuditRecord, publicDeliveryDiagnostic, type DeliveryEvent,
   type DeliveryReason} from "./deliveryAudit.ts";
 import type {Firestore} from "firebase-admin/firestore";
@@ -41,10 +42,6 @@ type StoredOrder = {
   providerOrderId: string; collector: string; totalCents: number; currency: "BRL";
   gamertag: string; lines: Line[]; state: string;
 };
-type Payload = {
-  contract: "netcraft.delivery.v1"; id: string; orderId: string; gamertag: string;
-} & ({kind: "items"; items: Array<{itemId: string;quantity: number}>} |
-  {kind: "vip";rankTag: "ncbr:vip_explorer";days: 30});
 
 const fingerprint = (value: unknown) =>
   crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -68,40 +65,7 @@ function canonicalOrder(o: any): StoredOrder {
     throw new PixError("invalid_commercial_order_snapshot", 409);
   return o as StoredOrder;
 }
-function compileLine(order: StoredOrder, index: number): Payload {
-  const l = order.lines[index], id = order.id + "-" + index;
-  if (!l || !/^[a-zA-Z0-9_-]{1,80}$/.test(l.productId || "") ||
-      !Number.isSafeInteger(l.quantity) || l.quantity < 1 || l.quantity > 64)
-    throw new PixError("invalid_delivery_line", 409);
-  const base = {
-    contract: "netcraft.delivery.v1" as const, id,
-    orderId: order.id, gamertag: order.gamertag,
-  };
-  if (l.productType === "vip") {
-    // Only explicitly authorized Core mapping; never map arbitrary VIP names.
-    if (l.productId !== "pix-vip" || l.duration !== "30 dias" || l.quantity !== 1)
-      throw new PixError("vip_mapping_not_homologated", 409);
-    return {...base,kind: "vip",rankTag: "ncbr:vip_explorer",days: 30};
-  }
-  if (l.productType !== "product" || l.reward?.version !== 1 ||
-      !Array.isArray(l.reward.items) || l.reward.items.length < 1 ||
-      l.reward.items.length > 36)
-    throw new PixError("reward_not_homologated", 409);
-  const items = new Map<string, number>();
-  let units = 0;
-  for (const item of l.reward.items) {
-    if (!item || !/^minecraft:[a-z0-9_]+$/.test(item.itemId || "") ||
-        !Number.isSafeInteger(item.quantity) || item.quantity < 1)
-      throw new PixError("invalid_delivery_item", 409);
-    const quantity = item.quantity * l.quantity;
-    units += quantity;
-    items.set(item.itemId, (items.get(item.itemId) || 0) + quantity);
-    if (units > 2304 || (items.get(item.itemId) || 0) > 2304)
-      throw new PixError("delivery_capacity_exceeded", 409);
-  }
-  return {...base,kind: "items",items: [...items.entries()].sort((a,b)=>a[0].localeCompare(b[0]))
-    .map(([itemId,quantity])=>({itemId,quantity}))};
-}
+
 const safeBody = (body: string) => {
   let parsed: any;
   try { parsed = JSON.parse(body); } catch { throw new PixError("invalid_delivery_json", 400); }
@@ -116,12 +80,18 @@ const exactKeys = (value: Record<string, unknown>, keys: string[]) =>
 export function createCommercialStagingService(
   db: DB,
   reader: CommercialGatewayReader,
-  options: {keyring: Readonly<Record<string,string>>; now?:()=>number},
+  options: {keyring: Readonly<Record<string,string>>;
+    registry: RewardRegistry; now?:()=>number},
 ) {
   labOnly();
   const clock = options.now || Date.now;
   const orders = db.collection("pixCommercialOrders");
   const queue = db.collection("pixCommercialDeliveries");
+  if(!options.registry || Object.keys(options.registry).length===0)
+    throw new PixError("approved_reward_registry_required",503);
+  const compileLine = (order:StoredOrder,index:number) =>
+    mappedDelivery({orderId:order.id,index,gamertag:order.gamertag,
+      line:order.lines[index],registry:options.registry});
   const auditRecords = db.collection("pixCommercialDeliveryAudit");
   function journal(tx:any,event:DeliveryEvent,orderId:string,deliveryId?:string,
     reason:DeliveryReason="none") {

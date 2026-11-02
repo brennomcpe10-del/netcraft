@@ -34,6 +34,7 @@ await db.doc("coupons/fixture").set({
 {
  const {createCommercialStagingService}=
    await import("../server/delivery/commercialStagingService.ts");
+ const {makeRewardRegistry}=await import("../server/delivery/verifiedRewardRegistry.ts");
  const candidateId="e".repeat(64);
  const provider=ordersFixture(candidateId,"25.00","approved");
  provider.live_mode=true;
@@ -48,7 +49,9 @@ await db.doc("coupons/fixture").set({
  const candidate=createCommercialStagingService(db,{
   me:async()=>({id:42,netcraftTestAccount:false}),
   get:async()=>structuredClone(provider),
- },{keyring:{"bds_emulator":"not-real-hmac-secret-1234567890123456789"}});
+ },{keyring:{"bds_emulator":"not-real-hmac-secret-1234567890123456789"},
+   registry:makeRewardRegistry([{kind:"items",productId:"kit",
+     items:[{itemId:"minecraft:diamond",quantity:2}]}])});
  const queued=await Promise.all([
   candidate.reconcileAndQueue(candidateId),
   candidate.reconcileAndQueue(candidateId),
@@ -83,6 +86,8 @@ await db.doc("coupons/fixture").set({
 {
  const {createCommercialStagingService} =
    await import("../server/delivery/commercialStagingService.ts");
+ const {makeRewardRegistry} =
+   await import("../server/delivery/verifiedRewardRegistry.ts");
  const restartId="f".repeat(64), restartJobId=restartId+"-0";
  const remote=ordersFixture(restartId,"25.00","approved");
  remote.live_mode=true;
@@ -98,6 +103,8 @@ await db.doc("coupons/fixture").set({
    me:async()=>({id:42,netcraftTestAccount:false}),
    get:async()=>structuredClone(remote),
  },{keyring:{"bds_emulator":"not-real-hmac-secret-1234567890123456789"},
+   registry:makeRewardRegistry([{kind:"items",productId:"kit",
+     items:[{itemId:"minecraft:diamond",quantity:3}]}]),
    now:()=>testClock});
  await factory().reconcileAndQueue(restartId);
  const first=await factory().offer(restartJobId,"Reboot Tester",true) as any;

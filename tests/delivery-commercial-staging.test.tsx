@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import {memoryDB,ordersFixture,ORD} from "./fixtures/pixOrders.ts";
 import {createCommercialStagingService} from "../server/delivery/commercialStagingService.ts";
+import {makeRewardRegistry} from "../server/delivery/verifiedRewardRegistry.ts";
 import {
   bdsSignature,BdsAuthError,type BdsSignedMessage,
 } from "../server/delivery/bdsSignedRequest.ts";
@@ -45,8 +46,14 @@ function fixture(){
     me:async()=>({id:42,netcraftTestAccount:false}),
     get:async()=>structuredClone(resource),
   };
+  const registry=makeRewardRegistry([
+    {kind:"items",productId:"kit",
+      items:[{itemId:"minecraft:diamond",quantity:3}]},
+    {kind:"vip",productId:"pix-vip",tier:"explorer",
+      rankTag:"ncbr:vip_explorer",duration:"30 dias",days:30},
+  ]);
   const reboot=()=>createCommercialStagingService(db,reader,{
-    keyring:{[keyId]:secret},now:()=>time,
+    keyring:{[keyId]:secret},registry,now:()=>time,
   });
   const service=reboot();
   const setState=(state:string)=>{
@@ -90,7 +97,8 @@ test("15/16: authenticated Orders GET creates immutable queued items/VIP only on
  assert.equal(f.jobs()[1][1].payload.rankTag,"ncbr:vip_explorer");
  // A changed server snapshot cannot silently rewrite a previously queued job.
  f.db.records.get("pixCommercialOrders/"+id).lines[0].reward.items[0].quantity=9;
- await assert.rejects(()=>f.service.reconcileAndQueue(id),/delivery_id_conflict/);
+ await assert.rejects(()=>f.service.reconcileAndQueue(id),
+    /kit_snapshot_registry_mismatch/);
  assert.equal(f.jobs().length,2);
 });
 test("15: pending, rejected and forged provider identities never enqueue candidates",async()=>{
