@@ -643,4 +643,31 @@ try {
  }
 }
 
+// Verify the webhook idempotency lease against REAL Firestore transactions.
+// Same signed notification cannot be processed twice, even concurrently.
+{
+ const {claimWebhook,completeWebhook,releaseWebhook}=await import("../server/payments/webhookReplay.ts");
+ const {ORD}=await import("./fixtures/pixOrders.ts");
+ const timestamp=String(Date.now());
+ const mkSignature=(id:string)=>`ts=${timestamp},v1=${crypto.createHmac("sha256","emulator-webhook-not-live")
+  .update(`id:${ORD.toLowerCase()};request-id:${id};ts:${timestamp};`).digest("hex")}`;
+ const requestId="fixture-emulator-unique";
+ const signature=mkSignature(requestId);
+ const claimed=await Promise.all([
+  claimWebhook(db,ORD,requestId,signature),
+  claimWebhook(db,ORD,requestId,signature),
+ ]);
+ assert.deepEqual(claimed.map(x=>x.status).sort(),["acquired","busy"]);
+ const acquired=claimed.find(x=>x.status==="acquired")!;
+ await completeWebhook(db,acquired);
+ assert.equal((await claimWebhook(db,ORD,requestId,signature)).status,"duplicate");
+ const newId="fixture-emulator-retry";
+ const retrySignature=mkSignature(newId);
+ const retry=await claimWebhook(db,ORD,newId,retrySignature);
+ assert.equal(retry.status,"acquired");
+ await releaseWebhook(db,retry);
+ assert.equal((await claimWebhook(db,ORD,newId,retrySignature)).status,"acquired");
+ console.log("PASS real Firestore webhook replay: concurrent lease, immutable done record and retry after safe release");
+}
+
 await db.terminate();
