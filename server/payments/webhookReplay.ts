@@ -28,10 +28,15 @@ export async function claimWebhook(
   if(state?.state==="working" &&
      Number.isFinite(state.claimedAt)&&now-state.claimedAt<LOCK_MS &&
      now>=state.claimedAt)return {status:"busy",key,lease:""};
-  tx.set(ref,{
+  const next={
    state:"working",providerId,claimedAt:now,lease,
    expiresAt:Timestamp.fromMillis(now+48*60*60*1000),
-  });
+  };
+  // Atomic create enforces a single owner even for the first claim of a
+  // missing document. A blind set can let two workers each believe they
+  // acquired the same webhook when the emulator races missing-doc reads.
+  if(snap.exists)tx.update(ref,next);
+  else tx.create(ref,next);
   return {status:"acquired",key,lease};
  });
 }

@@ -65,6 +65,8 @@ function environment(opts:{identity?:boolean;free?:number;online?:boolean;curren
 test("25: kits use approved immutable mappings; forged items, quantities and IDs are denied",()=>{
  const x=environment();
  const kit=x.job("kit-verified",0,2);
+ assert.equal(kit.kind,"items");
+ if(kit.kind!=="items")throw Error("fixture expected an items payload");
  assert.deepEqual(kit.items,[
   {itemId:"minecraft:diamond",quantity:6},
   {itemId:"minecraft:iron_ingot",quantity:12},
@@ -87,6 +89,8 @@ test("25: kits use approved immutable mappings; forged items, quantities and IDs
 test("26: Explorer, Elite and Supreme grant once with exact 30-day registration",()=>{
  for(const [i,tier] of (["explorer","elite","supreme"] as const).entries()){
   const x=environment(),job=x.job("store-"+tier,i);
+  assert.equal(job.kind,"vip");
+  if(job.kind!=="vip")throw Error("fixture expected a VIP payload");
   assert.equal(job.rankTag,"ncbr:vip_"+tier);
   assert.equal(job.days,30);
   assert.equal(x.newEngine().execute(job).status,"applied");

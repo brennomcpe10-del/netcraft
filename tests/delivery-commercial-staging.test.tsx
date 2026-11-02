@@ -216,7 +216,11 @@ test("16: commercial candidate does not activate in Production, Preview or with 
  const db=memoryDB() as any;
  const reader:any={me:async()=>({id:42,netcraftTestAccount:false}),
    get:async()=>ordersFixture(id,"25.00","approved")};
- const make=()=>createCommercialStagingService(db,reader,{keyring:{[keyId]:secret}});
+ const make=()=>createCommercialStagingService(db,reader,{
+   keyring:{[keyId]:secret},registry:makeRewardRegistry([
+     {kind:"items",productId:"kit",items:[{itemId:"minecraft:diamond",quantity:3}]},
+   ]),
+ });
  try{
    process.env.NODE_ENV="production";
    assert.throws(make,/commercial_delivery_release_blocked/);

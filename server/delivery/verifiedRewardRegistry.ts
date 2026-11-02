@@ -29,7 +29,7 @@ export function makeRewardRegistry(rules:readonly RewardRule[]):RewardRegistry {
       throw Error("invalid_or_duplicate_reward_product");
     if(rule.kind==="vip"){
       if(!["explorer","elite","supreme"].includes(rule.tier)||
-         rule.rankTag!==ranks[rule.tier]||rule.duration!=="30 dias"||
+         rule.rankTag!==ranks[rule.tier as VipTier]||rule.duration!=="30 dias"||
          rule.days!==30)
         throw Error("unapproved_vip_rank_or_duration");
       result[rule.productId]=Object.freeze({...rule});
@@ -48,7 +48,8 @@ export function makeRewardRegistry(rules:readonly RewardRule[]):RewardRegistry {
       if(sum>2304)throw Error("kit_capacity_exceeded");
       result[rule.productId]=Object.freeze({
         kind:"items" as const,productId:rule.productId,
-        items:Object.freeze(rule.items.map(x=>Object.freeze({...x}))),
+        items:Object.freeze((rule.items as KitRule["items"]).map(
+          (x:{itemId:string;quantity:number})=>Object.freeze({...x}))),
       });
     }else throw Error("unapproved_reward_kind");
   }
