@@ -30,14 +30,17 @@ await db.doc("coupons/fixture").set({
 });
 // HTTP cart quote must agree with the same authoritative catalog and
 // coupon used by the transactional Pix creator. This is an isolated emulator.
-const { default: express } = await import("express");
+const expressQuote = (await import("express")).default;
 const { apiRouter } = await import("../server/routes/api.ts");
-const { once: serverReady } = await import("node:events");
-const quoteApp = express();
-quoteApp.use(express.json());
+const quoteApp = expressQuote();
+quoteApp.use(expressQuote.json());
 quoteApp.use("/api",apiRouter);
 const quoteServer=quoteApp.listen(0,"127.0.0.1");
-await serverReady(quoteServer,"listening");
+await new Promise<void>((resolve,reject)=>{
+ if(quoteServer.listening)return resolve();
+ quoteServer.once("listening",resolve);
+ quoteServer.once("error",reject);
+});
 const quoteBase="http://127.0.0.1:"+(quoteServer.address() as any).port;
 const getQuote=async (body:unknown)=>{
  const response=await fetch(quoteBase+"/api/cart/quote",{
