@@ -3,6 +3,7 @@ import {RevenuePanel} from "../components/RevenuePanel.tsx";
 import {revenueReport,brasiliaPeriod} from "../lib/revenue.ts";
 import {formatStoredMoney} from '../lib/adminDisplay.ts';
 import {ProductManager} from "../components/ProductManager.tsx";
+import {PixTestMonitor} from "../components/PixTestMonitor.tsx";
 import {CategoryManager} from "../components/CategoryManager.tsx";
 import {useStoreCategories} from "../hooks/useStoreCategories.ts";
 import React, { useState, useEffect } from 'react';
@@ -61,25 +62,6 @@ import {
   savePlayerToFirestore,
   getStatsFromFirestore
 } from '../lib/firestoreSync.ts';
-
-function pixTestStateLabel(order: PixTestOrderSummary, now = Date.now()): string {
-  // A reservation may be left in "creating" after a sandbox gateway error.
-  // This is display-only: never infer a payment, refund or change Firestore state.
-  if (order.state === 'creating' && !order.providerOrderId &&
-      order.expiresAt && Date.parse(order.expiresAt) <= now)
-    return 'Criação não confirmada (teste)';
-  const labels: Record<PixTestOrderSummary['state'], string> = {
-    creating: 'Criando cobrança (teste)',
-    pending: 'Aguardando teste',
-    processing: 'Processando teste',
-    approved: 'Aprovado (simulado)',
-    expired: 'Expirado (teste)',
-    cancelled: 'Cancelado (teste)',
-    refunded: 'Devolvido (teste)',
-    unknown: 'Status não identificado',
-  };
-  return labels[order.state];
-}
 
 interface AdminViewProps {
   onExit: () => void;
@@ -156,22 +138,33 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
   const [newPlayerVipId, setNewPlayerVipId] = useState('');
   const [isSavingPlayer, setIsSavingPlayer] = useState(false);
 
+  const [pixTestRefreshedAt,setPixTestRefreshedAt]=useState<number|null>(null);
   const loadPixTestOrders = async () => {
     if (!adminToken) return;
     setPixTestLoading(true);
     setPixTestError('');
+    setPixTestRefreshedAt(null);
     try {
-      const [ordersList, deliveriesList, catalogAudit] = await Promise.all([
+      const [ordersResult,deliveriesResult,auditResult]=await Promise.allSettled([
         api.getPixTestOrders(adminToken),
         api.getPixTestDeliveries(adminToken),
-        // A missing audit must not hide existing Pix orders or deliveries.
-        api.getDeliveryCatalogAudit(adminToken).catch(() => null),
+        api.getDeliveryCatalogAudit(adminToken),
       ]);
-      setPixTestOrders(ordersList);
-      setPixTestDeliveries(deliveriesList);
-      setDeliveryCatalogAudit(catalogAudit);
-    } catch (error) {
-      setPixTestError(error instanceof Error ? error.message : 'Não foi possível consultar as simulações.');
+      // Never show stale statuses as fresh after a partially failed refresh.
+      setPixTestOrders(ordersResult.status==='fulfilled'?ordersResult.value:[]);
+      setPixTestDeliveries(deliveriesResult.status==='fulfilled'?deliveriesResult.value:[]);
+      setDeliveryCatalogAudit(auditResult.status==='fulfilled'?auditResult.value:null);
+      const errors:string[]=[];
+      if(ordersResult.status==='rejected')errors.push('Não foi possível carregar os pedidos Pix de teste.');
+      if(deliveriesResult.status==='rejected')errors.push('Não foi possível carregar a fila de entregas de teste.');
+      if(auditResult.status==='rejected')errors.push('Auditoria do catálogo indisponível.');
+      if(errors.length)setPixTestError(errors.join(' '));
+      else setPixTestRefreshedAt(Date.now());
+    } catch {
+      setPixTestOrders([]);
+      setPixTestDeliveries([]);
+      setDeliveryCatalogAudit(null);
+      setPixTestError('Não foi possível consultar o laboratório.');
     } finally {
       setPixTestLoading(false);
     }
@@ -985,103 +978,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
               )}
             </section>
 
-            <section className="rounded-xl border border-emerald-500/20 bg-white/[0.02] p-4 sm:p-5 space-y-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-bold text-white">Pix de teste · Mercado Pago Orders API</h3>
-                  <p className="text-zinc-400 text-[11px] mt-1">
-                    Últimas 50 simulações, somente leitura. Não são vendas reais,
-                    não entram no faturamento e não geram entregas Minecraft.
-                    Tentativas interrompidas não são pagamentos aprovados.
-                  </p>
-                </div>
-                <button type="button" onClick={() => void loadPixTestOrders()} disabled={pixTestLoading}
-                  className="text-xs border border-white/10 rounded-lg px-3 py-2 text-emerald-300 disabled:opacity-50">
-                  {pixTestLoading ? 'Consultando…' : 'Atualizar testes Pix'}
-                </button>
-              </div>
-              {pixTestError ? (
-                <p role="alert" className="text-amber-300 text-xs">{pixTestError}</p>
-              ) : pixTestLoading && pixTestOrders.length === 0 ? (
-                <p role="status" className="text-zinc-400 text-xs">Consultando pedidos de teste…</p>
-              ) : pixTestOrders.length === 0 ? (
-                <p className="text-zinc-400 text-xs">Nenhum pedido de teste encontrado no banco.</p>
-              ) : (
-                <div className="divide-y divide-white/[0.06]">
-                  {pixTestOrders.map(testOrder => (
-                    <div key={testOrder.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                      <div className="min-w-0">
-                        <div className="font-semibold text-white text-xs">
-                          {testOrder.gamertag} · {testOrder.linesCount} item(ns)
-                        </div>
-                        <div className="font-mono text-[10px] text-zinc-500 mt-1 break-all">
-                          Teste #{testOrder.id.slice(0, 12)} · {testOrder.createdAt
-                            ? new Date(testOrder.createdAt).toLocaleString('pt-BR')
-                            : 'Data não disponível'}
-                        </div>
-                      </div>
-                      <div className="text-right text-xs">
-                        <div className="font-semibold text-white">
-                          {(testOrder.totalCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </div>
-                        <div className={testOrder.state === 'approved' ? 'text-emerald-400' : 'text-amber-300'}>
-                          {pixTestStateLabel(testOrder)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="rounded-xl border border-emerald-500/20 bg-white/[0.02] p-4 sm:p-5 space-y-3" aria-label="Fila de entregas Pix de teste">
-              <div>
-                <h3 className="text-sm font-bold text-white">Fila de entregas · homologação</h3>
-                <p className="text-zinc-400 text-xs mt-1">
-                  Registros gerados após conciliação Pix. Apenas leitura: nenhuma recompensa será entregue.
-                  Todas as entregas continuam desligadas.
-                </p>
-              </div>
-              {pixTestError ? (
-                <p role="alert" className="text-amber-300 text-xs">{pixTestError}</p>
-              ) : pixTestLoading && pixTestDeliveries.length === 0 ? (
-                <p role="status" className="text-zinc-400 text-xs">Consultando entregas de teste…</p>
-              ) : pixTestDeliveries.length === 0 ? (
-                <p className="text-zinc-400 text-xs">Nenhuma entrega de teste registrada.</p>
-              ) : (
-                <div className="divide-y divide-white/[0.06]">
-                  <p className="text-amber-300 text-xs pb-2">{pixTestDeliveries.length} registro(s) de teste · execução Minecraft OFF.</p>
-                  {pixTestDeliveries.map(job => {
-                    const labels: Record<PixTestDeliverySummary['hold'], string> = {
-                      payment_not_verified: 'Pagamento não confirmado ou registro inválido',
-                      refunded: 'Bloqueado: estorno/cancelamento',
-                      missing_approval_timestamp: 'Pendente: data de aprovação do VIP',
-                      reward_review_required: 'Pendente: revisar recompensas do kit',
-                      vip_mapping_required: 'Pendente: integrar cargo VIP ao Core',
-                      reward_missing: 'Pendente: configurar recompensa',
-                      reward_invalid: 'Pendente: corrigir recompensa',
-                      quantity_invalid: 'Pendente: quantidade inválida',
-                      product_invalid: 'Pendente: produto inválido',
-                      plan_missing: 'Pendente: preparar plano de entrega',
-                      dispatch_disabled: 'Entrega automática desligada',
-                    };
-                    return (
-                      <div key={job.id} className="py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-                        <div className="min-w-0">
-                          <div className="font-semibold text-white">
-                            {job.gamertag} · {job.kind === 'vip' ? 'VIP' : job.kind === 'items' ? 'Itens/kit' : 'Não configurado'} · {job.units} un.
-                          </div>
-                          <div className="font-mono text-zinc-500 text-[10px] break-all">
-                            Entrega #{job.id.slice(0, 16)}
-                          </div>
-                        </div>
-                        <div className="text-amber-300 font-medium">{labels[job.hold]}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+            <PixTestMonitor
+              orders={pixTestOrders}
+              deliveries={pixTestDeliveries}
+              loading={pixTestLoading}
+              error={pixTestError}
+              refreshedAt={pixTestRefreshedAt}
+              onRefresh={() => void loadPixTestOrders()}
+            />
 
             <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
               {orders
