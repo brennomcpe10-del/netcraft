@@ -15,7 +15,7 @@ test("remaining shared Preview writes stay protected by a server guard", () => {
   }
 });
 
-test("authenticated Preview cannot write to remaining shared settings, branding, coupons, editorial or legacy orders", async () => {
+test("authenticated Preview cannot write to remaining shared settings, branding, editorial or legacy orders", async () => {
   const beforeKey = process.env.ADMIN_KEYWORD;
   const beforeEnv = process.env.VERCEL_ENV;
   process.env.ADMIN_KEYWORD = randomBytes(24).toString("hex");
@@ -28,8 +28,6 @@ test("authenticated Preview cannot write to remaining shared settings, branding,
   const port = (server.address() as any).port;
   const token = generateAdminToken();
   const protectedPaths: [string,string][] = [
-    ["POST","/admin/coupons"],
-    ["PUT","/admin/coupons/test-coupon"], ["DELETE","/admin/coupons/test-coupon"],
     ["PUT","/admin/settings"], ["PUT","/admin/settings/livepix"], ["PUT","/admin/settings/pix"],
     ["POST","/admin/events"], ["PUT","/admin/events/test-event"],
     ["DELETE","/admin/events/test-event"], ["POST","/admin/news"],
@@ -58,6 +56,7 @@ test("authenticated Preview cannot write to remaining shared settings, branding,
       environment:"preview",
       isolatedPlayerAndSupportData:true,
       isolatedPreviewCatalog:true,
+      isolatedPreviewCoupons:true,
       sharedStoreData:true,
       storeWritesBlocked:true
     });
@@ -71,15 +70,17 @@ test("authenticated Preview cannot write to remaining shared settings, branding,
   }
 });
 
-test("coupon admin updates are transactional and never accept browser Firestore fallbacks", () => {
+test("coupon admin writes are transactional and Preview-aware with no browser Firestore access", () => {
   const source=readFileSync(new URL("../server/routes/api.ts",import.meta.url),"utf8");
   const start=source.indexOf("apiRouter.post('/admin/coupons'");
   const end=source.indexOf("apiRouter.post('/coupons/validate'");
   assert.ok(start>=0&&end>start);
   const adminRoutes=source.slice(start,end);
   assert.match(adminRoutes,/db\.runTransaction\(async tx=>/);
-  assert.match(adminRoutes,/const next=couponDraft\(req\.body,id,snap\.data\(\)\)/);
+  assert.match(adminRoutes,/const next=couponDraft\(req\.body,id,existing\)/);
   assert.match(adminRoutes,/tx\.set\(ref,next\)/);
+  assert.match(adminRoutes,/couponWriteReference\(id,db\)/);
+  assert.match(adminRoutes,/if\(!isPreviewEnvironment\(\)\)dbStore\.updateCoupon/);
   const validate=source.slice(end,source.indexOf("function isProviderManagedLegacyOrder",end));
   assert.doesNotMatch(validate,/import\('firebase\/firestore'\)/);
 });
