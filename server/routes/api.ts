@@ -13,6 +13,7 @@ import { validateVipCategoryId, assertVipCategoryExists } from '../services/vipC
 import { validateVipImage } from '../services/vipImage.ts';
 import {firestoreProducts} from '../services/firestoreProducts.ts';
 import {quoteCart,validateCartRequest} from '../../src/lib/cartQuote.ts';
+import { discounted } from '../payments/service.ts';
 import {validateCategories, defaultStoreCategories} from '../../src/lib/storeCategories.ts';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import crypto from 'crypto';
@@ -277,19 +278,40 @@ apiRouter.delete('/admin/vips/:id',requireAdmin,async(req,res)=>{
 // -------------------------------------------------------------
 // STORE PRODUCTS
 // -------------------------------------------------------------
-// Read-only cart quote. Payment and fulfillment remain disabled for grouped carts.
+// Read-only server-authoritative quote; no order or coupon reservations.
 apiRouter.post('/cart/quote', async (req,res)=>{
+ res.setHeader('Cache-Control','no-store');
  try {
   validateCartRequest(req.body?.lines);
-  if(req.body.couponCode) return res.status(409).json({error:'Cupons indisponíveis para cobranças fixas.'});
-  // The cart quote must use the same server-side Firestore Admin connection as Pix.
-  // The browser Firebase SDK cannot reliably access Firestore from Vercel functions.
+  const rawCoupon=req.body?.couponCode;
+  if(rawCoupon!==undefined && (typeof rawCoupon!=='string'||rawCoupon.length>50))
+   return res.status(400).json({error:'Cupom inválido.'});
+  const couponCode=typeof rawCoupon==='string'?rawCoupon.trim().toUpperCase():'';
+  const {paymentDatabase}=await import('../payments/database.ts');
+  const db=paymentDatabase();
   const items=await Promise.all(req.body.lines.map((line:any)=>
-   readCatalogItem(line.productType==='vip'?'vips':'products',line.productId)));
-  res.setHeader('Cache-Control','no-store');
-  return res.json(quoteCart(req.body.lines,items as any));
+   readCatalogItem(line.productType==='vip'?'vips':'products',line.productId,undefined,db)));
+  const quote=quoteCart(req.body.lines,items as any);
+  let discountCents=0;
+  if(couponCode){
+   // Actual Pix checkout revalidates and reserves the coupon in a transaction.
+   const found=await db.collection('coupons').where('code','==',couponCode).get();
+   if(found.size!==1)return res.status(400).json({error:'Cupom não encontrado.'});
+   const source=found.docs[0].data();
+   const reservation=await db.collection('pixTestCouponUsage').doc(found.docs[0].id).get();
+   discountCents=discounted(quote.subtotalCents,{
+    ...source,usedCount:Number(source.usedCount||0)+Number(reservation.data()?.reservedCount||0),
+   });
+  }
+  const totalCents=quote.subtotalCents-discountCents;
+  if(totalCents<1||totalCents>1000000)
+   return res.status(400).json({error:'O total Pix precisa estar entre R$ 0,01 e R$ 10.000.'});
+  return res.json({...quote,discountCents,totalCents,
+   couponCode:couponCode||null,couponsAvailable:true,
+   combinedPaymentAvailable:true,environment:'test'});
  }catch(error){
-  if(error instanceof Error && (error.name==='PixError'||error.name==='CartQuoteError')) return res.status(400).json({error:error.message});
+  if(error instanceof Error && (error.name==='PixError'||error.name==='CartQuoteError'))
+   return res.status(400).json({error:error.message});
   return res.status(503).json({error:'Não foi possível consultar o catálogo no servidor. Tente novamente.'});
  }
 });
