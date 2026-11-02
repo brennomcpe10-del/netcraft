@@ -45,9 +45,10 @@ function fixture(){
     me:async()=>({id:42,netcraftTestAccount:false}),
     get:async()=>structuredClone(resource),
   };
-  const service=createCommercialStagingService(db,reader,{
+  const reboot=()=>createCommercialStagingService(db,reader,{
     keyring:{[keyId]:secret},now:()=>time,
   });
+  const service=reboot();
   const setState=(state:string)=>{
     resource=ordersFixture(id,"25.00",state);
     resource.live_mode=true;
@@ -67,7 +68,7 @@ function fixture(){
   }
   const jobs=()=>[...db.records.entries()]
     .filter(([path]:[string,unknown])=>path.startsWith("pixCommercialDeliveries/"));
-  return {db,order,service,reader,setState,step,signed,jobs};
+  return {db,order,service,reboot,reader,setState,step,signed,jobs};
 }
 test("15/16: authenticated Orders GET creates immutable queued items/VIP only once; real dispatch is OFF",async()=>{
  const f=fixture();
@@ -236,4 +237,125 @@ test("17: Bedrock pure-JS signer and backend HMAC agree byte for byte",()=>{
  assert.throws(()=>makeCommercialCandidateSignature({
    action:"poll",body:payload,keyId,timestamp,nonce,readSecret:()=>"",
  }),/missing_server_only_secret/);
+});
+
+test("20/21: service reboot holds expired leases until durable Core receipt ACK",async()=>{
+ const f=fixture();
+ await f.service.reconcileAndQueue(id);
+ const offer=await f.service.offer(id+"-0","Lab Tester",true) as any;
+ assert.equal(offer.status,"offered");
+ f.step(120_500);
+ const restarted=f.reboot();
+ assert.deepEqual(await restarted.recoverAfterRestart(),{
+   examined:1,awaitingReceipt:1,skipped:0,dispatchEnabled:false,
+ });
+ const inspection=await restarted.diagnose(id+"-0");
+ assert.equal(inspection.found,true);
+ assert.equal(inspection.state,"awaiting_receipt");
+ assert.equal(inspection.requiresReceipt,true);
+ assert.equal(inspection.dispatchEnabled,false);
+ assert.ok(!("leaseToken" in inspection));
+ assert.ok(!("gamertag" in inspection));
+ assert.ok(!("payload" in inspection));
+ assert.equal((await restarted.offer(id+"-0","Lab Tester",true)).status,"held");
+ assert.equal((await f.reboot().recoverAfterRestart()).awaitingReceipt,0);
+ // A lost HTTP ACK can be retried after the service/gateway restarts.
+ const ack=await restarted.acknowledge(id+"-0",offer.leaseToken,"already_applied");
+ assert.equal(ack.status,"acknowledged");
+ assert.equal((await f.reboot().acknowledge(id+"-0",offer.leaseToken,"applied") as any).duplicate,true);
+ assert.equal((await f.reboot().offer(id+"-0","Lab Tester",true)).status,"held");
+ const safe=(await f.reboot().diagnose(id+"-0"));
+ assert.equal(safe.requiresReceipt,false);
+ assert.equal(safe.state,"acknowledged");
+ assert.equal(f.jobs()[0][1].attempts,1);
+});
+test("20/21: outage before any receipt permits ONLY same-ID NACK retry, never second simultaneous grant",async()=>{
+ const f=fixture();
+ await f.service.reconcileAndQueue(id);
+ const grant=await f.service.offer(id+"-0","Lab Tester",true) as any;
+ f.step(120_100);
+ assert.equal((await f.reboot().recoverAfterRestart()).awaitingReceipt,1);
+ const unsafe=await f.reboot().nack(id+"-0",grant.leaseToken,"inventory_full","unknown");
+ assert.equal(unsafe.status,"review_required");
+ assert.equal((await f.reboot().offer(id+"-0","Lab Tester",true)).status,"held");
+ // Independent case: Core explicitly proves NO write-ahead receipt.
+ const other=f.service.offer(id+"-1","Lab Tester",true) as any;
+ const vip=await other;
+ f.step(120_100);
+ await f.reboot().recoverAfterRestart();
+ assert.equal((await f.reboot().nack(id+"-1",vip.leaseToken,
+  "player_offline","none")).status,"retryable");
+ assert.equal((await f.reboot().offer(id+"-1","Lab Tester",true)).status,"held");
+ f.step(5001);
+ const reoffer=await f.reboot().offer(id+"-1","Lab Tester",true) as any;
+ assert.equal(reoffer.status,"offered");
+ assert.notEqual(reoffer.leaseToken,vip.leaseToken);
+ assert.equal((await f.reboot().acknowledge(id+"-1",vip.leaseToken,"applied")).status,"held");
+ assert.equal(f.jobs()[1][1].attempts,2);
+});
+test("22: disputes block pending grants; chargeback after ACK requires review, no reactivation",async()=>{
+ const f=fixture();
+ await f.service.reconcileAndQueue(id);
+ const grant=await f.service.offer(id+"-0","Lab Tester",true) as any;
+ assert.equal((await f.service.acknowledge(id+"-0",grant.leaseToken,"applied")).status,"acknowledged");
+ f.setState("in_mediation");
+ const disputed=await f.service.reconcileAndQueue(id);
+ assert.equal(disputed.state,"disputed");
+ assert.equal(f.jobs()[0][1].state,"refunded_after_ack");
+ assert.equal(f.jobs()[1][1].state,"blocked");
+ assert.equal((await f.service.offer(id+"-1","Lab Tester",true)).status,"held");
+ f.setState("approved");
+ assert.equal((await f.service.reconcileAndQueue(id)).state,"review_required");
+ assert.equal(f.jobs()[1][1].state,"blocked");
+ f.setState("charged_back");
+ assert.equal((await f.service.reconcileAndQueue(id)).state,"refunded");
+ assert.equal(f.jobs()[0][1].state,"refunded_after_ack");
+ assert.equal((await f.reboot().offer(id+"-1","Lab Tester",true)).status,"held");
+});
+test("23: transaction audit and diagnostics never expose IDs, secrets, player name, payloads or tokens",async()=>{
+ const f=fixture();
+ await f.service.reconcileAndQueue(id);
+ const granted=await f.service.offer(id+"-0","Lab Tester",true) as any;
+ f.step(120_001);
+ await f.reboot().recoverAfterRestart();
+ await f.reboot().acknowledge(id+"-0",granted.leaseToken,"applied");
+ const audit=[...f.db.records.entries()]
+  .filter(([path]:[string,any])=>path.startsWith("pixCommercialDeliveryAudit/"));
+ assert.ok(audit.length>=4);
+ const allowed=new Set(["event","reason","orderHash","deliveryHash",
+  "recordedAt","environment","dispatchEnabled"]);
+ const all=JSON.stringify(audit);
+ for(const [,record] of audit){
+   assert.ok(Object.keys(record).every(k=>allowed.has(k)));
+   assert.match(record.orderHash,/^[a-f0-9]{64}$/);
+   assert.equal(record.dispatchEnabled,false);
+   assert.equal(record.environment,"commercial_candidate");
+ }
+ assert.ok(!all.includes(id));
+ assert.ok(!all.includes("Lab Tester"));
+ assert.ok(!all.includes(secret));
+ assert.ok(!all.includes(granted.leaseToken));
+ assert.ok(!all.includes("minecraft:diamond"));
+ const view=await f.service.diagnose(id+"-0");
+ assert.deepEqual(Object.keys(view).sort(),[
+   "attempts","dispatchEnabled","found","reason","requiresManualReview",
+   "requiresReceipt","state",
+ ].sort());
+ assert.equal(view.state,"acknowledged");
+ assert.equal((await f.service.diagnose("b".repeat(64)+"-1")).found,false);
+});
+test("20: provider unavailable on recovery keeps same lease quarantined",async()=>{
+ const f=fixture();
+ await f.service.reconcileAndQueue(id);
+ const offer=await f.service.offer(id+"-0","Lab Tester",true) as any;
+ f.step(150_000);
+ f.reader.get=async()=>{throw Error("provider fail with private-data-must-not-be-recorded")};
+ assert.equal((await f.reboot().recoverAfterRestart()).awaitingReceipt,1);
+ assert.equal((await f.reboot().diagnose(id+"-0")).reason,"provider_check_failed");
+ assert.equal((await f.reboot().offer(id+"-0","Lab Tester",true)).status,"held");
+ assert.equal((await f.reboot().acknowledge(id+"-0",offer.leaseToken,"applied")).status,
+   "review_required");
+ const audit=[...f.db.records.entries()].filter(([p]:[string,unknown])=>
+   p.startsWith("pixCommercialDeliveryAudit/"));
+ assert.ok(!JSON.stringify(audit).includes("private-data-must-not-be-recorded"));
 });
