@@ -164,8 +164,9 @@ export function CategoryManager({
         >
           <h3>Excluir {deleting.title}?</h3>
           <p>
-            Os produtos e pedidos serão preservados. Produtos desta categoria
-            poderão ser reclassificados em Produtos → Todas as categorias.
+            Pedidos anteriores serão preservados. Se houver produtos ou VIPs
+            ativos nesta categoria, a exclusão será bloqueada até você
+            reclassificá-los ou desativá-los no painel.
           </p>
           <button
             className="nc-button"
