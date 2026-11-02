@@ -80,3 +80,24 @@ test("partial fetch errors visibly mark all dashboard metrics incomplete",()=>{
  assert.match(source,/<PixTestMonitor/);
  assert.ok(!source.includes("function pixTestStateLabel"));
 });
+
+test("historical order tracking filters stored statuses without claiming sandbox or real delivery proof",async()=>{
+ const {legacyOrderOverview,filterLegacyOrders}=await import("../src/lib/legacyOrderMonitor.ts");
+ const historic = [
+  {id:"hist-pending",status:"Pendente",recipientNickname:"Halzin",buyerNickname:"Owner",productName:"Kit",transactionId:"T1"},
+  {id:"hist-paid",status:"Pago",recipientNickname:"Alice",buyerNickname:"Buyer",productName:"VIP",transactionId:"T2"},
+  {id:"hist-delivered",status:"Entregue",recipientNickname:"Bob",buyerNickname:"Buyer",productName:"Kit",transactionId:"T3"},
+  {id:"hist-refunded",status:"Reembolsado",recipientNickname:"Carol",buyerNickname:"Buyer",productName:"VIP",transactionId:"T4"},
+  {id:"hist-cancel",status:"Cancelado",recipientNickname:"Dan",buyerNickname:"Buyer",productName:"Kit",transactionId:"T5"},
+ ] as any[];
+ const stats=legacyOrderOverview(historic);
+ assert.deepEqual(stats,{total:5,pending:1,paid:1,delivered:1,closed:2});
+ assert.deepEqual(filterLegacyOrders(historic,"paid","").map(x=>x.id),["hist-paid"]);
+ assert.deepEqual(filterLegacyOrders(historic,"closed","").map(x=>x.id),["hist-refunded","hist-cancel"]);
+ assert.deepEqual(filterLegacyOrders(historic,"all","hAlZiN").map(x=>x.id),["hist-pending"]);
+ assert.deepEqual(filterLegacyOrders(historic,"all","T3").map(x=>x.id),["hist-delivered"]);
+ const source=readFileSync(new URL("../src/views/AdminView.tsx",import.meta.url),"utf8");
+ assert.match(source,/Filtrar pedidos históricos/);
+ assert.match(source,/Histórico legado/);
+ assert.match(source,/filterLegacyOrders\(orders,legacyOrderFilter,searchQuery\)/);
+});
