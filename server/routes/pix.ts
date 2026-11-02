@@ -226,7 +226,7 @@ export function createPixRouter(
       // has a unique request-id; exact retries are acknowledged only after
       // successful verified GET + transactional reconciliation.
       const db=dependencies.database();
-      const claim=isOrder ? await claimWebhook(db,id,requestId,signature) : null;
+      const claim=await claimWebhook(db,id,requestId,signature);
       if(claim?.status==="duplicate")return res.sendStatus(204);
       if(claim?.status==="busy")return res.status(503).json({error:"Notificação em processamento. Reenvie mais tarde."});
       try {
