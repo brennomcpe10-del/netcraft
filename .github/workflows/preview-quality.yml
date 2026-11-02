@@ -100,6 +100,12 @@ jobs:
         run: node --test tests/delivery-core-v031-clone.test.mjs
       - name: Check v0.3.1 isolated mock BDS fixture server syntax
         run: node --check minecraft/delivery-v031-core-lab/start-v031-bds-clone-local.mjs
+      - name: Verify no private credentials or unsafe logging in source
+        run: node scripts/verify-delivery-secrets.mjs
+      - name: Verify Cloudflare private Worker remains strictly OFF
+        run: |
+          node --check sandbox/cloudflare/delivery-private-candidate.worker.mjs
+          node --test --import tsx tests/delivery-infra-30-34.test.tsx tests/delivery-secret-guard.test.tsx
       - name: TypeScript typecheck
         run: npm run lint
       - name: Package clone-only fixture bridge source v0.3.2 (not installable)
@@ -334,6 +340,64 @@ jobs:
           retention-days: 14
       - name: Build storefront
         run: npm run build
+
+  delivery-firestore-permissions:
+    name: Delivery candidate Firestore client permissions (emulator only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    env:
+      NODE_ENV: test
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+      GCLOUD_PROJECT: demo-netcraft-admin-test
+      GOOGLE_CLOUD_PROJECT: demo-netcraft-admin-test
+      FIREBASE_PROJECT_ID: demo-netcraft-admin-test
+      FIREBASE_SERVICE_ACCOUNT_JSON: ""
+      GOOGLE_APPLICATION_CREDENTIALS: ""
+      MERCADOPAGO_ACCESS_TOKEN: ""
+      MERCADOPAGO_WEBHOOK_SECRET: ""
+    steps:
+      - name: Checkout Preview branch
+        uses: actions/checkout@v4
+      - name: Install Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Java 21 for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install
+      - name: Check no rules or infrastructure release is activated
+        run: |
+          test -f firestore.delivery-isolated.rules
+          grep -q 'CANDIDATE ONLY - NOT DEPLOYED' firestore.delivery-isolated.rules
+          test -f sandbox/cloudflare/wrangler.delivery-private-candidate.toml
+          grep -q 'workers_dev = false' sandbox/cloudflare/wrangler.delivery-private-candidate.toml
+          node scripts/verify-delivery-secrets.mjs
+      - name: Verify private client permissions with isolated candidate rules
+        run: |
+          set -euo pipefail
+          test "$FIRESTORE_EMULATOR_HOST" = '127.0.0.1:8085'
+          test "$GCLOUD_PROJECT" = 'demo-netcraft-admin-test'
+          test -z "$FIREBASE_SERVICE_ACCOUNT_JSON"
+          test -z "$MERCADOPAGO_ACCESS_TOKEN"
+          cat > .firebase-delivery-candidate-ci.json <<'JSON'
+          {
+            "firestore": {"rules": "firestore.delivery-isolated.rules"},
+            "emulators": {"firestore": {"host": "127.0.0.1", "port": 8085},
+              "ui": {"enabled": false}}
+          }
+          JSON
+          npx --yes firebase-tools@14 emulators:exec --only firestore \
+            --project demo-netcraft-admin-test \
+            --config .firebase-delivery-candidate-ci.json \
+            'node --import tsx tests/delivery-security-firestore.integration.ts'
 
   pix-firestore-emulator:
     name: Pix Firestore emulator (demo only)
