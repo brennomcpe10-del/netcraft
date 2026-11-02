@@ -513,15 +513,14 @@ test("HTTP webhook verifies signature and re-queries Orders API instead of trust
   try {
     const url = `http://127.0.0.1:${port}/pix/webhook?data.id=${ORD}&type=order`,
       ts = String(Date.now()),
-      sig = crypto
-        .createHmac("sha256", "fixture")
-        .update(`id:${ORD.toLowerCase()};request-id:req;ts:${ts};`)
-        .digest("hex"),
-      headers = {
-        "content-type": "application/json",
-        "x-request-id": "req",
-        "x-signature": `ts=${ts},v1=${sig}`,
-      };
+      signHeaders = (requestId: string) => ({
+        "content-type":"application/json",
+        "x-request-id":requestId,
+        "x-signature":`ts=${ts},v1=${crypto.createHmac("sha256","fixture")
+          .update(`id:${ORD.toLowerCase()};request-id:${requestId};ts:${ts};`)
+          .digest("hex")}`,
+      }),
+      headers = signHeaders("req-1");
     assert.equal(
       (
         await fetch(url, {
@@ -543,19 +542,22 @@ test("HTTP webhook verifies signature and re-queries Orders API instead of trust
     assert.equal(response.status, 204);
     assert.equal((await s.api.view(first.id)).state, "pending");
     s.setResource(ordersFixture(first.id, "25.00", "approved"));
+    // The exact notification retry cannot re-query provider or re-grant.
+    assert.equal((await fetch(url,{method:"POST",headers,body:"{}"})).status,204);
+    assert.equal((await s.api.view(first.id)).state,"pending");
+    const approvedHeaders=signHeaders("req-2");
     assert.equal(
-      (await fetch(url, { method: "POST", headers, body: "{}" })).status,
+      (await fetch(url, { method: "POST", headers:approvedHeaders, body: "{}" })).status,
       204,
     );
     assert.equal((await s.api.view(first.id)).state, "approved");
-    // Duplicate signed webhooks must not queue duplicate fulfillment jobs.
-    assert.equal((await fetch(url, { method: "POST", headers, body: "{}" })).status, 204);
+    assert.equal((await fetch(url, { method: "POST", headers:approvedHeaders, body: "{}" })).status, 204);
     const jobs = [...s.db.records.entries()].filter(([key]) => key.startsWith("pixTestDeliveries/"));
     assert.equal(jobs.length, 1);
     assert.equal(jobs[0][1].dispatchEnabled, false);
     // A forged approval in the body cannot override the authenticated provider GET.
     s.setResource(ordersFixture(first.id, "25.00", "refunded"));
-    assert.equal((await fetch(url, { method: "POST", headers, body: JSON.stringify({ type: "order", data: { id: ORD, status: "processed" } }) })).status, 204);
+    assert.equal((await fetch(url, { method: "POST", headers:signHeaders("req-3"), body: JSON.stringify({ type: "order", data: { id: ORD, status: "processed" } }) })).status, 204);
     assert.equal((await s.api.view(first.id)).state, "refunded");
     assert.equal(s.db.records.get(jobs[0][0]).state, "blocked");
     assert.equal(

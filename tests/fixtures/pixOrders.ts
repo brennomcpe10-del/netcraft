@@ -93,6 +93,7 @@ export function memoryDB() {
     set: (r: any, d: any) => records.set(r.path, structuredClone(d)),
     update: (r: any, d: any) =>
       records.set(r.path, { ...records.get(r.path), ...structuredClone(d) }),
+    delete: (r: any) => records.delete(r.path),
   };
   return { records, collection, runTransaction: async (fn: any) => fn(tx) };
 }
