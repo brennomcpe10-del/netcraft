@@ -13,6 +13,7 @@ import { previewDeliveryPlan } from "../delivery/rewardPlan.ts";
 import { draftCoreDelivery } from "../delivery/coreJobContract.ts";
 import { quoteCart, validateCartRequest } from "../../src/lib/cartQuote.ts";
 import { readCatalogItem } from "../services/previewCatalog.ts";
+import { findCouponByCode } from "../services/previewCoupons.ts";
 import {
   MercadoPago,
   PixError,
@@ -144,19 +145,14 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
           input.couponCode.length > 50
         )
           throw new PixError("Cupom inválido.");
-        const found = await tx.get(
-          db
-            .collection("coupons")
-            .where("code", "==", input.couponCode.trim().toUpperCase()),
-        );
-        if (found.size !== 1) throw new PixError("Cupom não encontrado.");
+        const source = await findCouponByCode(input.couponCode.trim().toUpperCase(),tx,db);
+        if (!source) throw new PixError("Cupom não encontrado.");
         const reservationRef = db
           .collection("pixTestCouponUsage")
-          .doc(found.docs[0].id);
+          .doc(source.id);
         couponRef = reservationRef;
         const usage = await tx.get(reservationRef);
         couponReservations = Number(usage.data()?.reservedCount || 0);
-        const source = found.docs[0].data();
         coupon = {
           ...source,
           usedCount: Number(source.usedCount || 0) + couponReservations,
