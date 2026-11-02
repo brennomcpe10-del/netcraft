@@ -287,9 +287,11 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
         Date.parse(providerUpdatedAt) < Date.parse(o.providerStatusUpdatedAt)
       )
         return;
+      // A newer authenticated provider GET may revoke approval. Never keep
+      // an approved status when the provider now reports refund, expiry,
+      // cancellation or a disputed/uncertain processing state. Refunded is
+      // terminal and must never return to approved due to stale notifications.
       if (o.state === "refunded") state = "refunded";
-      else if (o.state === "approved" && state !== "refunded")
-        state = "approved";
       // Orders API documents last_updated_date, not an immutable approval timestamp.
       // Record observation separately; never start a future VIP timer from an invented date.
       const approvedAt = o.approvedAt || null;
@@ -338,18 +340,21 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
               createdAt: new Date().toISOString(),
             });
         });
-      if (state === "refunded")
+      if (state !== "approved")
         snapshots.forEach((snap: any) => {
-          if (snap.exists)
+          if (snap.exists && snap.data()?.state !== "blocked")
             tx.update(snap.ref, {
               state: "blocked",
-              reason: "refund_or_chargeback",
+              reason: state === "refunded" ? "refund_or_chargeback"
+                : "provider_payment_not_approved",
             });
         });
       tx.update(ref, {
         state,
         approvedAt,
         approvalObservedAt,
+        paymentReviewRequired: state !== "approved" &&
+          Boolean(o.approvalObservedAt),
         requiresApprovalTimestamp: state === "approved" && !approvedAt,
         updatedAt: new Date().toISOString(),
         providerStatus: resource.status,
