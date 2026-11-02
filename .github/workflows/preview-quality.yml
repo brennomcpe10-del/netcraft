@@ -113,6 +113,17 @@ jobs:
             dist/bds-off/fixture-bridge-v032-manifest.json
           if-no-files-found: error
           retention-days: 7
+      - name: Assemble clone-only NetCraft Delivery BP/RP v0.4.0
+        run: node scripts/package-netcraft-delivery-v040.mjs
+      - name: Publish clone-only NetCraft Delivery v0.4.0 Bedrock addon
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcraft-delivery-core-clone-lab-off-v040
+          path: |
+            dist/bds-off/NetCraft_Delivery_Core_Clone_LAB_OFF_v0.4.0.mcaddon
+            dist/bds-off/netcraft-delivery-v040-integrity.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Automated tests
         run: NODE_ENV=test npm test
       - name: Gate C - isolated verified HTTPS loopback (no external endpoint)
