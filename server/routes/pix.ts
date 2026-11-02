@@ -127,17 +127,18 @@ export function createPixRouter(
         process.env.VERCEL_ENV === "preview" &&
         /^ORDTST[A-Z0-9]{20,40}$/.test(id) &&
         (() => {
-          const parts = Object.fromEntries(
-            signature.split(",").map(part => part.trim().split("=")),
-          );
-          if (!secret || !requestId || !/^\d{10,13}$/.test(parts.ts || "") ||
-              !/^[a-f0-9]{64}$/i.test(parts.v1 || "")) return false;
-          const milliseconds = Number(parts.ts) * (parts.ts.length === 10 ? 1000 : 1);
+          // Preserve the Preview test-simulator case exception without
+          // accepting repeated/unknown ts or v1 fields, which a loose
+          // Object.fromEntries parser would silently overwrite.
+          const parts = /^ts=(\d{10}|\d{13}),\s*v1=([a-f0-9]{64})$/i.exec(signature);
+          if (!parts || !secret || !/^[A-Za-z0-9-]{1,128}$/.test(requestId))
+            return false;
+          const milliseconds = Number(parts[1]) * (parts[1].length === 10 ? 1000 : 1);
           if (Math.abs(Date.now() - milliseconds) > 300000) return false;
           const expected = crypto.createHmac("sha256", secret)
-            .update(`id:${id};request-id:${requestId};ts:${parts.ts};`)
+            .update(`id:${id};request-id:${requestId};ts:${parts[1]};`)
             .digest();
-          return crypto.timingSafeEqual(expected, Buffer.from(parts.v1, "hex"));
+          return crypto.timingSafeEqual(expected, Buffer.from(parts[2], "hex"));
         })();
       if (!documentedSignatureValid && !previewOriginalCaseSignatureValid) {
         // Preview-only diagnostics: never log header values, secrets, request

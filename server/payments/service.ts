@@ -292,6 +292,12 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
       // cancellation or a disputed/uncertain processing state. Refunded is
       // terminal and must never return to approved due to stale notifications.
       if (o.state === "refunded") state = "refunded";
+      // Once a previously credited order has been reversed, a later GET
+      // reporting approval is not sufficient to resume its blocked grants.
+      // Keep the reversal for manual review instead of silently reinstating.
+      else if (o.paymentReviewRequired && o.approvalObservedAt &&
+        ["cancelled", "expired"].includes(o.state) && state === "approved")
+        state = o.state;
       // Orders API documents last_updated_date, not an immutable approval timestamp.
       // Record observation separately; never start a future VIP timer from an invented date.
       const approvedAt = o.approvedAt || null;
@@ -376,15 +382,24 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
   }
   async function reconcileLegacy(id: string, saved: any) {
     if (!saved.paymentId) return;
+    const receiver = await gateway.me();
+    if (receiver.netcraftTestAccount !== true ||
+        String(receiver.id) !== String(saved.collector))
+      throw new PixError("Recebedor histórico não corresponde à conta de teste.", 503);
     const payment = await gateway.getLegacyPayment(saved.paymentId);
-    verifyPayment(payment, saved, String((await gateway.me()).id));
+    verifyPayment(payment, saved, String(receiver.id));
     await db.runTransaction(async (tx) => {
       const ref = orders.doc(id),
-        o = (await tx.get(ref)).data()!;
-      verifyPayment(payment, o, o.collector);
+        o = (await tx.get(ref)).data();
+      if (!o || o.paymentId !== saved.paymentId ||
+          String(o.collector) !== String(receiver.id))
+        throw new PixError("Vínculo do pagamento histórico alterado.", 409);
+      verifyPayment(payment, o, String(receiver.id));
       let state = paymentState(payment);
       if (o.state === "refunded") state = "refunded";
-      else if (o.approvedAt && state !== "refunded") state = "approved";
+      else if (o.paymentReviewRequired && o.approvedAt &&
+        ["cancelled", "expired"].includes(o.state) && state === "approved")
+        state = o.state;
       // Preserve legacy timestamps and outbox. New legacy fulfillment is never dispatched.
       const approvedAt =
         o.approvedAt ||
@@ -410,17 +425,19 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
               attempts: 0,
             });
         });
-      if (state === "refunded")
+      if (state !== "approved")
         snaps.forEach((s: any) => {
-          if (s.exists)
+          if (s.exists && s.data()?.state !== "blocked")
             tx.update(s.ref, {
               state: "blocked",
-              reason: "refund_or_chargeback",
+              reason: state === "refunded"
+                ? "refund_or_chargeback" : "provider_payment_not_approved",
             });
         });
       tx.update(ref, {
         state,
         approvedAt,
+        paymentReviewRequired: state !== "approved" && Boolean(o.approvedAt),
         updatedAt: new Date().toISOString(),
         providerStatus: payment.status,
       });

@@ -88,3 +88,16 @@ Fontes oficiais:
 - https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/payment-management/status/order-status
 
 **Status:** código de segurança e laboratório preparado, comércio real OFF.
+
+## Reforço de regressão (2 de novembro de 2026)
+
+- A verificação **histórica** da Payments API não transforma mais pagamentos
+  cancelados/rejeitados/pendentes em aprovados só porque houve crédito anterior.
+  Reversões bloqueiam jobs de teste e exigem revisão; a identidade do recebedor
+  de teste também é novamente conferida.
+- Uma aprovação posterior não reabre automaticamente jobs já bloqueados por
+  estorno, expiração ou cancelamento. O checkout comercial segue indisponível.
+- A exceção de assinatura com maiúsculas do simulador de Preview passou a
+  exigir cabeçalho HMAC canônico, rejeitando campos ts/v1 duplicados.
+- Novos testes de regressão cobrem esses cenários; produção e entregas reais
+  permanecem desativadas.

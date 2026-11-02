@@ -458,6 +458,50 @@ test("legacy payment verification remains available for historical reconciliatio
     ),
   );
 });
+
+test("legacy revocations and rejections block historical jobs instead of inheriting approval", async () => {
+  for (const status of ["pending", "cancelled", "rejected", "refunded"]) {
+    const db = memoryDB(), id = "a".repeat(64);
+    const saved = {
+      id, paymentId: "123", collector: "42", totalCents: 2500,
+      apiVersion: "payments-legacy", currency: "BRL",
+      state: "approved", approvedAt: "2026-10-01T12:00:00.000Z",
+      gamertag: "Local Tester", lines: [{ name: "Historical kit", quantity: 1 }],
+    };
+    const jobId = id + "-0";
+    db.records.set("pixTestOrders/" + id, saved);
+    db.records.set("pixTestDeliveries/" + jobId, {
+      id: jobId, state: "pending", environment: "test", dispatchEnabled: false,
+    });
+    let providerStatus = status;
+    const payment = () => ({
+      id: 123, external_reference: id, collector_id: 42,
+      currency_id: "BRL", payment_method_id: "pix",
+      live_mode: false, transaction_amount: 25,
+      metadata: { netcraft_order_id: id },
+      status: providerStatus,
+    });
+    const gateway: any = {
+      me: async () => ({ id: 42, netcraftTestAccount: true }),
+      getLegacyPayment: async () => payment(),
+    };
+    const api = pixService(db as any, gateway);
+    await api.reconcile(id);
+    assert.equal((await api.view(id)).state,
+      status === "rejected" ? "cancelled" : status);
+    assert.equal(db.records.get("pixTestDeliveries/" + jobId).state, "blocked");
+    assert.equal(db.records.get("pixTestOrders/" + id).paymentReviewRequired, true);
+    providerStatus = "approved";
+    const restoredPayment = payment();
+    restoredPayment.status = "approved";
+    (restoredPayment as any).date_approved = "2026-10-01T12:00:00.000Z";
+    gateway.getLegacyPayment = async () => restoredPayment;
+    await api.reconcile(id);
+    assert.equal(db.records.get("pixTestDeliveries/" + jobId).state, "blocked",
+      "a later approval must never unlock a previously blocked historical grant");
+    assert.equal(db.records.get("pixTestOrders/" + id).paymentReviewRequired, true);
+  }
+});
 test("coupon validity, minimum and usage are server checked", () => {
   const c = { active: true, discountType: "percentage", discountValue: 10 };
   assert.equal(discounted(2599, c), 260);
