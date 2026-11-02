@@ -14,7 +14,7 @@ import { validateVipImage } from '../services/vipImage.ts';
 import {firestoreProducts} from '../services/firestoreProducts.ts';
 import {quoteCart,validateCartRequest} from '../../src/lib/cartQuote.ts';
 import { discounted } from '../payments/service.ts';
-import {validateCategories, defaultStoreCategories} from '../../src/lib/storeCategories.ts';
+import {validateCategories, defaultStoreCategories, activeCategoryOrphans} from '../../src/lib/storeCategories.ts';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import crypto from 'crypto';
 import { dbStore } from '../data/store.ts';
@@ -322,6 +322,14 @@ apiRouter.put('/admin/store-categories',requireAdmin,async(req,res)=>{
   return res.status(400).json({error:'Confira os dados das categorias.'});
  }
  try {
+  const [old,products,vips]=await Promise.all([
+   readStoreCategories(),listCatalog('products'),listCatalog('vips')
+  ]);
+  const orphans=activeCategoryOrphans(old??defaultStoreCategories,
+   req.body.categories,products,vips);
+  if(orphans.length)return res.status(409).json({error:
+   'Mova ou desative os produtos e VIPs ativos antes de remover estas categorias: '+
+   orphans.join(', ')});
   await previewCategoryReference().set({categories:req.body.categories},{merge:true});
   return res.json({success:true});
  }catch{
@@ -362,6 +370,8 @@ const productsAdmin=productCatalog(firestoreProducts);
 function productError(res:express.Response,error:unknown){return res.status(error instanceof ProductCatalogError?error.status:503).json({error:error instanceof ProductCatalogError?error.message:'Não foi possível confirmar a alteração no Firebase. Tente novamente.'});}
 apiRouter.post('/admin/products',requireAdmin,async(req,res)=>{
  try{
+  if(!req.body||typeof req.body!=='object'||Array.isArray(req.body))
+    return res.status(400).json({error:'Dados do produto inválidos.'});
   const product=await productsAdmin.save({...req.body,id:req.body.id||`prod-${crypto.randomUUID()}`});
   if(!isPreviewEnvironment())dbStore.createProduct(product);
   return res.status(201).json(product);
