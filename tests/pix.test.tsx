@@ -543,7 +543,7 @@ test("HTTP webhook verifies signature and re-queries Orders API instead of trust
     assert.equal((await s.api.view(first.id)).state, "pending");
     s.setResource(ordersFixture(first.id, "25.00", "approved"));
     // The exact notification retry cannot re-query provider or re-grant.
-    assert.equal((await fetch(url,{method:"POST",headers,body:"{}"})).status,204);
+    assert.equal((await fetch(url,{method:"POST",headers,body:"{}"})).status,200);
     assert.equal((await s.api.view(first.id)).state,"pending");
     const approvedHeaders=signHeaders("req-2");
     assert.equal(
