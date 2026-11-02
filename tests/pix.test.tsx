@@ -677,3 +677,42 @@ test("end-to-end checkout polling confirms only provider-approved Pix, without M
     await new Promise<void>(resolve => server.close(() => resolve()));
   }
 });
+
+test("provider statuses revoked after approval immediately block TEST outbox without double grants",async()=>{
+ for(const providerState of ["failed","rejected","canceled","expired","refunded"]){
+  const s=setup(),key="revocation-case-"+providerState+"-test-1234567890";
+  const created=await s.api.create(input,key);
+  s.setResource(ordersFixture(created.id,"25.00","approved"));
+  await s.api.reconcile(created.id);
+  const entries=[...s.db.records.entries()].filter(([k])=>k.startsWith("pixTestDeliveries/"));
+  assert.equal(entries.length,1);
+  assert.equal(entries[0][1].dispatchEnabled,false);
+  const provider=ordersFixture(created.id,"25.00",providerState);
+  if(providerState==="expired")provider.status_detail="expired";
+  s.setResource(provider);
+  await s.api.reconcile(created.id);
+  const later=await s.api.view(created.id);
+  assert.equal(later.state,providerState==="refunded"?"refunded":
+   providerState==="expired"?"expired":"cancelled");
+  assert.equal(s.db.records.get(entries[0][0]).state,"blocked");
+  assert.equal(s.db.records.get("pixTestOrders/"+created.id).paymentReviewRequired,true);
+  assert.equal([...s.db.records.keys()].filter(k=>k.startsWith("pixTestDeliveries/")).length,1);
+  // A delayed credit notification cannot revive a refunded order.
+  if(providerState==="refunded"){
+   s.setResource(ordersFixture(created.id,"25.00","approved"));
+   await s.api.reconcile(created.id);
+   assert.equal((await s.api.view(created.id)).state,"refunded");
+   assert.equal(s.db.records.get(entries[0][0]).state,"blocked");
+  }
+ }
+});
+test("Orders API rejection/failure/chargeback and expiry never count as paid",()=>{
+ const order=ordersFixture(expected.id,"25.00","approved");
+ for(const status of ["canceled","cancelled","failed","rejected"])
+  assert.equal(ordersState({...order,status},order.transactions.payments[0],"2099-01-01"),"cancelled");
+ assert.equal(ordersState({...order,status:"charged_back"},
+  order.transactions.payments[0],"2099-01-01"),"refunded");
+ assert.equal(ordersState({...order,status_detail:"partially_refunded"},
+  order.transactions.payments[0],"2099-01-01"),"refunded");
+ assert.equal(ordersState({...order,status:"created"},null,"2000-01-01"),"expired");
+});
