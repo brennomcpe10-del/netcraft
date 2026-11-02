@@ -1,6 +1,7 @@
 import { Product } from "../types/index.ts";
 import { StoreCategory } from "./storeCategories.ts";
 import { validateRewardDraft } from "./rewardDraft.ts";
+import { safeStoreImage } from "./storeImage.ts";
 export function validateProductId(id: unknown, allowLegacySingleCharacter = false): asserts id is string {
   if (
     typeof id !== "string" ||
@@ -62,8 +63,8 @@ export function normalizeProduct(
     Math.abs(data.price * 100 - Math.round(data.price * 100)) > 0.000001
   )
     throw new Error("Informe um preço válido, com até duas casas decimais.");
-  if (data.active && data.price === 0)
-    throw new Error("Defina um preço maior que zero antes de ativar.");
+  if (data.active && (data.price === 0 || data.price > 10000))
+    throw new Error("Produtos ativos precisam custar entre R$ 0,01 e R$ 10.000 para o Pix.");
   const order = data.order ?? 1;
   if (!Number.isSafeInteger(order) || order < 0 || order > 1000000)
     throw new Error("Informe uma ordem inteira entre 0 e 1000000.");
@@ -78,7 +79,10 @@ export function normalizeProduct(
       image,
     ) &&
       !["cube", "crown"].includes(image) &&
-      image !== existing?.image)
+      image !== existing?.image) ||
+    (image !== existing?.image &&
+      !["cube", "crown"].includes(image) &&
+      safeStoreImage(image, "__invalid__") !== image)
   )
     throw new Error(
       "Use uma imagem HTTPS, um caminho local ou envie uma imagem.",
