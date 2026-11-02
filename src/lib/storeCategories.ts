@@ -1,4 +1,5 @@
 import { Product, VIP } from "../types/index.ts";
+import { safeStoreImage } from "./storeImage.ts";
 export interface StoreCategory {
   id: string;
   title: string;
@@ -136,9 +137,7 @@ export function validateCategories(
     if (c.showWhenEmpty !== undefined && typeof c.showWhenEmpty !== "boolean")
       throw new Error("Visibilidade da categoria inválida.");
     if (
-      !/^(https:\/\/|\/(?!\/)|data:image\/(png|jpeg|webp|gif);base64,)/.test(
-        c.image,
-      )
+      safeStoreImage(c.image, "__invalid__") !== c.image
     )
       throw new Error("Use imagem HTTPS ou caminho local.");
   }
