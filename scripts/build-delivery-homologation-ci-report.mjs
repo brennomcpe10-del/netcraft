@@ -7,6 +7,7 @@ const vals={
  security:process.env.GATE_SECURITY||"pending",
  regression:process.env.GATE_REGRESSION||"pending",
  package:process.env.GATE_PACKAGE||"pending",
+ firestore:process.env.GATE_FIRESTORE||"pending",
 };
 for(const state of Object.values(vals)){
  if(!allowed.has(state))throw Error("invalid_ci_gate_result");
