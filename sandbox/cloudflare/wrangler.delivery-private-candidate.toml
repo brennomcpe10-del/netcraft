@@ -1,0 +1,17 @@
+# Gate 32: infrastructure blueprint only. NEVER deploy this config.
+# No worker.dev URL, routes, cron triggers, secrets, real account IDs or zones.
+name = "netcraft-delivery-private-candidate-off"
+main = "delivery-private-candidate.worker.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = false
+preview_urls = false
+
+[vars]
+NC_DELIVERY_DEPLOYMENT_LOCK = "OFF"
+NC_COMMERCIAL_DELIVERY_ENABLED = "false"
+NC_FIREBASE_BOUND = "false"
+NC_REAL_PAYMENTS_ENABLED = "false"
+NC_PRODUCTION_BDS_ENABLED = "false"
+
+[observability]
+enabled = false
