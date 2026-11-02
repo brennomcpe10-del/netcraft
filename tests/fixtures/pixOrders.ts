@@ -69,6 +69,14 @@ export function memoryDB() {
       path,
       field,
       value,
+      // Mirror Firestore Query.get() as well as Transaction.get(Query), so
+      // authenticated BDS candidate poll can exercise the real query shape.
+      get: async () => ({
+        docs: [...records.entries()]
+          .filter(([key, entry]) => key.startsWith(path + "/") &&
+            entry[field] === value)
+          .map(([key]) => snap(key)),
+      }),
     }),
   });
   const tx: any = {
