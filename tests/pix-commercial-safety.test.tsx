@@ -8,6 +8,7 @@ import {commercialReadiness,commercialOrderCandidate,
  requiredCommercialGates} from "../server/payments/commercialBoundary.ts";
 import {claimWebhook,completeWebhook,releaseWebhook} from "../server/payments/webhookReplay.ts";
 import {memoryDB,ORD} from "./fixtures/pixOrders.ts";
+import {webhookSignature} from "../server/payments/mercadoPago.ts";
 const token=(rid:string,secret="lab-test-only",ts=String(Date.now()))=>{
  const signature=crypto.createHmac("sha256",secret)
   .update(`id:${ORD.toLowerCase()};request-id:${rid};ts:${ts};`).digest("hex");
@@ -57,20 +58,21 @@ test("Durable notification claims reject replay, concurrent repeat and support r
  assert.equal(inFlight.status,"busy");
  await completeWebhook(db,first);
  assert.equal((await claimWebhook(db,ORD,"evt-1",sig)).status,"duplicate");
- const second=await claimWebhook(db,ORD,"evt-2",token("evt-2").signature);
+ const secondSignature=token("evt-2").signature;
+ const second=await claimWebhook(db,ORD,"evt-2",secondSignature);
  assert.equal(second.status,"acquired");
  await releaseWebhook(db,second);
- assert.equal((await claimWebhook(db,ORD,"evt-2",token("evt-2").signature)).status,"acquired");
+ assert.equal((await claimWebhook(db,ORD,"evt-2",secondSignature)).status,"acquired");
  const staleAt=Date.now()-100000;
  const staleSig=token("evt-3").signature;
  const stale=await claimWebhook(db,ORD,"evt-3",staleSig,staleAt);
  assert.equal(stale.status,"acquired");
  assert.equal((await claimWebhook(db,ORD,"evt-3",staleSig)).status,"acquired");
- assert.throws(()=>claimWebhook(db,"bad","evt","x"),undefined);
+ await assert.rejects(()=>claimWebhook(db,"bad","evt","x"),/webhook_replay_input_invalid/);
 });
-test("signature request identity must match the signed resource",async()=>{
- const db=memoryDB() as any;
- const sig=token("good").signature;
- await assert.rejects(()=>claimWebhook(db,ORD,"bad",sig),
-  /webhook_replay_input_invalid/); // Check ID shape separately, not HMAC here.
+test("HMAC verifies the exact signed order and request ID before replay reservations",()=>{
+ const signature=token("good").signature;
+ assert.equal(webhookSignature(ORD,"good",signature,"lab-test-only"),true);
+ assert.equal(webhookSignature(ORD,"bad",signature,"lab-test-only"),false);
+ assert.equal(webhookSignature(ORD,"good",signature,"wrong"),false);
 });
