@@ -23,7 +23,7 @@ test("Production and local development retain existing collections", () => {
 
 test("private Preview collections have explicit Firestore deny policies", () => {
   const rules=readFileSync(new URL("../firestore.rules",import.meta.url),"utf8");
-  for(const collection of ["previewPlayers","previewSupportTickets"]){
+  for(const collection of ["previewPlayers","previewSupportTickets","previewCoupons"]){
     assert.match(rules,new RegExp(`match /${collection}/\\{id\\} \\{ allow read, write: if false; \\}`));
   }
 });
@@ -44,5 +44,5 @@ test("admin panel warns when the Preview catalog is still shared with Production
   assert.match(api,/sharedStoreData:stage==='preview'/);
   assert.match(panel,/api\.getEnvironmentStatus\(adminToken\)/);
   assert.match(panel,/Produtos, VIPs e categorias podem ser editados na Preview/);
-  assert.match(panel,/Cupons, configurações, identidade visual, eventos, notícias e pedidos históricos continuam bloqueados/);
+  assert.match(panel,/Cupons também usam cópias isoladas na Preview/);
 });

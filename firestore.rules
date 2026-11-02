@@ -10,6 +10,7 @@ service cloud.firestore {
     match /previewProducts/{id} { allow read, write: if false; }
     match /previewVips/{id} { allow read, write: if false; }
     match /previewStoreSettings/{id} { allow read, write: if false; }
+    match /previewCoupons/{id} { allow read, write: if false; }
 
     // Backend Admin SDK only. Never mirror these records into public orders.
     match /pixTestCouponUsage/{id} { allow read, write: if false; }

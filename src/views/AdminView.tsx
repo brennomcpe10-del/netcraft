@@ -734,7 +734,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
             <strong>Preview com isolamento parcial.</strong> Os jogadores e chamados de teste são mantidos separados.
             Produtos, VIPs e categorias podem ser editados na Preview: as alterações são gravadas em cópias separadas,
             sem alterar os registros originais da Production. O catálogo inicial ainda é consultado em modo leitura.
-            <strong> {previewSafety.storeWritesBlocked ? 'Cupons, configurações, identidade visual, eventos, notícias e pedidos históricos continuam bloqueados para edição.' : 'Confira a separação antes de editar outras áreas.'}</strong>
+            <strong> {previewSafety.storeWritesBlocked ? 'Configurações gerais, identidade visual, eventos, notícias e pedidos históricos continuam bloqueados para edição. Cupons também usam cópias isoladas na Preview.' : 'Confira a separação antes de editar outras áreas.'}</strong>
             Pix simulado, jogadores e chamados isolados permanecem disponíveis.
           </div>
         )}

@@ -36,6 +36,7 @@ apiRouter.get('/admin/environment', requireAdmin, (_req,res)=>{
   environment:stage,
   isolatedPlayerAndSupportData:stage==='preview',
   isolatedPreviewCatalog:stage==='preview',
+  isolatedPreviewCoupons:stage==='preview',
   sharedStoreData:stage==='preview',
   storeWritesBlocked:stage==='preview',
  });
