@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { safeStoreImage, fallbackStoreImage } from "../lib/storeImage.ts";
 import { ArrowLeft, Search } from "lucide-react";
 import { Product, VIP } from "../types/index.ts";
 import {
@@ -75,7 +76,7 @@ export function StoreView({
             <span aria-current="page">{storeCategoryTitle(category)}</span>
           </nav>
           <div className="category-page-heading">
-            <img src={category.image} alt="" />
+            <img src={safeStoreImage(category.image, "/categories/items.webp")} onError={(event) => fallbackStoreImage(event, "/categories/items.webp")} alt="" />
             <div>
               <span className="eyebrow">EXPLORE ESTA CATEGORIA</span>
               <h1 className="catalog-title">{storeCategoryTitle(category)}</h1>

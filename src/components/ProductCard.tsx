@@ -1,4 +1,5 @@
 import React from "react";
+import { safeStoreImage, fallbackStoreImage } from "../lib/storeImage.ts";
 import { ArrowUpRight } from "lucide-react";
 import { VIP, Product } from "../types/index.ts";
 export function ProductCard({
@@ -15,17 +16,12 @@ export function ProductCard({
       className={`product-card ${vip && item.isPopular ? "featured" : ""}`}
     >
       <div className="product-art">
-        {/^(https?:\/\/|data:image\/|\/|.*\.(png|jpe?g|webp|gif|svg)$)/i.test(
-          item.image,
-        ) ? (
-          <img src={item.image} alt={item.name} loading="lazy" />
-        ) : (
-          <img
-            src={vip ? "/categories/vips.webp" : "/categories/items.webp"}
-            alt={item.name}
-            loading="lazy"
-          />
-        )}
+        <img
+          src={safeStoreImage(item.image, vip ? "/categories/vips.webp" : "/categories/items.webp")}
+          onError={(event) => fallbackStoreImage(event, vip ? "/categories/vips.webp" : "/categories/items.webp")}
+          alt={item.name}
+          loading="lazy"
+        />
         {vip && item.isPopular && <span className="popular-tag">DESTAQUE</span>}
       </div>
       <div className="product-body">

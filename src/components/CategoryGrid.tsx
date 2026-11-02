@@ -1,4 +1,5 @@
 import React from "react";
+import { safeStoreImage, fallbackStoreImage } from "../lib/storeImage.ts";
 import { ArrowRight } from "lucide-react";
 import {
   StoreCategory,
@@ -26,7 +27,7 @@ export function CategoryGrid({
           key={c.id}
           onClick={() => onSelect(c.id)}
         >
-          <img src={c.image} alt="" loading="lazy" />
+          <img src={safeStoreImage(c.image, "/categories/items.webp")} onError={(event) => fallbackStoreImage(event, "/categories/items.webp")} alt="" loading="lazy" />
           <span className="shop-category-copy">
             <strong>{storeCategoryTitle(c)}</strong>
             <span>{c.description}</span>

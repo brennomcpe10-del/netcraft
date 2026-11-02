@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { safeStoreImage, fallbackStoreImage } from "../lib/storeImage.ts";
 import { Plus, Search } from "lucide-react";
 import { Product } from "../types/index.ts";
 import { StoreCategory, storeCategoryTitle } from "../lib/storeCategories.ts";
@@ -145,11 +146,8 @@ export function ProductManager({
         {list.map((product) => (
           <article key={product.id}>
             <img
-              src={
-                /^(https:|data:|\/)/.test(product.image)
-                  ? product.image
-                  : "/categories/items.webp"
-              }
+              src={safeStoreImage(product.image, "/categories/items.webp")}
+              onError={(event) => fallbackStoreImage(event, "/categories/items.webp")}
               alt=""
             />
             <div className="admin-product-info">

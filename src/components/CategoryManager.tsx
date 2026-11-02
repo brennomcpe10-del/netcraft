@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { safeStoreImage, fallbackStoreImage } from "../lib/storeImage.ts";
 import { useStoreCategoryState } from "../hooks/useStoreCategories.ts";
 import { StoreCategory, validateCategories } from "../lib/storeCategories.ts";
 import { useAdmin } from "../context/AdminContext.tsx";
@@ -105,7 +106,7 @@ export function CategoryManager({
           .sort((a, b) => a.order - b.order)
           .map((c) => (
             <article key={c.id}>
-              <img src={c.image} alt="" />
+              <img src={safeStoreImage(c.image, "/categories/items.webp")} onError={(event) => fallbackStoreImage(event, "/categories/items.webp")} alt="" />
               <div>
                 <h3>{c.title}</h3>
                 <p>
@@ -233,7 +234,8 @@ export function CategoryManager({
             </label>
             <img
               className="category-image-preview"
-              src={editing.image}
+              src={safeStoreImage(editing.image, "/categories/items.webp")}
+              onError={(event) => fallbackStoreImage(event, "/categories/items.webp")}
               alt="Prévia da categoria"
             />
             {uploading && <p role="status">Preparando imagem…</p>}
