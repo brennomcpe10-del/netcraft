@@ -9,6 +9,7 @@ import {
 } from "../payments/mercadoPago.ts";
 import { paymentDatabase } from "../payments/database.ts";
 import { pixService } from "../payments/service.ts";
+import {claimWebhook,completeWebhook,releaseWebhook} from "../payments/webhookReplay.ts";
 export function createPixRouter(
   dependencies = {
     database: paymentDatabase,
@@ -208,32 +209,43 @@ export function createPixRouter(
         return res
           .status(400)
           .json({ error: "Identificadores da notificação divergentes." });
-      const gateway = dependencies.gateway(),
-        payment = isOrder
-          ? await gateway.get(id)
-          : await gateway.getLegacyPayment(id);
-      const orderId = String(payment.external_reference || "");
-      if (!/^[a-f0-9]{64}$/.test(orderId)) {
-        if (process.env.VERCEL_ENV === "preview") console.info("[Pix webhook reconciliation]", { outcome: "ignored_unlinked_external_reference" });
+      // Replay defense is persistent in Firestore, not in function memory.
+      // Only signed Orders notifications are claimed. Each new provider event
+      // has a unique request-id; exact retries are acknowledged only after
+      // successful verified GET + transactional reconciliation.
+      const db=dependencies.database();
+      const claim=isOrder ? await claimWebhook(db,id,requestId,signature) : null;
+      if(claim?.status==="duplicate")return res.sendStatus(204);
+      if(claim?.status==="busy")return res.status(503).json({error:"Notificação em processamento. Reenvie mais tarde."});
+      try {
+        const gateway=dependencies.gateway();
+        const payment=isOrder?await gateway.get(id):await gateway.getLegacyPayment(id);
+        const orderId=String(payment.external_reference||"");
+        if(!/^[a-f0-9]{64}$/.test(orderId)){
+          if(claim)await completeWebhook(db,claim);
+          return res.sendStatus(204);
+        }
+        const order=(await db.collection("pixTestOrders").doc(orderId).get()).data();
+        if(!order){
+          if(claim)await completeWebhook(db,claim);
+          return res.sendStatus(204);
+        }
+        if(isOrder
+          ? order.apiVersion!=="orders-v1"||order.providerOrderId!==id
+          : order.apiVersion==="orders-v1"||order.paymentId!==id)
+          throw new PixError("Pagamento não vinculado ao pedido.",409);
+        // The webhook's status/body is never used as approval evidence.
+        await pixService(db,gateway).reconcile(orderId);
+        if(claim)await completeWebhook(db,claim);
+        if(process.env.VERCEL_ENV==="preview")
+          console.info("[Pix webhook reconciliation]",{outcome:"reconciled_test_order"});
         return res.sendStatus(204);
+      }catch(error){
+        // The provider may temporarily fail. Release only our own lease so
+        // the same signed message can be retried, without granting anything.
+        if(claim)await releaseWebhook(db,claim);
+        throw error;
       }
-      const db = dependencies.database(),
-        order = (
-          await db.collection("pixTestOrders").doc(orderId).get()
-        ).data();
-      if (!order) {
-        if (process.env.VERCEL_ENV === "preview") console.info("[Pix webhook reconciliation]", { outcome: "ignored_order_not_found" });
-        return res.sendStatus(204);
-      }
-      if (
-        isOrder
-          ? order.apiVersion !== "orders-v1" || order.providerOrderId !== id
-          : order.apiVersion === "orders-v1" || order.paymentId !== id
-      )
-        throw new PixError("Pagamento não vinculado ao pedido.", 409);
-      await pixService(db, gateway).reconcile(orderId);
-      if (process.env.VERCEL_ENV === "preview") console.info("[Pix webhook reconciliation]", { outcome: "reconciled_test_order" });
-      return res.sendStatus(204);
     } catch (e) {
       return failure(res, e);
     }
