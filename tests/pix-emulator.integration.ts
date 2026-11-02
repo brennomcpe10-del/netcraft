@@ -28,6 +28,56 @@ await db.doc("coupons/fixture").set({
   maxUses: 1,
   usedCount: 0,
 });
+// Commercial Delivery candidate exercise against REAL local Firestore
+// transactions, not a fake in-memory transaction implementation.
+// This is intentionally disconnected from all production routes and BDS.
+{
+ const {createCommercialStagingService}=
+   await import("../server/delivery/commercialStagingService.ts");
+ const candidateId="e".repeat(64);
+ const provider=ordersFixture(candidateId,"25.00","approved");
+ provider.live_mode=true;
+ const candidateRef=db.doc("pixCommercialOrders/"+candidateId);
+ await candidateRef.set({
+  id:candidateId,environment:"commercial",catalogValidated:true,
+  providerOrderId:provider.id,collector:"42",currency:"BRL",
+  totalCents:2500,gamertag:"Emulator Tester",state:"pending",
+  lines:[{productType:"product",productId:"kit",quantity:1,
+   reward:{version:1,items:[{itemId:"minecraft:diamond",quantity:2}]}}],
+ });
+ const candidate=createCommercialStagingService(db,{
+  me:async()=>({id:42,netcraftTestAccount:false}),
+  get:async()=>structuredClone(provider),
+ },{keyring:{"bds_emulator":"not-real-hmac-secret-1234567890123456789"}});
+ const queued=await Promise.all([
+  candidate.reconcileAndQueue(candidateId),
+  candidate.reconcileAndQueue(candidateId),
+ ]);
+ assert.equal(queued.reduce((count,row)=>count+row.created,0),1,
+  "provider approval must generate exactly one durable candidate");
+ const candidateJobId=candidateId+"-0";
+ const offers=await Promise.all([
+  candidate.offer(candidateJobId,"Emulator Tester",true),
+  candidate.offer(candidateJobId,"Emulator Tester",true),
+ ]);
+ const acquired=offers.filter(x=>x.status==="offered");
+ assert.equal(acquired.length,1,
+  "Firestore transaction prevents double grants across worker concurrency");
+ const token=(acquired[0] as any).leaseToken;
+ assert.equal((await candidate.acknowledge(candidateJobId,token,"applied")).status,
+  "acknowledged");
+ assert.equal((await candidate.acknowledge(candidateJobId,token,"already_applied") as any).duplicate,true);
+ assert.equal((await candidate.offer(candidateJobId,"Emulator Tester",true)).status,"held");
+ provider.status="refunded";provider.status_detail="refunded";
+ provider.transactions.payments[0].status="refunded";
+ provider.transactions.payments[0].status_detail="refunded";
+ assert.equal((await candidate.reconcileAndQueue(candidateId)).state,"refunded");
+ const after=await db.doc("pixCommercialDeliveries/"+candidateJobId).get();
+ assert.equal(after.data()?.state,"refunded_after_ack");
+ assert.equal(after.data()?.dispatchEnabled,false);
+ console.log("PASS commercial-candidate local Firestore approval -> unique queue -> one lease -> idempotent ACK -> refund review; NO real dispatch");
+}
+
 // HTTP cart quote must agree with the same authoritative catalog and
 // coupon used by the transactional Pix creator. This is an isolated emulator.
 const expressQuote = (await import("express")).default;
