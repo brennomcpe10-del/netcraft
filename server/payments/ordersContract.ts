@@ -140,13 +140,15 @@ export function ordersState(
   const details = [resource.status_detail, payment?.status_detail],
     statuses = [resource.status, payment?.status];
   if (
-    statuses.some((s) => s === "refunded" || s === "charged_back") ||
-    details.includes("partially_refunded")
+    statuses.some((s) => s === "refunded" || s === "charged_back" || s === "chargeback") ||
+    details.some((d)=>["partially_refunded","refunded","charged_back","chargeback"].includes(d))
   )
     return "refunded";
   if (details.includes("expired") || statuses.includes("expired"))
     return "expired";
-  if (statuses.some((s) => s === "failed" || s === "canceled"))
+  if (statuses.some((s) =>
+    ["failed","canceled","cancelled","rejected"].includes(s)) ||
+    details.some((d)=>["rejected","canceled","cancelled","failed"].includes(d)))
     return "cancelled";
   if (
     resource.status === "processed" &&
