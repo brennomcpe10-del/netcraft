@@ -28,6 +28,11 @@ const assert=require("node:assert/strict");
   switch(path){
    case "/api/admin/login":value={success:true,token:"adm-fixture-signed-not-real"};break;
    case "/api/admin/verify":value={authenticated:true};break;
+   case "/api/admin/revenue":value={
+    totalCents:0,currentMonthCents:0,periodCents:0,currentPeriod:"2026-11",
+    confirmedPayments:0,duplicates:0,missingApprovalDates:0,
+    uncertainPayments:0,
+   };break;
    case "/api/admin/environment":value={
     environment:"preview",isolatedPlayerAndSupportData:true,
     isolatedPreviewCatalog:true,isolatedPreviewCoupons:true,
