@@ -58,6 +58,8 @@ test("Durable notification claims reject replay, concurrent repeat and support r
  assert.equal(inFlight.status,"busy");
  await completeWebhook(db,first);
  assert.equal((await claimWebhook(db,ORD,"evt-1",sig)).status,"duplicate");
+ assert.equal((await claimWebhook(db,ORD,"evt-1",sig.replace(",v1=",", v1="))).status,"duplicate",
+  "whitespace cannot bypass the canonical notification key");
  const secondSignature=token("evt-2").signature;
  const second=await claimWebhook(db,ORD,"evt-2",secondSignature);
  assert.equal(second.status,"acquired");
@@ -75,4 +77,7 @@ test("HMAC verifies the exact signed order and request ID before replay reservat
  assert.equal(webhookSignature(ORD,"good",signature,"lab-test-only"),true);
  assert.equal(webhookSignature(ORD,"bad",signature,"lab-test-only"),false);
  assert.equal(webhookSignature(ORD,"good",signature,"wrong"),false);
+ assert.equal(webhookSignature(ORD,"good",signature+",v1="+signature.split("v1=")[1],"lab-test-only"),false,
+   "duplicate HMAC fields are invalid");
+ assert.equal(webhookSignature(ORD,"good",signature+",ts="+Date.now(),"lab-test-only"),false);
 });
