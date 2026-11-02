@@ -7,7 +7,7 @@ const COLLECTION="pixTestWebhookReceipts";
 const LOCK_MS=90000;
 export type ClaimResult={status:"acquired"|"duplicate"|"busy";key:string;lease:string};
 export function webhookReplayKey(providerId:string,requestId:string,signature:string){
- const parsed=/^ts=(\\d{10}|\\d{13}),\\s*v1=([a-f0-9]{64})$/i.exec(signature);
+ const parsed=/^ts=(\d{10}|\d{13}),\s*v1=([a-f0-9]{64})$/i.exec(signature);
  if(!(/^(?:ORD[A-Z0-9]{20,40}|[0-9]{1,30})$/.test(providerId)) ||
     !/^[A-Za-z0-9-]{1,128}$/.test(requestId)||!parsed)
   throw Error("webhook_replay_input_invalid");
