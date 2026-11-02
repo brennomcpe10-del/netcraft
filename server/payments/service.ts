@@ -296,7 +296,7 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
       // reporting approval is not sufficient to resume its blocked grants.
       // Keep the reversal for manual review instead of silently reinstating.
       else if (o.paymentReviewRequired && o.approvalObservedAt &&
-        ["cancelled", "expired"].includes(o.state) && state === "approved")
+        ["pending", "processing", "cancelled", "expired"].includes(o.state) && state === "approved")
         state = o.state;
       // Orders API documents last_updated_date, not an immutable approval timestamp.
       // Record observation separately; never start a future VIP timer from an invented date.
@@ -398,7 +398,7 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
       let state = paymentState(payment);
       if (o.state === "refunded") state = "refunded";
       else if (o.paymentReviewRequired && o.approvedAt &&
-        ["cancelled", "expired"].includes(o.state) && state === "approved")
+        ["pending", "cancelled", "expired"].includes(o.state) && state === "approved")
         state = o.state;
       // Preserve legacy timestamps and outbox. New legacy fulfillment is never dispatched.
       const approvedAt =
