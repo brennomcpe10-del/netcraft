@@ -54,6 +54,7 @@ const assert = require("node:assert/strict");
     }else if(p.startsWith("/api/pix/orders/")){
       body={id:"a".repeat(64),state:"pending",totalCents:4498,
         discountCents:500,qrCode:"test-only-qr-no-bank",
+        qrBase64:"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
         expiresAt:new Date(Date.now()+600000).toISOString(),
         delivery:"Nenhuma entrega real."};
     }else{status=404;body={error:"Mock-only API"};}
