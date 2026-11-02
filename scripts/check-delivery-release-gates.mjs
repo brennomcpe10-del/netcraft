@@ -25,9 +25,13 @@ export function inspectDeliveryReleaseCandidate(files){
  "pixTestWebhookReceipts","coupons","orders","players","users"];
  for(const item of required)
   check(rules.includes("match /"+item+"/{"),"private_rules_missing_"+item);
+ // Match grants anywhere within a line, including single-line match blocks;
+ // Firestore ORs overlapping grants so a deny-all catchall is NOT sufficient.
  for(const line of rules.split("\n")){
-  if(/^\s*allow\s+.*\bwrite\b\s*:/.test(line.trim())&&!/:\s*if false;/.test(line))
-   issues.push("unsafe_client_write_grant");
+  const code=line.replace(/\/\/.*$/,"");
+  for(const m of code.matchAll(/\ballow\s+(?:read\s*,\s*)?write\s*:\s*if\s+([^;]+);/g)){
+   if(m[1].trim()!=="false")issues.push("unsafe_client_write_grant");
+  }
  }
  check(/firebase_projects_not_isolated/.test(staging)&&
    /separate_firebase_projects_not_configured/.test(staging),

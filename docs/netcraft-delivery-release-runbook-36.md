@@ -1,5 +1,7 @@
 # NetCraft Delivery — procedimento de implantação, backup e rollback (ITEM 36)
 
+**NetCraftCore:** o pacote Bedrock do laboratório não substitui o Core oficial, e a integridade dos seus BP/RP precisa ser confirmada antes de qualquer release.
+
 **Estado: preparação documental / somente laboratório. NÃO EXECUTAR implantação, alteração de Production ou de MagnoHost nesta etapa.** Branch de desenvolvimento: `redesign-mobile-solaris`. O CI apenas testa e arquiva manifestos, não faz backup da produção nem publica serviços. A operação abaixo é um roteiro para uma futura janela de release expressamente aprovada.
 
 ## 0. Autorizações, responsáveis e limites
