@@ -9,6 +9,7 @@ import { editorialRepository, EditorialError } from '../services/editorialCatalo
 import { protectSharedPreviewWrite } from '../services/previewWriteGuard.ts';
 import { catalogWriteReference, listCatalog, readCatalogItem, readStoreCategories, previewCategoryReference } from '../services/previewCatalog.ts';
 import { isPreviewEnvironment } from '../services/previewIsolation.ts';
+import {couponWriteReference,readCoupon,listCoupons,findCouponByCode} from '../services/previewCoupons.ts';
 import { validateVipCategoryId, assertVipCategoryExists } from '../services/vipCategoryId.ts';
 import { validateVipImage } from '../services/vipImage.ts';
 import {firestoreProducts} from '../services/firestoreProducts.ts';
@@ -295,10 +296,9 @@ apiRouter.post('/cart/quote', async (req,res)=>{
   let discountCents=0;
   if(couponCode){
    // Actual Pix checkout revalidates and reserves the coupon in a transaction.
-   const found=await db.collection('coupons').where('code','==',couponCode).get();
-   if(found.size!==1)return res.status(400).json({error:'Cupom não encontrado.'});
-   const source=found.docs[0].data();
-   const reservation=await db.collection('pixTestCouponUsage').doc(found.docs[0].id).get();
+   const source=await findCouponByCode(couponCode,undefined,db);
+   if(!source)return res.status(400).json({error:'Cupom não encontrado.'});
+   const reservation=await db.collection('pixTestCouponUsage').doc(source.id).get();
    discountCents=discounted(quote.subtotalCents,{
     ...source,usedCount:Number(source.usedCount||0)+Number(reservation.data()?.reservedCount||0),
    });
@@ -548,71 +548,75 @@ function couponDraft(input:any,id:string,previous?:any) {
   createdAt:previous?.createdAt || now,updatedAt:now
  };
 }
+// Preview coupons use an isolated copy-on-write namespace, never Production
+// coupon writes. Same source resolves for admin, server quote and Pix TEST.
 apiRouter.get('/admin/coupons',requireAdmin,async (_req,res)=>{
  try{
-  const {paymentDatabase}=await import('../payments/database.ts');
-  const snap=await paymentDatabase().collection('coupons').get();
   res.setHeader('Cache-Control','no-store');
-  return res.json(snap.docs.map(d=>({...d.data(),id:d.id})));
+  return res.json(await listCoupons());
  }catch{return res.status(503).json({error:'Não foi possível consultar os cupons.'});}
 });
-apiRouter.post('/admin/coupons',requireAdmin,protectSharedPreviewWrite,async(req,res)=>{
+apiRouter.post('/admin/coupons',requireAdmin,async(req,res)=>{
  try {
-  const id=typeof req.body?.id==='string'&&req.body.id.trim()?req.body.id.trim():`cupom-${crypto.randomUUID()}`;
+  if(!req.body||typeof req.body!=='object'||Array.isArray(req.body))
+   throw new ProductCatalogError('Dados do cupom inválidos.',400);
+  const id=typeof req.body.id==='string'&&req.body.id.trim()?req.body.id.trim():`cupom-${crypto.randomUUID()}`;
   const coupon=couponDraft(req.body,id);
   const {paymentDatabase}=await import('../payments/database.ts');
-  const db=paymentDatabase(),col=db.collection('coupons'),ref=col.doc(id);
-  // Both the identifier and the normalized coupon code must be unique.
-  // Keep the query and document creation in ONE Firestore transaction.
+  const db=paymentDatabase(),ref=couponWriteReference(id,db);
   await db.runTransaction(async tx=>{
-   const [existing,matching]=await Promise.all([
-    tx.get(ref),
-    tx.get(col.where('code','==',coupon.code).limit(2)),
-   ]);
-   if(existing.exists)throw new ProductCatalogError('Este identificador já existe.',409);
-   if(!matching.empty)throw new ProductCatalogError('Já existe um cupom com este código.',409);
-   tx.create(ref,coupon);
+   const existing=await readCoupon(id,tx,db);
+   if(existing)throw new ProductCatalogError('Este identificador já existe.',409);
+   const matching=await findCouponByCode(coupon.code,tx,db);
+   if(matching)throw new ProductCatalogError('Já existe um cupom com este código.',409);
+   tx.set(ref,coupon);
   });
-  dbStore.createCoupon(coupon);
+  if(!isPreviewEnvironment())dbStore.createCoupon(coupon);
   return res.status(201).json(coupon);
  }catch(error){return productError(res,error);}
 });
-apiRouter.put('/admin/coupons/:id',requireAdmin,protectSharedPreviewWrite,async(req,res)=>{
+apiRouter.put('/admin/coupons/:id',requireAdmin,async(req,res)=>{
  try {
   const id=req.params.id;
   if(!/^[a-zA-Z0-9_-]{2,128}$/.test(id))
    throw new ProductCatalogError('Identificador inválido.',400);
   const {paymentDatabase}=await import('../payments/database.ts');
-  const db=paymentDatabase(),col=db.collection('coupons'),ref=col.doc(id);
+  const db=paymentDatabase(),ref=couponWriteReference(id,db);
   const coupon=await db.runTransaction(async tx=>{
-   const snap=await tx.get(ref);
-   if(!snap.exists)throw new ProductCatalogError('Cupom não encontrado.',404);
-   // Read previous usage INSIDE the transaction; never overwrite it from an
-   // out-of-date admin form while a payment reservation is being processed.
-   const next=couponDraft(req.body,id,snap.data());
-   const matching=await tx.get(col.where('code','==',next.code).limit(2));
-   if(matching.docs.some(d=>d.id!==id))
+   const existing=await readCoupon(id,tx,db);
+   if(!existing)throw new ProductCatalogError('Cupom não encontrado.',404);
+   // Never replace the stored usedCount from stale client data.
+   const next=couponDraft(req.body,id,existing);
+   const matching=await findCouponByCode(next.code,tx,db);
+   if(matching&&matching.id!==id)
     throw new ProductCatalogError('Já existe um cupom com este código.',409);
    tx.set(ref,next);
    return next;
   });
-  dbStore.updateCoupon(id,coupon);
+  if(!isPreviewEnvironment())dbStore.updateCoupon(id,coupon);
   return res.json(coupon);
  }catch(error){return productError(res,error);}
 });
-apiRouter.delete('/admin/coupons/:id',requireAdmin,protectSharedPreviewWrite, async(req,res)=>{
+apiRouter.delete('/admin/coupons/:id',requireAdmin,async(req,res)=>{
  try{
   const id=req.params.id;
-  if(!/^[a-zA-Z0-9_-]{2,128}$/.test(id))return res.status(400).json({error:'Identificador inválido.'});
+  if(!/^[a-zA-Z0-9_-]{2,128}$/.test(id))
+   return res.status(400).json({error:'Identificador inválido.'});
   const {paymentDatabase}=await import('../payments/database.ts');
-  await paymentDatabase().collection('coupons').doc(id).delete();
-  dbStore.deleteCoupon(id);
-  return res.json({success:true,message:'Cupom excluído com sucesso.'});
+  const db=paymentDatabase(),ref=couponWriteReference(id,db);
+  await db.runTransaction(async tx=>{
+   if(!(await readCoupon(id,tx,db)))
+    throw new ProductCatalogError('Cupom não encontrado.',404);
+   if(isPreviewEnvironment())tx.set(ref,{id,__previewDeleted:true});
+   else tx.delete(ref);
+  });
+  if(!isPreviewEnvironment())dbStore.deleteCoupon(id);
+  return res.json({success:true,message:'Cupom excluído. Pedidos anteriores preservados.'});
  }catch(error){return productError(res,error);}
 });
 
 apiRouter.post('/coupons/validate', async (req, res) => {
-  const { code, amount } = req.body;
+  const { code, amount } = req.body || {};
   if (!code || typeof code !== 'string' || !code.trim()) {
     return res.status(400).json({ valid: false, error: 'Código de cupom não informado.' });
   }
@@ -622,10 +626,7 @@ apiRouter.post('/coupons/validate', async (req, res) => {
 
   let coupon: any = null;
   try {
-    const {paymentDatabase}=await import('../payments/database.ts');
-    const docs=await paymentDatabase().collection('coupons').where('code','==',cleanCode).limit(2).get();
-    if(docs.size > 1) return res.status(409).json({valid:false,error:'Cupom duplicado. Contate o suporte.'});
-    if(docs.size === 1) coupon={...docs.docs[0].data(),id:docs.docs[0].id};
+    coupon=await findCouponByCode(cleanCode);
   }catch{
     return res.status(503).json({valid:false,error:'Não foi possível validar o cupom no servidor.'});
   }
