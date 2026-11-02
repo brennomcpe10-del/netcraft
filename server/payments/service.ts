@@ -48,9 +48,37 @@ export function discounted(subtotal: number, c: any, now = Date.now()) {
     ),
   );
 }
+// A timed, durable creation lease prevents two Vercel workers from issuing
+// simultaneous POSTs for the same checkout. After an ambiguous timeout, a
+// takeover can ONLY retry with the original provider idempotency key.
+const CREATE_LEASE_MS = 90_000;
 export function pixService(db: Firestore, gateway: MercadoPago) {
   const orders = db.collection("pixTestOrders"),
-    jobs = db.collection("pixTestDeliveries");
+    jobs = db.collection("pixTestDeliveries"),
+    orderBindings = db.collection("pixTestProviderOrderBindings"),
+    paymentBindings = db.collection("pixTestProviderPaymentBindings");
+  // Firestore transactions serialize the provider IDs across local checkouts.
+  // The external_reference check remains mandatory: bindings are not payment
+  // evidence and never authorize rewards.
+  async function bindProvider(tx: any, localId: string, providerId: string, paymentId: string | null) {
+    const orderRef = orderBindings.doc(providerId);
+    const paymentRef = paymentId ? paymentBindings.doc(paymentId) : null;
+    const [orderSnap, paymentSnap] = await Promise.all([
+      tx.get(orderRef), paymentRef ? tx.get(paymentRef) : Promise.resolve(null),
+    ]);
+    if (orderSnap.exists && orderSnap.data()?.orderId !== localId)
+      throw new PixError("Order já vinculada a outro checkout.", 409);
+    if (paymentSnap?.exists &&
+        (paymentSnap.data()?.orderId !== localId ||
+         paymentSnap.data()?.providerOrderId !== providerId))
+      throw new PixError("Pagamento já vinculado a outro pedido.", 409);
+    if (!orderSnap.exists)
+      tx.create(orderRef, {orderId: localId, environment: "test"});
+    if (paymentRef && paymentSnap && !paymentSnap.exists)
+      tx.create(paymentRef, {
+        orderId: localId, providerOrderId: providerId, environment: "test",
+      });
+  }
   async function create(input: any, key: string) {
     if (!input || typeof input !== "object" || Array.isArray(input))
       throw new PixError("Dados do checkout inválidos.", 400);
@@ -96,7 +124,8 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
     const collector = String(receiver.id);
     if (!/^\d+$/.test(collector))
       throw new PixError("Recebedor de teste inválido.", 503);
-    const order: any = await db.runTransaction(async (tx) => {
+    const attempt = crypto.randomBytes(16).toString("hex");
+    const reserved: {order: any; shouldCreate: boolean} = await db.runTransaction(async (tx) => {
       const previous = await tx.get(ref);
       if (previous.exists) {
         const saved = previous.data()!;
@@ -110,7 +139,18 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
             "Este identificador já pertence a outra compra.",
             409,
           );
-        return saved;
+        if (saved.providerOrderId || saved.state !== "creating")
+          return {order: saved, shouldCreate: false};
+        if (Number.isFinite(saved.creationLeaseUntil) &&
+            saved.creationLeaseUntil > Date.now())
+          return {order: saved, shouldCreate: false};
+        // No external operation inside the transaction. An expired lease can
+        // be reclaimed, but the Mercado Pago idempotency key MUST remain fixed.
+        tx.update(ref, {
+          creationLease: attempt,
+          creationLeaseUntil: Date.now() + CREATE_LEASE_MS,
+        });
+        return {order: saved, shouldCreate: true};
       }
       // The Pix quote resolves the EXACT same Preview overrides as storefront.
       // The transaction only reads from production; any sandbox purchase writes
@@ -182,6 +222,8 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
           duration: items[i].duration || null,
         })),
         state: "creating",
+        creationLease: attempt,
+        creationLeaseUntil: Date.now() + CREATE_LEASE_MS,
         environment: "test",
         createdAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 2700000).toISOString(),
@@ -190,9 +232,13 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
       if (couponRef)
         tx.set(couponRef, { reservedCount: couponReservations + 1 }); // reservation is retained on ambiguous gateway failures
       tx.create(ref, saved);
-      return saved;
+      return {order: saved, shouldCreate: true};
     });
-    if (!order.providerOrderId) {
+    const {order, shouldCreate} = reserved;
+    // Another worker is still creating the same checkout. Do not POST again;
+    // the buyer can poll the same order and retry the same key after the lease.
+    if (!shouldCreate && !order.providerOrderId) return view(id);
+    if (shouldCreate) {
       const payer: any = {
         email: input.email,
         identification: { type: "CPF", number: cpf },
@@ -223,14 +269,23 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
       // Bind the provider order immediately, including asynchronous responses without QR/payment.
       // POST never approves a local order. Only the subsequent authenticated GET can approve it.
       await db.runTransaction(async (tx) => {
-        const current = (await tx.get(ref)).data()!;
-        if (current.providerOrderId && current.providerOrderId !== resource.id)
+        const current = (await tx.get(ref)).data();
+        if (!current || current.requestHash !== requestHash ||
+            (current.providerOrderId && current.providerOrderId !== resource.id))
           throw new PixError("Conflito de order.", 409);
         verifyOrder(resource, current, collector);
+        // Never let a slow, lease-expired request overwrite a newer checkout.
+        // The provider may still return the SAME idempotent order; the active
+        // worker will bind it, otherwise the next retry reconciles it.
+        if (!current.providerOrderId && current.creationLease !== attempt)
+          throw new PixError("Criação em outra tentativa. Consulte o pedido.", 409);
+        await bindProvider(tx, id, resource.id, payment?.id || null);
         if (!current.providerOrderId)
           tx.update(ref, {
             providerOrderId: resource.id,
             paymentId: payment?.id || null,
+            creationLease: null,
+            creationLeaseUntil: null,
             state: "processing",
             expiresAt: orderExpiry(resource, payment, current.expiresAt),
           });
@@ -321,6 +376,8 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
         eventRef = ref.collection("events").doc(eventId);
       const snapshots = await Promise.all(jobRefs.map((r: any) => tx.get(r))),
         event = await tx.get(eventRef);
+      // Provider identities must be unique even across distinct checkout keys.
+      await bindProvider(tx, id, resource.id, payment?.id || null);
       if (state === "approved")
         o.lines.forEach((line: any, i: number) => {
           if (!snapshots[i].exists)

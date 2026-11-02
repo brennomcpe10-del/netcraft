@@ -102,7 +102,7 @@ export function PixCheckout({
     }
   }
   useEffect(() => {
-    if (!key || busy || order?.state === "creating") return;
+    if (!key || busy) return;
     const abort = new AbortController();
     let active = true;
     const tick = () => {
@@ -118,7 +118,7 @@ export function PixCheckout({
       abort.abort();
       clearInterval(timer);
     };
-  }, [key, busy, order?.state === "creating"]);
+  }, [key, busy]);
   function resetCheckout() {
     try {
       sessionStorage.removeItem("netcraft-pix-key");
