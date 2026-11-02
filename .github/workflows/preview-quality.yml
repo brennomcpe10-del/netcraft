@@ -10,6 +10,45 @@ permissions:
   contents: read
 
 jobs:
+  storefront_mobile_browser:
+    name: Mobile shop and Pix browser (mock API, no real checkout)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - name: Install storefront and disposable browser runner
+        run: |
+          bun install
+          npm install --no-save --package-lock=false playwright
+      - name: Build static storefront
+        run: npm run build
+      - name: Start localhost-only Vite Preview and run five-width browser smoke
+        env:
+          NC_STORE_BROWSER_TEST: '1'
+          MERCADOPAGO_ACCESS_TOKEN: ''
+          FIREBASE_SERVICE_ACCOUNT_JSON: ''
+          VERCEL_ENV: ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          export TEST_CHROME_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -x "$TEST_CHROME_PATH"
+          npm run preview -- --host 127.0.0.1 --port 3000 --strictPort >/tmp/netcraft-store-preview.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          for n in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3000/ >/dev/null
+          node tests/store-mobile-browser.e2e.cjs
+
   fixture_workerd_sqlite:
     name: Local Cloudflare fixture DO SQLite (no deploy, no payments)
     runs-on: ubuntu-latest
