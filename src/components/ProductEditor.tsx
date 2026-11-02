@@ -51,7 +51,7 @@ export function ProductEditor({
     if (!file) return;
     setError("");
     try {
-      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024)
+      if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 10 * 1024 * 1024)
         throw new Error("Escolha uma imagem de até 10 MB.");
       setUploading(true);
       const image = await compressImageFile(file, 800, 800, 0.8);
