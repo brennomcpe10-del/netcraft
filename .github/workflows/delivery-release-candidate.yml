@@ -82,6 +82,8 @@ jobs:
           node-version: '22'
       - name: Validate and package independent v0.4.0 addon
         run: node scripts/package-netcraft-delivery-v040.mjs
+      - name: Verify approved site products against NetCraftCore v2.3.24 executor (LAB OFF)
+        run: node --experimental-strip-types --test tests/delivery-core-v2324-contract.test.mjs
       - name: Publish isolated clone artifact only
         uses: actions/upload-artifact@v4
         with:
