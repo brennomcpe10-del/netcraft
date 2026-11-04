@@ -885,6 +885,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
                         {vip.benefits.join(' • ')}
                       </div>
                     )}
+                    <p className="text-zinc-400 text-[11px] mt-1">
+                      ID interno para automação: <span className="font-mono select-all break-all text-zinc-200">{vip.id}</span>
+                    </p>
                   </div>
 
                   <div className="flex items-center gap-2">
