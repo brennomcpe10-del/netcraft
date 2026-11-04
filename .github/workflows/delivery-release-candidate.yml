@@ -84,6 +84,8 @@ jobs:
         run: node scripts/package-netcraft-delivery-v040.mjs
       - name: Verify approved site products against NetCraftCore v2.3.24 executor (LAB OFF)
         run: node --experimental-strip-types --test tests/delivery-core-v2324-contract.test.mjs
+      - name: Verify read-only Core VIP rank readiness and fail-closed OFF guard
+        run: node --test tests/delivery-core-vip-readiness.test.mjs
       - name: Publish isolated clone artifact only
         uses: actions/upload-artifact@v4
         with:
