@@ -85,7 +85,7 @@ export function approvedNetCraftVipRegistry(
       throw new Error("invalid_or_duplicate_vip_approval");
     seenTiers.add(entry.tier);
     seenIds.add(entry.productId);
-    const expected = NETCRAFT_VIP_TERMS[entry.tier];
+    const expected = NETCRAFT_VIP_TERMS[entry.tier as VipTier];
     const actual = byId.get(entry.productId);
     if(!actual || actual.active !== true ||
        actual.name !== expected.name ||
