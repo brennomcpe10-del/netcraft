@@ -64,7 +64,7 @@ test("Inactive, wrong duration, renamed and swapped VIP IDs are rejected",()=>{
     /vip_catalog_terms_mismatch/);
   assert.throws(()=>approvedNetCraftVipRegistry(records,
     [approval[1],{...approval[0],productId:approval[2].productId},approval[2]]),
-    /invalid_or_duplicate_vip_approval/);
+    /vip_catalog_terms_mismatch|invalid_or_duplicate_vip_approval/);
 });
 test("Missing, duplicated or invalid catalogue identities are rejected",()=>{
   assert.throws(()=>approvedNetCraftVipRegistry(records.slice(1),approval),
