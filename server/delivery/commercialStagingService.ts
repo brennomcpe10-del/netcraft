@@ -37,7 +37,7 @@ type Line = {
   reward?: {version: 1; items: Array<{itemId: string;quantity: number}>};
   duration?: string;
 };
-type StoredOrder = {
+export type StoredOrder = {
   id: string; environment: "commercial"; catalogValidated: true;
   providerOrderId: string; collector: string; totalCents: number; currency: "BRL";
   gamertag: string; lines: Line[]; state: string;
@@ -81,10 +81,18 @@ export function createCommercialStagingService(
   db: DB,
   reader: CommercialGatewayReader,
   options: {keyring: Readonly<Record<string,string>>;
-    registry: RewardRegistry; now?:()=>number},
+    registry: RewardRegistry; now?:()=>number;
+    // Optional LAB-only catalog approval: checked on EVERY read of an order
+    // during reconcile, offer and ACK. No public dispatch path uses this.
+    validateOrder?:(order:Readonly<StoredOrder>)=>void},
 ) {
   labOnly();
   const clock = options.now || Date.now;
+  const validatedOrder = (raw:unknown):StoredOrder => {
+    const order=canonicalOrder(raw);
+    options.validateOrder?.(order);
+    return order;
+  };
   const orders = db.collection("pixCommercialOrders");
   const queue = db.collection("pixCommercialDeliveries");
   if(!options.registry || Object.keys(options.registry).length===0)
@@ -107,7 +115,7 @@ export function createCommercialStagingService(
   async function reconcileAndQueue(orderId: string) {
     labOnly();
     if (!ID.test(orderId)) throw new PixError("invalid_order_id", 400);
-    const order = canonicalOrder((await orders.doc(orderId).get()).data());
+    const order = validatedOrder((await orders.doc(orderId).get()).data());
     const state = await providerState(order);
     const material = fingerprint({
       id: order.id,providerOrderId: order.providerOrderId,
@@ -119,7 +127,7 @@ export function createCommercialStagingService(
     const payloads = state === "approved" ? order.lines.map((_,i)=>compileLine(order,i)) : [];
     return db.runTransaction(async tx => {
       const orderRef = orders.doc(orderId), fresh = await tx.get(orderRef);
-      const current = canonicalOrder(fresh.data());
+      const current = validatedOrder(fresh.data());
       const currentMaterial = fingerprint({
         id: current.id,providerOrderId: current.providerOrderId,
         collector: current.collector,totalCents: current.totalCents,currency: current.currency,
@@ -194,7 +202,7 @@ export function createCommercialStagingService(
         initial.dispatchEnabled !== false || initial.state !== "queued")
       return {status:"held" as const};
     const orderSnap = (await orders.doc(initial.orderId).get()).data();
-    const order = canonicalOrder(orderSnap);
+    const order = validatedOrder(orderSnap);
     if (order.state !== "approved" ||
         await providerState(order) !== "approved")
       return {status:"payment_not_approved" as const};
@@ -242,7 +250,7 @@ export function createCommercialStagingService(
       return {status:"acknowledged" as const,duplicate:true};
     if (!["leased","awaiting_receipt"].includes(job.state))
       return {status:"held" as const};
-    const order = canonicalOrder((await orders.doc(job.orderId).get()).data());
+    const order = validatedOrder((await orders.doc(job.orderId).get()).data());
     let approved=false;
     try { approved = order.state === "approved" &&
       (await providerState(order)) === "approved"; } catch { approved=false; }
@@ -329,7 +337,7 @@ export function createCommercialStagingService(
       // Failed provider checks require a receipt; they never trigger retries.
       let providerApproved=false;
       try {
-        const o=canonicalOrder((await orders.doc(initial.orderId).get()).data());
+        const o=validatedOrder((await orders.doc(initial.orderId).get()).data());
         providerApproved=o.state==="approved" &&
           (await providerState(o))==="approved";
       } catch { providerApproved=false; }
