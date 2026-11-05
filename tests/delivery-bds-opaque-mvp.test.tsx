@@ -7,7 +7,8 @@ import {authenticateBdsRequest} from "../server/delivery/bdsSignedRequest.ts";
 
 const now=1783500000000,token="A".repeat(64),hmac="private-bridge-lab-only-key-"+("B".repeat(64));
 const baseEnv=["NODE_ENV","FIRESTORE_EMULATOR_HOST","VERCEL_ENV",
-  "MERCADOPAGO_ACCESS_TOKEN","MP_ACCESS_TOKEN","FIREBASE_SERVICE_ACCOUNT_JSON"];
+  "MERCADOPAGO_ACCESS_TOKEN","MP_ACCESS_TOKEN","GOOGLE_APPLICATION_CREDENTIALS",
+  "FIREBASE_SERVICE_ACCOUNT_JSON"];
 async function inLab(fn:()=>Promise<void>) {
   const prev=Object.fromEntries(baseEnv.map(k=>[k,process.env[k]]));
   try {
@@ -103,6 +104,9 @@ test("MVP: production is ALWAYS blocked, regardless of a valid token",async()=>{
     await assert.rejects(()=>adapter(request()),rejected("release_not_authorized"));
     delete process.env.VERCEL_ENV;
     process.env.MP_ACCESS_TOKEN="not-a-real-token";
+    await assert.rejects(()=>adapter(request()),rejected("release_not_authorized"));
+    delete process.env.MP_ACCESS_TOKEN;
+    process.env.GOOGLE_APPLICATION_CREDENTIALS="forbidden-in-lab.json";
     await assert.rejects(()=>adapter(request()),rejected("release_not_authorized"));
     assert.equal(hits,0);
   });
