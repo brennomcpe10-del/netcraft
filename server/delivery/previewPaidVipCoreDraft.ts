@@ -21,7 +21,7 @@ export function previewPaidVipCoreDraft(order:any,index:number){
      order.state!=="approved" || !ID.test(order.id||"") ||
      !NAME.test(order.gamertag||"") ||
      !Array.isArray(order.lines)||order.lines.length!==1 ||
-     index!==0||order.discountCents!==0||
+     index!==0||
      order.paymentReviewRequired===true)
     return held("unapproved_or_unsupported_test_order");
   const line=order.lines[0],tier=previewById.get(line?.productId);
@@ -29,7 +29,10 @@ export function previewPaidVipCoreDraft(order:any,index:number){
   const terms=NETCRAFT_VIP_TERMS[tier];
   if(line.productType!=="vip" || line.quantity!==1 ||
      line.duration!==terms.duration ||
-     order.totalCents!==terms.priceCents ||
+     !Number.isSafeInteger(order.discountCents) ||
+     order.discountCents<0 || order.discountCents>=terms.priceCents ||
+     !Number.isSafeInteger(order.totalCents) ||
+     order.totalCents+order.discountCents!==terms.priceCents ||
      order.subtotalCents!==terms.priceCents)
     return held("vip_order_or_amount_mismatch");
   return Object.freeze({
