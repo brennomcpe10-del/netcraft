@@ -5,6 +5,23 @@ import {Timestamp} from "firebase-admin/firestore";
 // body to authorize grants; only signed notifications trigger a fresh GET.
 const COLLECTION="pixTestWebhookReceipts";
 const LOCK_MS=90000;
+// Same-instance single-flight is defense-in-depth for the Firestore Emulator.
+// It is NOT our cross-worker lock: the unique Firestore create/transaction
+// below remains mandatory across Vercel workers and BDS gateway processes.
+const localClaims=new Map<string,Promise<void>>();
+async function withLocalClaimLock<T>(key:string,fn:()=>Promise<T>):Promise<T>{
+ const previous=localClaims.get(key);
+ let release:()=>void=()=>{};
+ const mine=new Promise<void>(resolve=>{release=resolve;});
+ localClaims.set(key,mine);
+ try{
+  if(previous)await previous;
+  return await fn();
+ }finally{
+  if(localClaims.get(key)===mine)localClaims.delete(key);
+  release();
+ }
+}
 export type ClaimResult={status:"acquired"|"duplicate"|"busy";key:string;lease:string};
 export function webhookReplayKey(providerId:string,requestId:string,signature:string){
  const parsed=/^ts=(\d{10}|\d{13}),\s*v1=([a-f0-9]{64})$/i.exec(signature);
@@ -21,6 +38,7 @@ export async function claimWebhook(
 ):Promise<ClaimResult>{
  const key=webhookReplayKey(providerId,requestId,signature);
  const ref=db.collection(COLLECTION).doc(key);
+ return withLocalClaimLock(key,async()=>{
  const lease=crypto.randomBytes(16).toString("hex");
  const next={
   state:"working",providerId,claimedAt:now,lease,
@@ -44,10 +62,11 @@ export async function claimWebhook(
   if(!snap.exists)throw Error("webhook_claim_state_unavailable");
   if(state?.state==="done")return {status:"duplicate" as const,key,lease:""};
   if(state?.state==="working" &&
-     Number.isFinite(state.claimedAt)&&now-state.claimedAt<LOCK_MS &&
-     now>=state.claimedAt)return {status:"busy" as const,key,lease:""};
+     (!Number.isFinite(state.claimedAt)||now-state.claimedAt<LOCK_MS))
+    return {status:"busy" as const,key,lease:""};
   tx.update(ref,next);
   return {status:"acquired" as const,key,lease};
+ });
  });
 }
 export async function completeWebhook(db:Firestore,claim:ClaimResult){
