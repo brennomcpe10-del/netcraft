@@ -4,6 +4,12 @@ import {Timestamp} from "firebase-admin/firestore";
 // Transactions must be durable across Vercel workers. Never trust the provider
 // body to authorize grants; only signed notifications trigger a fresh GET.
 const COLLECTION="pixTestWebhookReceipts";
+const COMMERCIAL_COLLECTION="pixCommercialWebhookReceipts";
+const approvedCollection=(c:string)=>{
+ if(c!==COLLECTION&&c!==COMMERCIAL_COLLECTION)
+   throw Error("invalid_webhook_receipt_collection");
+ return c;
+};
 const LOCK_MS=90000;
 // Same-instance single-flight is defense-in-depth for the Firestore Emulator.
 // It is NOT our cross-worker lock: the unique Firestore create/transaction
@@ -34,10 +40,10 @@ export function webhookReplayKey(providerId:string,requestId:string,signature:st
 }
 export async function claimWebhook(
  db:Firestore,providerId:string,requestId:string,signature:string,
- now=Date.now(),
+ now=Date.now(),collection=COLLECTION,
 ):Promise<ClaimResult>{
  const key=webhookReplayKey(providerId,requestId,signature);
- const ref=db.collection(COLLECTION).doc(key);
+ const ref=db.collection(approvedCollection(collection)).doc(key);
  return withLocalClaimLock(key,async()=>{
  const lease=crypto.randomBytes(16).toString("hex");
  const next={
@@ -69,9 +75,9 @@ export async function claimWebhook(
  });
  });
 }
-export async function completeWebhook(db:Firestore,claim:ClaimResult){
+export async function completeWebhook(db:Firestore,claim:ClaimResult,collection=COLLECTION){
  if(claim.status!=="acquired")return;
- const ref=db.collection(COLLECTION).doc(claim.key);
+ const ref=db.collection(approvedCollection(collection)).doc(claim.key);
  await db.runTransaction(async tx=>{
   const snap=await tx.get(ref);
   if(snap.data()?.lease!==claim.lease ||snap.data()?.state!=="working")
@@ -79,9 +85,9 @@ export async function completeWebhook(db:Firestore,claim:ClaimResult){
   tx.update(ref,{state:"done",completedAt:Date.now(),lease:null});
  });
 }
-export async function releaseWebhook(db:Firestore,claim:ClaimResult){
+export async function releaseWebhook(db:Firestore,claim:ClaimResult,collection=COLLECTION){
  if(claim.status!=="acquired")return;
- const ref=db.collection(COLLECTION).doc(claim.key);
+ const ref=db.collection(approvedCollection(collection)).doc(claim.key);
  await db.runTransaction(async tx=>{
   const snap=await tx.get(ref);
   if(snap.data()?.lease===claim.lease &&snap.data()?.state==="working")
