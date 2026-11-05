@@ -1,4 +1,6 @@
 import {pixRouter} from './pix.ts';
+import {commercialPixReleaseRouter,commercialBdsReleaseRouter}
+  from './commercialRelease.ts';
 import { auditDeliveryCatalog } from '../delivery/catalogAudit.ts';
 import {identityRouter} from './identity.ts';
 import {paymentStatusPatch} from '../../src/lib/paymentStatus.ts';
@@ -25,6 +27,10 @@ export const apiRouter = express.Router();
 
 apiRouter.use('/admin', adminAuthRouter);
 apiRouter.use(identityRouter);
+// Explicitly gated commercial routes: in Preview they fall through to the
+// original blocked commercial endpoints. The BDS path remains 503 in LAB.
+apiRouter.use('/pix/commercial',commercialPixReleaseRouter);
+apiRouter.use('/delivery/bds',commercialBdsReleaseRouter);
 apiRouter.use(pixRouter);
 // Warn administrators of the remaining shared database boundary.
 // No credentials, project identifiers or tokens are returned.
