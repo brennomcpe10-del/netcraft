@@ -31,7 +31,7 @@ jobs:
       - name: Install storefront and disposable browser runner
         run: |
           bun install
-          npm install --no-save --package-lock=false playwright
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.64.1
       - name: Build static storefront
         run: npm run build
       - name: Start localhost-only Vite Preview and run five-width browser smoke
