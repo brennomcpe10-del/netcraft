@@ -1,7 +1,7 @@
 /**
  * UNMOUNTED private TLS BDS ingress for commercial nick delivery.
- * Only a dedicated HTTPS listener with authenticated server-to-server traffic;
- * never mount this on the public storefront, Vercel, or a browser route.
+ * Only an explicitly reviewed HTTPS listener or Vercel Production edge with
+ * authenticated server-to-server traffic; never mount in Preview.
  * The production provider reader, Firestore and approved registry are injected
  * by an independently reviewed deployment, never by HTTP request data.
  */
@@ -21,9 +21,15 @@ export function createBdsNickPrivateRouter(opts:{
   const adapter=createOpaqueBdsNickReleaseAdapter(opts);
   router.use((req,res,next)=>{
     res.setHeader("Cache-Control","no-store");
-    // No forwarded-for or forwarded-proto trust: only the real socket counts.
-    if((req.socket as any).encrypted!==true ||
-       req.headers["x-forwarded-for"] || req.headers["x-forwarded-proto"])
+    // In a dedicated Node HTTPS listener the socket is TLS. In Vercel
+    // Production the HTTPS edge terminates TLS before this function; require
+    // its HTTPS forwarded protocol plus a server-side VERCEL_ENV gate.
+    // Untrusted Preview, HTTP and local proxies remain blocked.
+    const directTLS=(req.socket as any).encrypted===true &&
+      !req.headers["x-forwarded-for"]&&!req.headers["x-forwarded-proto"];
+    const vercelTLS=process.env.VERCEL_ENV==="production" &&
+      req.headers["x-forwarded-proto"]==="https";
+    if(!directTLS&&!vercelTLS)
       return res.status(403).json({error:"private_tls_required"});
     next();
   });
