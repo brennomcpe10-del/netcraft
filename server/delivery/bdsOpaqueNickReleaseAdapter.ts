@@ -36,7 +36,8 @@ const MAX_BYTES=4096;
 const validNonce=/^[a-f0-9]{32}$/;
 const validTimestamp=/^[0-9]{13}$/;
 const isPrivateCommercial=()=>process.env.NODE_ENV==="production" &&
-  !process.env.VERCEL_ENV && !process.env.FIRESTORE_EMULATOR_HOST &&
+  (!process.env.VERCEL_ENV || process.env.VERCEL_ENV==="production") &&
+  !process.env.FIRESTORE_EMULATOR_HOST &&
   process.env.NETCRAFT_DELIVERY_RELEASE_APPROVED==="PRIVATE_GATEWAY_REVIEWED" &&
   !!(process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN) &&
   !!(process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
