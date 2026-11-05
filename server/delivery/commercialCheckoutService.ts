@@ -64,12 +64,43 @@ export function createNetCraftCommercialCheckout(input:{
     priceCheck({totalCents,lines});
     return {gamertag:raw.gamertag,email:raw.email,lines,totalCents};
   };
-  async function view(id:string){
-    if(!/^[a-f0-9]{64}$/.test(id))throw new PixError("invalid_order_id",400);
-    const order=(await orders.doc(id).get()).data();
-    if(!order)return {id,status:"not_found" as const};
-    return {id,state:order.state,providerOrderId:order.providerOrderId??null,
-      totalCents:order.totalCents,currency:"BRL" as const};
+  const idFor=(key:string)=>crypto.createHash("sha256")
+    .update("netcraft-commercial-v1:"+key).digest("hex");
+  async function viewByCheckoutKey(key:string){
+    release();
+    if(!KEY.test(key))throw new PixError("invalid_commercial_idempotency_key",400);
+    const id=idFor(key),order=(await orders.doc(id).get()).data();
+    if(!order||order.environment!=="commercial")
+      return {id,status:"not_found" as const};
+    const result:{id:string;state:string;providerOrderId:string|null;
+      totalCents:number;currency:"BRL";qrCode?:string;qrCodeBase64?:string}={
+      id,state:order.state,providerOrderId:order.providerOrderId??null,
+      totalCents:order.totalCents,currency:"BRL",
+    };
+    // Fetch QR only from a live, matched provider GET, never from the POST
+    // response or a client-supplied code. A key alone cannot mark a payment paid.
+    if(result.providerOrderId&&["pending","processing"].includes(order.state)){
+      const resource=await input.provider.get(result.providerOrderId);
+      if(resource?.id!==result.providerOrderId||
+         resource.external_reference!==id||
+         String(resource.user_id)!==String(order.collector)||
+         Number(resource.total_amount)!==order.totalCents/100)
+        throw new PixError("commercial_qr_provider_mismatch",409);
+      const payments=resource.transactions?.payments;
+      if(Array.isArray(payments)&&payments.length===1&&
+         payments[0]?.payment_method?.id==="pix"&&
+         payments[0]?.payment_method?.type==="bank_transfer"&&
+         Number(payments[0]?.amount)===order.totalCents/100){
+        const qr=payments[0]?.payment_method?.qr_code;
+        const base64=payments[0]?.payment_method?.qr_code_base64;
+        if(typeof qr==="string"&&qr.length<10000&&qr.length>0)
+          result.qrCode=qr;
+        if(typeof base64==="string"&&base64.length<500000&&
+           /^[A-Za-z0-9+/=]+$/.test(base64))
+          result.qrCodeBase64=base64;
+      }
+    }
+    return result;
   }
   async function create(raw:Request,idempotencyKey:string){
     release();
@@ -80,8 +111,7 @@ export function createNetCraftCommercialCheckout(input:{
     if(merchant.netcraftTestAccount!==false||
        !/^[0-9]{1,24}$/.test(String(merchant.id)))
       throw new PixError("commercial_merchant_not_verified",503);
-    const id=crypto.createHash("sha256")
-      .update("netcraft-commercial-v1:"+idempotencyKey).digest("hex");
+    const id=idFor(idempotencyKey);
     const requestHash=hash(request),ref=orders.doc(id),
       lease=crypto.randomBytes(16).toString("hex"),time=now();
     const result=await input.db.runTransaction(async(tx:any)=>{
@@ -105,7 +135,7 @@ export function createNetCraftCommercialCheckout(input:{
         creationLeaseUntil:time+90_000,createdAt:new Date(time).toISOString()});
       return {shouldPost:true};
     });
-    if(!result.shouldPost)return view(id);
+    if(!result.shouldPost)return viewByCheckoutKey(idempotencyKey);
     release();
     const amount=(request.totalCents/100).toFixed(2);
     const providerRequest={type:"online",processing_mode:"automatic",
@@ -137,7 +167,7 @@ export function createNetCraftCommercialCheckout(input:{
         updatedAt:new Date(now()).toISOString()});
     });
     // POST response cannot authorize a reward; only a later verified GET can.
-    return view(id);
+    return viewByCheckoutKey(idempotencyKey);
   }
-  return Object.freeze({create,view});
+  return Object.freeze({create,viewByCheckoutKey});
 }
