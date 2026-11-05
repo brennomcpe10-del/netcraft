@@ -65,6 +65,14 @@ test("Durable notification claims reject replay, concurrent repeat and support r
  assert.equal(second.status,"acquired");
  await releaseWebhook(db,second);
  assert.equal((await claimWebhook(db,ORD,"evt-2",secondSignature)).status,"acquired");
+ const concurrentSig=token("evt-parallel").signature;
+ const competing=await Promise.all([
+   claimWebhook(db,ORD,"evt-parallel",concurrentSig),
+   claimWebhook(db,ORD,"evt-parallel",concurrentSig),
+ ]);
+ assert.deepEqual(competing.map(x=>x.status).sort(),["acquired","busy"]);
+ await completeWebhook(db,competing.find(x=>x.status==="acquired")!);
+ assert.equal((await claimWebhook(db,ORD,"evt-parallel",concurrentSig)).status,"duplicate");
  const staleAt=Date.now()-100000;
  const staleSig=token("evt-3").signature;
  const stale=await claimWebhook(db,ORD,"evt-3",staleSig,staleAt);
