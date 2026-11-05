@@ -8,7 +8,7 @@ import {
 } from "./netcraftVipPreviewApproval.ts";
 import {NETCRAFT_VIP_TERMS} from "./netcraftVipCatalogApproval.ts";
 
-const previewById=new Map(NETCRAFT_PREVIEW_VIP_APPROVALS.map(x=>[x.productId,x.tier]));
+const previewById=new Map(NETCRAFT_PREVIEW_VIP_APPROVALS.map(x=>[x.productId,x.tier] as const));
 const ID=/^[a-f0-9]{64}$/;
 const NAME=/^[A-Za-z0-9_ ]{3,32}$/;
 export function previewPaidVipCoreDraft(order:any,index:number){
