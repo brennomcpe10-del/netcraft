@@ -11,6 +11,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { validateRewardDraft } from "../../src/lib/rewardDraft.ts";
 import { previewDeliveryPlan } from "../delivery/rewardPlan.ts";
 import { draftCoreDelivery } from "../delivery/coreJobContract.ts";
+import { previewPaidVipCoreDraft } from "../delivery/previewPaidVipCoreDraft.ts";
 import { quoteCart, validateCartRequest } from "../../src/lib/cartQuote.ts";
 import { readCatalogItem } from "../services/previewCatalog.ts";
 import { findCouponByCode } from "../services/previewCoupons.ts";
@@ -393,6 +394,9 @@ export function pixService(db: Firestore, gateway: MercadoPago) {
                 orderState: state, environment: "test",
                 plan: previewDeliveryPlan(line),
               }),
+              // Approved Orders API state + exact server-owned VIP ID/price.
+              // Still NON-EXECUTABLE: never interpreted as grant authority.
+              vipBridgeDraft: previewPaidVipCoreDraft({...o,state},i),
               approvedAt,
               approvalObservedAt,
               requiresApprovalTimestamp: !approvedAt,
