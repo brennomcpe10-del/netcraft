@@ -65,7 +65,7 @@ commercialPixReleaseRouter.post("/webhook",async(req,res)=>{
     const requestId=String(req.headers["x-request-id"]||"");
     const signature=String(req.headers["x-signature"]||"");
     const topic=String(req.query.type||req.body?.type||"");
-    const secret=process.env.MERCADOPAGO_WEBHOOK_SECRET||"";
+    const secret=process.env.NCBR_COMMERCIAL_MP_WEBHOOK_SECRET||"";
     if(!ORDER.test(providerId)||!REQUEST.test(requestId)||
        !["order","orders"].includes(topic)||
        (req.body?.data?.id&&String(req.body.data.id)!==providerId)||
