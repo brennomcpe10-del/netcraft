@@ -75,6 +75,8 @@ test("commercial checkout creates ONE Pix Orders POST with approved price and se
   await inProd(async()=>{
     const f=setup();
     const first=await f.service.create(f.body,KEY);
+    assert.ok("state" in first);
+    if(!("state" in first))throw Error("checkout_state_missing");
     assert.equal(first.totalCents,490);
     assert.equal(first.state,"pending");
     assert.equal(first.qrCode,"000201testpix");
@@ -92,7 +94,10 @@ test("commercial checkout creates ONE Pix Orders POST with approved price and se
     assert.equal(stored.state,"pending");
     assert.equal(stored.dispatchEnabled,false);
     assert.equal([...f.db.records.keys()].filter(x=>x.startsWith("pixCommercialDeliveries/")).length,0);
-    assert.equal(await f.service.viewByCheckoutKey(KEY).then(x=>x.qrCode),"000201testpix");
+    const checked=await f.service.viewByCheckoutKey(KEY);
+    assert.ok("qrCode" in checked);
+    if(!("qrCode" in checked))throw Error("checkout_qr_missing");
+    assert.equal(checked.qrCode,"000201testpix");
   });
 });
 test("checkout blocks changed idempotency key, invalid product, double VIP and coupons",async()=>{
