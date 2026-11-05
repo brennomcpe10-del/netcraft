@@ -17,7 +17,8 @@ export function createCommercialOrdersReader(options:{
   if(typeof token!=="string"||
      !/^APP_USR-[A-Za-z0-9-]{24,}$/.test(token))
     throw new PixError("private_merchant_credentials_required",503);
-  if(process.env.NODE_ENV!=="production"||process.env.VERCEL_ENV||
+  if(process.env.NODE_ENV!=="production"||
+     (process.env.VERCEL_ENV && process.env.VERCEL_ENV!=="production")||
      process.env.FIRESTORE_EMULATOR_HOST)
     throw new PixError("commercial_provider_reader_release_blocked",503);
   const request=async (path:string)=>{
