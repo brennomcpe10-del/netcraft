@@ -41,7 +41,7 @@ test("v2330 refuses HTTP, invalid players, invalid ACK and missing secret",async
  assert.throws(()=>factory().driver.poll(""),/BDS_MVP_PLAYER_INVALID/);
  assert.throws(()=>factory().driver.ack("bad","b".repeat(32),"applied"),/BDS_MVP_ACK_INVALID/);
  const {driver}=factory();
- await assert.rejects(()=>driver.nack(ORDER,"b".repeat(32),"offline","bad"),/BDS_MVP_NACK_INVALID/);
+ assert.throws(()=>driver.nack(ORDER,"b".repeat(32),"offline","bad"),/BDS_MVP_NACK_INVALID/);
  const init=()=>createBdsMvpNetTransport({
    http:{request:async()=>({status:200,body:"{}"})},
    HttpRequest:class{},HttpHeader:class{},HttpRequestMethod:{Post:"POST"},
