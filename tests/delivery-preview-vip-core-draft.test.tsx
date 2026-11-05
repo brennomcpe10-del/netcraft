@@ -23,7 +23,13 @@ test("Site Preview paid VIPs: exact IDs and terms map to Core held payloads",()=
    assert.equal(draft.payload?.days,30);
  }
 });
-test("Site Preview: tampering and discounts never create an eligible delivery",()=>{
+test("Site Preview: server-priced VIP discount remains a held draft",()=>{
+ const order={...make("elite"),discountCents:100,totalCents:1190};
+ const draft=previewPaidVipCoreDraft(order,0);
+ assert.equal(draft.payload?.rankTag,"ncbr:vip_elite");
+ assert.equal(draft.dispatchEnabled,false);
+});
+test("Site Preview: tampered totals, states and catalog never create a payload",()=>{
  const cases=[
   {...make("explorer"),totalCents:1},
   {...make("explorer"),discountCents:1},
