@@ -91,16 +91,19 @@ export function createCommercialNickReleaseService(
     registry: RewardRegistry; now?:()=>number;
     // Server-owned catalog approval: checked on EVERY read of an order
     // during reconcile, offer and ACK. No public route mounts this service.
-    validateOrder?:(order:Readonly<StoredOrder>)=>void;
+    validateOrder:(order:Readonly<StoredOrder>)=>void;
     // Independent commercial release decision: no environment flag alone
     // may authorize a real Minecraft grant.
     authorizeOrderForDispatch:(order:Readonly<StoredOrder>)=>Promise<boolean>},
 ) {
   commercialOnly();
+  if(typeof options.validateOrder!=="function" ||
+     typeof options.authorizeOrderForDispatch!=="function")
+    throw new PixError("approved_catalog_and_release_required",503);
   const clock = options.now || Date.now;
   const validatedOrder = (raw:unknown):StoredOrder => {
     const order=canonicalOrder(raw);
-    options.validateOrder?.(order);
+    options.validateOrder(order);
     return order;
   };
   const orders = db.collection("pixCommercialOrders");
