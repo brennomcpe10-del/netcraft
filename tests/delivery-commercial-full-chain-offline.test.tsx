@@ -67,13 +67,6 @@ test("mock live checkout -> verified paid webhook -> BDS nonce -> Core VIP -> on
       authorizeOrderForDispatch:async(order:any)=>
         order.checkoutOrigin==="netcraft_commercial_checkout_v1",
     });
-    const adapter=createOpaqueBdsNickReleaseAdapter({
-      service:{authenticatedRequest:(m:any,t:boolean)=>
-        gateway.router?gateway.reconcileVerifiedOrder(orderId)
-          .then(()=>Promise.resolve({})) : Promise.resolve({})} as any,
-      secret:token,hmacKey:hmac,now:()=>now,
-    });
-    void adapter;
     // A pending payment never enters the queue, even if a buyer has its QR.
     assert.equal((await gateway.reconcileVerifiedOrder(orderId)).created,0);
     paid=true;
