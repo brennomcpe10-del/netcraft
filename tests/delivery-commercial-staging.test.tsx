@@ -212,7 +212,9 @@ test("18/19: offline, unauthorized NACK, partial-grant errors and refund races n
 test("16: commercial candidate does not activate in Production, Preview or with real credentials",()=>{
  const previous={NODE_ENV:process.env.NODE_ENV,VERCEL_ENV:process.env.VERCEL_ENV,
    FIRESTORE_EMULATOR_HOST:process.env.FIRESTORE_EMULATOR_HOST,
-   MERCADOPAGO_ACCESS_TOKEN:process.env.MERCADOPAGO_ACCESS_TOKEN};
+   MERCADOPAGO_ACCESS_TOKEN:process.env.MERCADOPAGO_ACCESS_TOKEN,
+   MP_ACCESS_TOKEN:process.env.MP_ACCESS_TOKEN,
+   GOOGLE_APPLICATION_CREDENTIALS:process.env.GOOGLE_APPLICATION_CREDENTIALS};
  const db=memoryDB() as any;
  const reader:any={me:async()=>({id:42,netcraftTestAccount:false}),
    get:async()=>ordersFixture(id,"25.00","approved")};
@@ -229,6 +231,12 @@ test("16: commercial candidate does not activate in Production, Preview or with 
    assert.throws(make,/commercial_delivery_release_blocked/);
    delete process.env.VERCEL_ENV;
    process.env.MERCADOPAGO_ACCESS_TOKEN="forbidden-in-lab";
+   assert.throws(make,/commercial_delivery_release_blocked/);
+   delete process.env.MERCADOPAGO_ACCESS_TOKEN;
+   process.env.MP_ACCESS_TOKEN="forbidden-in-lab";
+   assert.throws(make,/commercial_delivery_release_blocked/);
+   delete process.env.MP_ACCESS_TOKEN;
+   process.env.GOOGLE_APPLICATION_CREDENTIALS="forbidden-in-lab.json";
    assert.throws(make,/commercial_delivery_release_blocked/);
  }finally{
   for(const [name,val] of Object.entries(previous)){
