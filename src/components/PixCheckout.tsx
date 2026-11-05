@@ -7,11 +7,12 @@ type Order = {
   providerOrderId?: string;
   paymentId?:string|null;
   totalCents: number;
-  discountCents: number;
+  discountCents?: number;
   qrCode?: string;
   qrBase64?: string;
-  expiresAt: string;
-  delivery: string;
+  qrCodeBase64?: string;
+  expiresAt?: string;
+  delivery?: string;
 };
 const money = (v: number) =>
   (v / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -25,6 +26,7 @@ export function PixCheckout({
   /** Applied coupon from CartView's server-authoritative quote. */
   couponCode?: string;
 }) {
+  const [mode,setMode] = useState<"commercial"|"test">("test");
   const [available, setAvailable] = useState(false),
     [configChecking, setConfigChecking] = useState(true),
     [configError, setConfigError] = useState(""),
@@ -46,6 +48,21 @@ export function PixCheckout({
     setConfigChecking(true);
     setConfigError("");
     try {
+      // Preview never activates the commercial checkout. In Production the
+      // backend must independently verify all commercial release gates.
+      const commerce=await fetch("/api/pix/commercial/config",{
+        cache:"no-store",signal,
+      });
+      if(commerce.ok){
+        const approved=await commerce.json();
+        if(approved.available===true&&approved.environment==="commercial"&&
+           approved.realPayments===true){
+          if(!signal?.aborted){
+            setMode("commercial");setAvailable(true);setConfigError("");
+          }
+          return;
+        }
+      }
       const response = await fetch("/api/pix/config", {
         cache: "no-store",
         signal,
@@ -56,6 +73,7 @@ export function PixCheckout({
         );
       const config = await response.json();
       if (!signal?.aborted) {
+        setMode("test");
         setAvailable(response.ok && config.available === true);
         if (!response.ok || !config.available)
           setConfigError(
@@ -81,15 +99,23 @@ export function PixCheckout({
     checkConfiguration(abort.signal);
     return () => abort.abort();
   }, []);
+  const normalizeOrder=(data:any):Order=>({
+    ...data,discountCents:Number(data.discountCents||0),
+    qrBase64:data.qrBase64||data.qrCodeBase64||undefined,
+    delivery:data.delivery||(mode==="commercial"
+      ?"A entrega será feita ao nick informado depois da confirmação do pagamento. Se estiver offline, fica na fila."
+      :"As recompensas comerciais permanecem desativadas no ambiente de teste."),
+  });
   async function refresh(k = key, signal?: AbortSignal) {
     const id = await crypto.subtle.digest(
       "SHA-256",
-      new TextEncoder().encode(k),
+      new TextEncoder().encode((mode==="commercial"?"netcraft-commercial-v1:":"")+k),
     );
     const hash = Array.from(new Uint8Array(id), (b) =>
       b.toString(16).padStart(2, "0"),
     ).join("");
-    const r = await fetch(`/api/pix/orders/${hash}`, {
+    const target=mode==="commercial"?"/api/pix/commercial/orders":"/api/pix/orders";
+    const r = await fetch(`${target}/${hash}`, {
       headers: { "x-checkout-key": k },
       cache: "no-store",
       signal,
@@ -97,12 +123,12 @@ export function PixCheckout({
     const d = await r.json();
     if (!r.ok) throw new Error(d.error);
     if (!signal?.aborted) {
-      setOrder(d);
+      setOrder(normalizeOrder(d));
       setError("");
     }
   }
   useEffect(() => {
-    if (!key || busy) return;
+    if (!key || busy || configChecking || !available) return;
     const abort = new AbortController();
     let active = true;
     const tick = () => {
@@ -118,7 +144,7 @@ export function PixCheckout({
       abort.abort();
       clearInterval(timer);
     };
-  }, [key, busy]);
+  }, [key, busy,mode,configChecking,available]);
   function resetCheckout() {
     try {
       sessionStorage.removeItem("netcraft-pix-key");
@@ -132,16 +158,21 @@ export function PixCheckout({
     e.preventDefault();
     setBusy(true);
     setError("");
-    const request = {
-      lines,
-      gamertag: gamertag.trim(),
-      email: email.trim(),
-      cpf: cpf.replace(/\D/g, ""),
-      couponCode: (quotedCoupon ?? couponInput).trim(),
+    if(mode==="commercial"&&(quotedCoupon||couponInput.trim())){
+      setError("Cupons ainda não estão disponíveis no Pix comercial. Remova o cupom para continuar.");
+      setBusy(false);return;
+    }
+    const request=mode==="commercial"?{
+      lines:lines.map(line=>({productId:line.productId,quantity:line.quantity})),
+      gamertag:gamertag.trim(),email:email.trim(),
+    }:{
+      lines,gamertag:gamertag.trim(),email:email.trim(),
+      cpf:cpf.replace(/\D/g,""),
+      couponCode:(quotedCoupon??couponInput).trim(),
     };
     const digest = await crypto.subtle.digest(
       "SHA-256",
-      new TextEncoder().encode(JSON.stringify(request)),
+      new TextEncoder().encode(JSON.stringify({mode,...request})),
     );
     const fingerprint = Array.from(new Uint8Array(digest), (b) =>
       b.toString(16).padStart(2, "0"),
@@ -166,7 +197,8 @@ export function PixCheckout({
       sessionStorage.setItem("netcraft-pix-request", fingerprint);
     } catch {}
     try {
-      const r = await fetch("/api/pix/orders", {
+      const r = await fetch(mode==="commercial"
+        ?"/api/pix/commercial/orders":"/api/pix/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json", "idempotency-key": k },
         body: JSON.stringify(request),
@@ -175,7 +207,7 @@ export function PixCheckout({
       if (!r.ok) {
         throw new Error(d.error || "Falha ao gerar Pix.");
       }
-      setOrder(d);
+      setOrder(normalizeOrder(d));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao gerar Pix.");
     } finally {
@@ -186,17 +218,19 @@ export function PixCheckout({
     creating: "Criando cobrança",
     pending: "Aguardando pagamento",
     processing: "Processando no Mercado Pago",
-    approved: "Pagamento aprovado — teste",
+    approved: mode==="commercial"?"Pagamento aprovado — entrega em processamento"
+      :"Pagamento aprovado — teste",
     expired: "Pix expirado",
     cancelled: "Pagamento cancelado",
     refunded: "Pagamento devolvido",
   };
   return (
     <section className="space-y-4 min-w-0">
-      <h3 className="font-bold text-lg">Pix automático · ambiente de teste</h3>
-      <p className="text-sm text-zinc-400">
-        Não pague com seu banco. Este fluxo não entrega itens no servidor.
-      </p>
+      <h3 className="font-bold text-lg">{mode==="commercial"
+        ?"Pix automático · compra no NetCraftBR":"Pix automático · ambiente de teste"}</h3>
+      <p className="text-sm text-zinc-400">{mode==="commercial"
+        ?"Confirme o nick Bedrock. Após o pagamento verificado, o VIP ou kit será enviado à conta indicada."
+        :"Não pague com seu banco. Este fluxo não entrega itens no servidor."}</p>
       {order?.apiVersion === "payments-legacy" && !order.paymentId && <div className="space-y-2"><p>Esta tentativa pertence ao checkout anterior. O registro será preservado; reiniciar não cancela uma eventual cobrança anterior.</p><button className="text-link" type="button" onClick={resetCheckout}>Reiniciar checkout</button></div>}
       {order?.state === "creating" && (
         <div role="status" className="space-y-2">
@@ -208,15 +242,15 @@ export function PixCheckout({
         <div className="space-y-3">
           <p role="status">{labels[order.state] || order.state}</p>
           <strong>{money(order.totalCents)}</strong>
-          {order.discountCents > 0 && (
-            <p>Desconto validado: {money(order.discountCents)}</p>
+          {(order.discountCents||0) > 0 && (
+            <p>Desconto validado: {money(order.discountCents||0)}</p>
           )}
           {(order.state === "pending" || order.state === "processing") && (
             <>
               {order.qrBase64 && (
                 <img
                   className="w-full max-w-64 bg-white p-3 rounded-xl"
-                  alt="QR Code Pix de teste"
+                  alt={mode==="commercial"?"QR Code Pix da compra":"QR Code Pix de teste"}
                   src={`data:image/png;base64,${order.qrBase64}`}
                 />
               )}
@@ -251,9 +285,9 @@ export function PixCheckout({
                   </button>
                 </>
               )}
-              <p>
+              {order.expiresAt&&<p>
                 Validade: {new Date(order.expiresAt).toLocaleString("pt-BR")}
-              </p>
+              </p>}
             </>
           )}
           <p className="text-sm">{order.delivery}</p>
@@ -280,9 +314,11 @@ export function PixCheckout({
         <form onSubmit={submit} className="space-y-3">
           {[
             ["Gamertag Bedrock", gamertag, setGamertag, "text"],
-            ["E-mail de teste", email, setEmail, "email"],
-            ["CPF do comprador de teste", cpf, setCpf, "text"],
-            ["Cupom (opcional)", couponInput, setCoupon, "text"],
+            [mode==="commercial"?"E-mail do comprador":"E-mail de teste", email, setEmail, "email"],
+            ...(mode==="commercial"?[]:[
+              ["CPF do comprador de teste", cpf, setCpf, "text"],
+              ["Cupom (opcional)", couponInput, setCoupon, "text"],
+            ]),
           ].filter(([label]) => quotedCoupon === undefined || label !== "Cupom (opcional)").map(([label, value, set, type]) => (
             <label key={String(label)} className="block text-sm">
               {String(label)}
@@ -314,12 +350,12 @@ export function PixCheckout({
               ? "Verificando integração…"
               : busy
                 ? "Gerando Pix…"
-                : "Gerar Pix de teste"}
+                : mode==="commercial"?"Gerar Pix da compra":"Gerar Pix de teste"}
           </button>
         </form>
       )}
       {configChecking && (
-        <p role="status">Verificando a conta de teste no Mercado Pago…</p>
+        <p role="status">Verificando a configuração de pagamento…</p>
       )}
       {!configChecking && !available && (
         <div className="space-y-2">
