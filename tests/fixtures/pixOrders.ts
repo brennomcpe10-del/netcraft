@@ -54,6 +54,17 @@ export function memoryDB() {
     path,
     id: path.split("/").pop(),
     get: async () => snap(path),
+    // Match Firestore DocumentReference.create(): an atomic unique-key write
+    // which fails with ALREADY_EXISTS (gRPC 6), not an upsert.
+    create: async (data: any) => {
+      if (records.has(path)) {
+        const err: any = new Error("ALREADY_EXISTS");
+        err.code = 6;
+        throw err;
+      }
+      records.set(path, structuredClone(data));
+      return { writeTime: null };
+    },
     collection: (name: string) => collection(path + "/" + name),
   });
   const snap = (path: string): any => ({
