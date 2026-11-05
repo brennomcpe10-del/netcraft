@@ -128,6 +128,7 @@ export function createNetCraftCommercialCheckout(input:{
         return {shouldPost:true};
       }
       tx.create(ref,{id,environment:"commercial",catalogValidated:true,
+        checkoutOrigin:"netcraft_commercial_checkout_v1",
         requestHash,providerOrderId:null,collector:String(merchant.id),
         gamertag:request.gamertag,totalCents:request.totalCents,
         currency:"BRL",lines:request.lines,discountCents:0,
