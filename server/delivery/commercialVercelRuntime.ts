@@ -47,7 +47,7 @@ export function createReviewedCommercialVercelRuntime(){
   const prices=jsonEnv("NCBR_COMMERCIAL_APPROVED_PRICES_JSON") as CommercialApprovedPrice[];
   const registry=makeRewardRegistry(rules);
   const token=process.env.NCBR_COMMERCIAL_MP_ACCESS_TOKEN||"";
-  const webhookSecret=process.env.MERCADOPAGO_WEBHOOK_SECRET||"";
+  const webhookSecret=process.env.NCBR_COMMERCIAL_MP_WEBHOOK_SECRET||"";
   const bdsOpaqueToken=process.env.NCBR_COMMERCIAL_BDS_TOKEN||"";
   const privateHmacKey=process.env.NCBR_COMMERCIAL_PRIVATE_HMAC_KEY||"";
   if(!/^APP_USR-[A-Za-z0-9-]{24,}$/.test(token)||
