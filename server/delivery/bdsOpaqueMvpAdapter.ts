@@ -38,7 +38,8 @@ const validTimestamp=/^[0-9]{13}$/;
 const isLab=()=>process.env.NODE_ENV==="test" &&
   process.env.FIRESTORE_EMULATOR_HOST==="127.0.0.1:8085" &&
   !process.env.VERCEL_ENV && !process.env.MERCADOPAGO_ACCESS_TOKEN &&
-  !process.env.MP_ACCESS_TOKEN && !process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  !process.env.MP_ACCESS_TOKEN && !process.env.GOOGLE_APPLICATION_CREDENTIALS &&
+  !process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
 export class OpaqueBridgeBlocked extends Error {
   constructor(readonly reason:string){super(reason);}
