@@ -91,7 +91,10 @@ export function createCommercialNickReleaseService(
     registry: RewardRegistry; now?:()=>number;
     // Server-owned catalog approval: checked on EVERY read of an order
     // during reconcile, offer and ACK. No public route mounts this service.
-    validateOrder?:(order:Readonly<StoredOrder>)=>void},
+    validateOrder?:(order:Readonly<StoredOrder>)=>void;
+    // Independent commercial release decision: no environment flag alone
+    // may authorize a real Minecraft grant.
+    authorizeOrderForDispatch:(order:Readonly<StoredOrder>)=>Promise<boolean>},
 ) {
   commercialOnly();
   const clock = options.now || Date.now;
@@ -190,7 +193,7 @@ export function createCommercialNickReleaseService(
       }
       tx.update(orderRef,{
         state:resolved,updatedAt:new Date(clock()).toISOString(),
-        dispatchEnabled:true,paymentReviewRequired:resolved==="review_required" ||
+        dispatchEnabled:resolved==="approved",paymentReviewRequired:resolved==="review_required" ||
           resolved==="refunded" || resolved==="disputed" ||
           (state!=="approved" && snapshots.some(s=>s.exists)),
       });
@@ -213,6 +216,10 @@ export function createCommercialNickReleaseService(
     if (order.state !== "approved" ||
         await providerState(order) !== "approved")
       return {status:"payment_not_approved" as const};
+    // Commercial release must be independently approved on EVERY lease.
+    if (typeof options.authorizeOrderForDispatch !== "function" ||
+        await options.authorizeOrderForDispatch(order) !== true)
+      return {status:"held" as const};
     const payload = compileLine(order, initial.lineIndex);
     const digest = fingerprint(payload);
     const leaseToken = crypto.randomBytes(16).toString("hex");
@@ -261,7 +268,10 @@ export function createCommercialNickReleaseService(
     const order = validatedOrder((await orders.doc(job.orderId).get()).data());
     let approved=false;
     try { approved = order.state === "approved" &&
-      (await providerState(order)) === "approved"; } catch { approved=false; }
+      (await providerState(order)) === "approved" &&
+      typeof options.authorizeOrderForDispatch === "function" &&
+      (await options.authorizeOrderForDispatch(order)) === true;
+    } catch { approved=false; }
     return db.runTransaction(async tx => {
       const [orderSnap,jobSnap]=await Promise.all([
         tx.get(orders.doc(order.id)),tx.get(queue.doc(deliveryId)),
