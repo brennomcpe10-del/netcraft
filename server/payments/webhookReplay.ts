@@ -22,22 +22,32 @@ export async function claimWebhook(
  const key=webhookReplayKey(providerId,requestId,signature);
  const ref=db.collection(COLLECTION).doc(key);
  const lease=crypto.randomBytes(16).toString("hex");
+ const next={
+  state:"working",providerId,claimedAt:now,lease,
+  expiresAt:Timestamp.fromMillis(now+48*60*60*1000),
+ };
+ // First claimant uses an atomic Firestore CREATE, never an optimistic
+ // missing-document read. On highly concurrent emulator/server requests,
+ // two read-then-create transactions can both appear to have acquired a
+ // previously nonexistent receipt. Server-side create is a unique-key fence.
+ try{
+  await ref.create(next);
+  return {status:"acquired" as const,key,lease};
+ }catch(error:any){
+  // Distinguish a genuine duplicate from outages and permission failures.
+  if(error?.code!==6 && error?.code!=="already-exists")throw error;
+ }
+ // An existing receipt must still be checked transactionally: done stays
+ // immutable, active worker stays busy, and ONLY an expired worker is reclaimed.
  return db.runTransaction(async tx=>{
   const snap=await tx.get(ref),state=snap.data();
-  if(state?.state==="done")return {status:"duplicate",key,lease:""};
+  if(!snap.exists)throw Error("webhook_claim_state_unavailable");
+  if(state?.state==="done")return {status:"duplicate" as const,key,lease:""};
   if(state?.state==="working" &&
      Number.isFinite(state.claimedAt)&&now-state.claimedAt<LOCK_MS &&
-     now>=state.claimedAt)return {status:"busy",key,lease:""};
-  const next={
-   state:"working",providerId,claimedAt:now,lease,
-   expiresAt:Timestamp.fromMillis(now+48*60*60*1000),
-  };
-  // Atomic create enforces a single owner even for the first claim of a
-  // missing document. A blind set can let two workers each believe they
-  // acquired the same webhook when the emulator races missing-doc reads.
-  if(snap.exists)tx.update(ref,next);
-  else tx.create(ref,next);
-  return {status:"acquired",key,lease};
+     now>=state.claimedAt)return {status:"busy" as const,key,lease:""};
+  tx.update(ref,next);
+  return {status:"acquired" as const,key,lease};
  });
 }
 export async function completeWebhook(db:Firestore,claim:ClaimResult){
