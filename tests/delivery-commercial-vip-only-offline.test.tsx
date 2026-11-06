@@ -95,11 +95,15 @@ test("each approved VIP pays its own total, queues once, grants once and ACKs on
       const request={gamertag:"Halzin5212",email:"offline-buyer@example.invalid",
         lines:[{productId:vip.productId,quantity:1}]};
       const before=await checkout.create(request,key);
+      assert.ok("state" in before,"checkout must return a persisted order");
+      if(!("state" in before))throw Error("checkout_not_persisted");
       assert.equal(before.state,"pending",vip.tier);
       assert.equal(before.totalCents,vip.priceCents,vip.tier);
       assert.equal(created,1);
       // Idempotent checkout: same key cannot create a second Pix order.
       const repeated=await checkout.create(request,key);
+      assert.ok("state" in repeated,"reused key must not reset the order");
+      if(!("state" in repeated))throw Error("idempotent_checkout_missing");
       assert.equal(repeated.state,"pending");
       assert.equal(created,1);
       const gateway=createNetCraftCommercialNickGateway({
