@@ -62,3 +62,19 @@ Inventário mínimo para o registro de aprovação: SHA commit; ID/hash do arqui
 - `node scripts/build-delivery-homologation-ci-report.mjs`: gera relatório de checks **da própria execução**; não equivale a uma aprovação de release.
 - `.github/workflows/delivery-release-candidate.yml`: CI somente leitura; nenhum deploy ou rollback automático.
 - `docs/netcraft-delivery-homologation-final-37.md`: evidências CI verificadas e bloqueios restantes.
+
+## 6. Verificação de publicação comercial (2026-11-05 — OFF)
+
+Em 2026-11-05 a rota comercial foi verificada na Preview protegida da Vercel. Evidências de resposta HTTP: `GET /api/health` = **200**, `GET /api/pix/commercial/config` = **503** (`release_blocked`), `GET /api/delivery/bds/poll` = **503** (`delivery_release_off`). O probe read-only `GET /api/pix/commercial/health` responde **200**, com `status: code_deployed_only` e `paymentOrDeliveryAuthorization: false`. Esse 200 NÃO habilita uma cobrança.
+
+**O domínio público `netcraft-ten.vercel.app` continua na branch `main` e NÃO contém a API comercial.** A branch `redesign-mobile-solaris` tem centenas de commits de diferença em relação a `main`: não promovê-la integralmente a Production só para liberar uma rota. O último deploy Production não foi alterado.
+
+Preflight operacional antes de qualquer mudança de tráfego:
+
+1. Garantir que `FIREBASE_SERVICE_ACCOUNT_JSON` da loja antiga esteja disponível de modo seguro em **Production**, mantendo `FIREBASE_SERVICE_ACCOUNT_JSON` da Preview com seu escopo atual. Não confundir com `NCBR_COMMERCIAL_FIREBASE_SERVICE_ACCOUNT_JSON`, já presente em Production e destinada EXCLUSIVAMENTE ao Firebase comercial isolado. Em 2026-11-05 a primeira variável existia apenas na Preview associada à branch; não é possível adicionar Production ao escopo mantendo esse filtro de branch.
+2. Planejar uma publicação específica da API ou revisar integralmente o corte da branch, com testes de regressão da loja/painel e rollback. Não alterar `main`, domínio principal ou Production automaticamente sem esse corte.
+3. Confirmar o mapeamento autoritativo de produtos, preços, kits e VIPs, as credenciais privadas BDS, a assinatura HMAC, a conexão do addon Bedrock em servidor de testes, retenção de recibos/ACK e política de recuperação. As flags `NETCRAFT_DELIVERY_RELEASE_APPROVED` e `NCBR_COMMERCIAL_CHECKOUT_APPROVED` permanecem ausentes.
+4. Somente após uma API comercial de produção validada: cadastrar URL HTTPS em Mercado Pago Developers, evento **Order (Mercado Pago)** e clicar **Salvar** para gerar a assinatura secreta. Guardar a assinatura em `NCBR_COMMERCIAL_MP_WEBHOOK_SECRET` **Production / Sensitive**, sem enviar segredo ao chat.
+5. Simular a notificação assinada sem conceder recompensas, verificar idempotência e observabilidade. Habilitar vendas/entregas exige revisão separada e responsável por pagamentos.
+
+**Estado do release:** branch e Preview testadas, Prod inalterada, pagamentos comerciais OFF, entrega Minecraft OFF. Os códigos de resposta acima não comprovam um E2E real nem substituem autorização para processar pagamentos.
