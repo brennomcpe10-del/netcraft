@@ -189,3 +189,30 @@ test("production-only gateway fails closed without explicit private release cont
       authorizeOrderForDispatch:async()=>true,now:()=>NOW}),/private_gateway_release_blocked/);
   });
 });
+
+
+test("commercial API health probe never activates payments or discloses secrets",async()=>{
+  const {default:express}=await import("express");
+  const {commercialPixReleaseRouter}=await import("../server/routes/commercialRelease.ts");
+  const app=express();
+  app.use("/pix/commercial",commercialPixReleaseRouter);
+  let server:ReturnType<typeof app.listen>;
+  await new Promise<void>(resolve=>{
+    server=app.listen(0,"127.0.0.1",resolve);
+  });
+  try{
+    const address=server!.address();
+    assert.ok(address&&typeof address!=="string");
+    const response=await fetch(`http://127.0.0.1:${address.port}/pix/commercial/health`);
+    assert.equal(response.status,200);
+    assert.equal(response.headers.get("cache-control"),"no-store");
+    const payload=await response.json();
+    assert.deepEqual(payload,{
+      component:"netcraft-commercial-api",
+      status:"code_deployed_only",
+      paymentOrDeliveryAuthorization:false,
+    });
+  }finally{
+    await new Promise<void>((resolve,reject)=>server!.close(err=>err?reject(err):resolve()));
+  }
+});
