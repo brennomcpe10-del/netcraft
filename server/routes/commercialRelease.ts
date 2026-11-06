@@ -26,6 +26,13 @@ const error=(res:express.Response,err:unknown)=>{
   return res.status(code).json({error:"commercial_operation_unavailable"});
 };
 export const commercialPixReleaseRouter=express.Router();
+// Read-only deployment probe. Deliberately DOES NOT check credentials,
+// construct the commercial runtime, confirm an order or enable payments.
+commercialPixReleaseRouter.get("/health",(_req,res)=>{
+  res.setHeader("Cache-Control","no-store");
+  return res.json({component:"netcraft-commercial-api",
+    status:"code_deployed_only",paymentOrDeliveryAuthorization:false});
+});
 commercialPixReleaseRouter.use((_req,res,next)=>{
   res.setHeader("Cache-Control","no-store");
   // Do not intercept the existing 503 release boundary in Preview/LAB.
