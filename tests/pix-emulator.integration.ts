@@ -857,3 +857,12 @@ try {
 }
 
 await db.terminate();
+
+// The test imports the storefront API, which can initialize the Firebase WEB
+// client as well as the Admin SDK above. A live client-side listener otherwise
+// holds Node open even after all assertions passed and the Admin gRPC client
+// was terminated. Clean up both independently; never change production code.
+const {getApps:getWebApps,deleteApp:deleteWebApp}=await import("firebase/app");
+await Promise.all(getWebApps().map(app=>deleteWebApp(app)));
+assert.equal(getWebApps().length,0,"all emulator-only Firebase web apps must close");
+console.log("PASS Firestore Emulator integration cleanup: Admin and web clients closed");
