@@ -52,7 +52,7 @@ test("only an authenticated in-game matching-name session may consume voucher on
   assert.equal(await f.link.verifyActiveSession({orderId:ID,gamertag:NAME,
     sessionId:proof.sessionId}),false);
   const result=await f.link.claimInGame(proof,()=>true);
-  assert.deepEqual(result,{status:"verified_in_game",gamertag:NAME});
+  assert.deepEqual(result,{status:"verified_in_game",gamertag:NAME,orderId:ID});
   assert.equal(await f.link.verifyActiveSession({orderId:ID,gamertag:NAME,
     sessionId:proof.sessionId}),true);
   assert.equal(await f.link.verifyActiveSession({orderId:ID,gamertag:NAME,
