@@ -202,7 +202,7 @@ export function createCommercialNickReleaseService(
           (state!=="approved" && snapshots.some(s=>s.exists)),
       });
       return {state:resolved,created:resolved==="approved"?
-        snapshots.filter(s=>!s.exists).length:0,dispatchEnabled:true as const};
+        snapshots.filter(s=>!s.exists).length:0,dispatchEnabled:resolved==="approved"};
     });
   }
 
