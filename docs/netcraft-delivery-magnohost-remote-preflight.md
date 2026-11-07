@@ -23,10 +23,18 @@ synthetic VIPs, ACK and restart without duplication. Do **not** repeat it.
 - This route is **not** `/api/delivery/bds`, which remains a separately gated
   commercial candidate.
 
-**Caution:** Vercel Preview deployment protection may deny requests from BDS.
-A 401/403 is not evidence that port 443 is blocked. The future MagnoHost test
-must use a genuinely reachable, authorized Preview endpoint; do not disable
-Preview protection or expose credentials to make this test pass.
+**Verified project setting (2026-11-07):** Vercel project configuration
+currently reports `deploymentProtection.enabled=true` and
+`deploymentType=all_except_custom_domains`. The Preview deployment built
+successfully, but its endpoint is **not confirmed externally reachable**.
+A MagnoHost BDS request to the Preview URL may receive 401/403 from
+deployment protection, independent of any HTTPS/443 capability.
+The Bedrock module reports `PREVIEW_PROTECTED_401_403` separately from
+`PREVIEW_ENDPOINT_404` and `HTTPS_GET_POST_BLOCKED`.
+
+Do not disable deployment protection, expose authorization credentials, or
+interpret the current Preview deployment as a confirmed live BDS endpoint.
+An independently authorized reachable test origin is still needed.
 
 ## Independent Bedrock preflight pack
 
