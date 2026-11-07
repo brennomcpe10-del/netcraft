@@ -12,7 +12,7 @@ import {
   createOpaqueBdsNickReleaseAdapter,issuePersistedPrivateBdsChallenge,OpaqueNickBridgeBlocked,
   type NickBridgeService,
 } from "../delivery/bdsOpaqueNickReleaseAdapter.ts";
-const allowed=new Set(["poll","ack","nack"]);
+const allowed=new Set(["poll","ack","nack","link"]);
 
 export function createBdsNickPrivateRouter(opts:{
   service:NickBridgeService;
