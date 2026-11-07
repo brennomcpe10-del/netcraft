@@ -1,6 +1,7 @@
 import {pixRouter} from './pix.ts';
 import {commercialPixReleaseRouter,commercialBdsReleaseRouter}
   from './commercialRelease.ts';
+import {deliveryMagnoPreflightRouter} from './deliveryMagnoPreflight.ts';
 import { auditDeliveryCatalog } from '../delivery/catalogAudit.ts';
 import {identityRouter} from './identity.ts';
 import {paymentStatusPatch} from '../../src/lib/paymentStatus.ts';
@@ -31,6 +32,8 @@ apiRouter.use(identityRouter);
 // original blocked commercial endpoints. The BDS path remains 503 in LAB.
 apiRouter.use('/pix/commercial',commercialPixReleaseRouter);
 apiRouter.use('/delivery/bds',commercialBdsReleaseRouter);
+// Read-only HTTPS transport check. No Pix/queue/ACK, Preview only.
+apiRouter.use('/delivery/remote-preflight',deliveryMagnoPreflightRouter);
 apiRouter.use(pixRouter);
 // Warn administrators of the remaining shared database boundary.
 // No credentials, project identifiers or tokens are returned.
