@@ -92,7 +92,7 @@ test("commercial BDS link/offer/ACK requires exact authenticated session; no rea
     },"F".repeat(64)),/unauthorized_bds_request/);
     assert.deepEqual(await f.bds("link",{
       code:code.code,gamertag:GAMERTAG,sessionId:"bedrock-player-1",
-    }),{status:"verified_in_game",gamertag:GAMERTAG});
+    }),{status:"verified_in_game",gamertag:GAMERTAG,orderId:ID});
     await assert.rejects(()=>f.bds("link",{
       code:code.code,gamertag:GAMERTAG,sessionId:"bedrock-player-1",
     }),/invalid_or_expired_code/);
