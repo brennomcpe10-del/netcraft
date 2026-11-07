@@ -100,6 +100,37 @@ test("commercial checkout creates ONE Pix Orders POST with approved price and se
     assert.equal(checked.qrCode,"000201testpix");
   });
 });
+test("buyer sees receipt-derived delivery progress, never a guessed grant",async()=>{
+  await inProd(async()=>{
+    const f=setup();
+    const original=await f.service.create(f.body,KEY);
+    if(!("state" in original))throw Error("checkout_state_missing");
+    const id=original.id;
+    // A pending payment is never presented as a delivery.
+    assert.equal((await f.service.viewByCheckoutKey(KEY) as any).deliveryStatus,undefined);
+    const order=f.db.records.get("pixCommercialOrders/"+id);
+    order.state="approved";
+    f.db.records.set("pixCommercialOrders/"+id,order);
+    const status=async()=>(await f.service.viewByCheckoutKey(KEY) as any).deliveryStatus;
+    assert.equal(await status(),"awaiting_queue");
+    const ref="pixCommercialDeliveries/"+id+"-0";
+    f.db.records.set(ref,{state:"queued"});
+    assert.equal(await status(),"queued");
+    f.db.records.set(ref,{state:"leased"});
+    assert.equal(await status(),"processing");
+    f.db.records.set(ref,{state:"acknowledged"});
+    assert.equal(await status(),"delivered");
+    f.db.records.set(ref,{state:"review_required"});
+    assert.equal(await status(),"review_required");
+    f.db.records.set(ref,{state:"blocked"});
+    assert.equal(await status(),"blocked");
+    f.db.records.set(ref,{state:"unknown_status"});
+    assert.equal(await status(),"review_required");
+    f.stop();
+    await assert.rejects(()=>f.service.viewByCheckoutKey(KEY),
+      /commercial_checkout_release_blocked/);
+  });
+});
 test("checkout blocks changed idempotency key, invalid product, double VIP and coupons",async()=>{
   await inProd(async()=>{
     const f=setup();
