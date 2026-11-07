@@ -136,7 +136,7 @@ function mockBedrock(input:{
   const logs:string[]=[], calls:any[]=[];
   let secretsRead=0;
   const opaque=input.secret;
-  const options=new Map([
+  const options=new Map<string,unknown>([
     ["ncbr_magno_preflight_enabled",input.enabled??false],
     ["ncbr_magno_preflight_preview_only",input.preview??false],
     ["ncbr_magno_preflight_origin",input.origin??""],
@@ -167,7 +167,7 @@ function mockBedrock(input:{
     console:{warn:(msg:string)=>logs.push(msg)},
   };
   const {runOnce}=runInNewContext(
-    src+"\\n({runOnce})",runtime,{timeout:1000}) as any;
+    src+"\n({runOnce})",runtime,{timeout:1000}) as any;
   return {execute:()=>runOnce() as Promise<void>,calls,logs,
     secretsRead:()=>secretsRead};
 }
