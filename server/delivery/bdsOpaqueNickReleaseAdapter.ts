@@ -55,6 +55,39 @@ function matchingSecret(received:string|undefined, trusted:string) {
   return crypto.timingSafeEqual(a,b);
 }
 
+/**
+ * Preflight-only nonce issuer for a private BDS connection.
+ * Bedrock SecretString is opaque and the Script API must not use Math.random
+ * for authenticated nonces. The trusted HTTPS gateway supplies 128 bits of
+ * cryptographic randomness; the existing Firestore authenticator consumes
+ * each nonce at most once on the subsequent poll/ack/nack.
+ *
+ * Issuing a challenge NEVER reads an order, leases a job or grants anything.
+ */
+export function issuePrivateBdsChallenge(input:{
+  method:string;transportVerified:boolean;body:string;
+  receivedToken:string|undefined;secret:string;now?:()=>number;
+}) {
+  if(!isPrivateCommercial())
+    throw new OpaqueNickBridgeBlocked("release_not_authorized");
+  if(input.transportVerified!==true || input.method!=="POST" ||
+     input.body!=='{"schema":1}')
+    throw new OpaqueNickBridgeBlocked("bad_bds_request");
+  if(!matchingSecret(input.receivedToken,input.secret))
+    throw new OpaqueNickBridgeBlocked("unauthorized_bds_request");
+  const time=(input.now??Date.now)();
+  if(!Number.isSafeInteger(time)||time<0)
+    throw new OpaqueNickBridgeBlocked("secure_clock_unavailable");
+  return Object.freeze({
+    schema:1 as const,
+    nonce:crypto.randomBytes(16).toString("hex"),
+    timestamp:String(time),
+    // The challenge itself is NOT an authorization to dispatch.
+    simulation:false as const,
+    dispatchEnabled:false as const,
+  });
+}
+
 export function createOpaqueBdsNickReleaseAdapter(input:{
   service:NickBridgeService;
   secret:string; // server-owned only; NEVER browser, never BDS source control
