@@ -14,6 +14,7 @@ import type {CommercialApprovedPrice} from "./commercialCatalogReleaseApproval.t
 import {createCommercialOrdersWriter} from "../payments/mercadoPagoCommercialWriter.ts";
 import {createNetCraftCommercialCheckout} from "./commercialCheckoutService.ts";
 import {createNetCraftCommercialNickGateway} from "./commercialNickGateway.ts";
+import {createCommercialGamePairing} from "./commercialGamePairing.ts";
 
 function requireCommercialEnvironment(){
   if(process.env.NODE_ENV!=="production"||
@@ -54,10 +55,12 @@ export function createReviewedCommercialVercelRuntime(){
   const webhookSecret=process.env.NCBR_COMMERCIAL_MP_WEBHOOK_SECRET||"";
   const bdsOpaqueToken=process.env.NCBR_COMMERCIAL_BDS_TOKEN||"";
   const privateHmacKey=process.env.NCBR_COMMERCIAL_PRIVATE_HMAC_KEY||"";
+  const gameLinkSecret=process.env.NCBR_COMMERCIAL_GAME_LINK_HASH_SECRET||"";
   if(!/^APP_USR-[A-Za-z0-9-]{24,}$/.test(token)||
      webhookSecret.length<32||!/^[A-Za-z0-9_-]{43,128}$/.test(bdsOpaqueToken)||
-     privateHmacKey.length<32)
+     privateHmacKey.length<32||Buffer.byteLength(gameLinkSecret)<32)
     throw new PixError("commercial_merchant_or_bds_credentials_missing",503);
+  const pairing=createCommercialGamePairing(db,{hashSecret:gameLinkSecret});
   const release=()=>{try{requireCommercialEnvironment();return true;}catch{return false;}};
   const provider=createCommercialOrdersWriter({accessToken:token,
     checkoutAuthorized:release});
@@ -67,10 +70,15 @@ export function createReviewedCommercialVercelRuntime(){
   const delivery=createNetCraftCommercialNickGateway({
     db,provider,registry,approvedPrices:prices,
     bdsOpaqueToken,privateHmacKey,webhookSecret,
-    authorizeOrderForDispatch:async order=>
+    authorizeOrderForDispatch:async(order,gameSessionId)=>
       release()&&(order as any).checkoutOrigin==="netcraft_commercial_checkout_v1" &&
       typeof (order as any).requestHash==="string"&&
-      /^[a-f0-9]{64}$/.test((order as any).requestHash),
+      /^[a-f0-9]{64}$/.test((order as any).requestHash)&&
+      typeof gameSessionId==="string" &&
+      pairing.verifyActiveSession({orderId:order.id,gamertag:order.gamertag,
+        sessionId:gameSessionId}),
+    // Called only AFTER private HTTPS and BDS signature + one-use nonce.
+    claimGameLink:input=>pairing.claimInGame(input,()=>true),
   });
-  return Object.freeze({db,checkout,delivery});
+  return Object.freeze({db,checkout,delivery,pairing});
 }
