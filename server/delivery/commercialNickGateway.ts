@@ -41,9 +41,11 @@ export function createNetCraftCommercialNickGateway(input:{
     now:input.now,
     validateOrder:priceCheck,
     authorizeOrderForDispatch:input.authorizeOrderForDispatch,
+    requireIssuedChallenge:true,
   });
   const router=createBdsNickPrivateRouter({
     service,secret:input.bdsOpaqueToken,hmacKey:input.privateHmacKey,
+    db:input.db,
     now:input.now,
   });
   /**
