@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "NetCraft Delivery Magno HTTPS Preflight OFF",
-    "description": "Standalone remote HTTPS GET/POST compatibility check. OFF by default. No payment, VIP, item, ACK or credentials.",
+    "name": "NetCraft Delivery Magno HTTPS Preflight 0.1.1 OFF",
+    "description": "Isolated protected Preview HTTPS diagnostic with opaque SecretString. OFF; no payments, VIPs, rewards or ACK.",
     "uuid": "92aca4ab-e71a-4150-895e-a5de8ec17550",
     "version": [
       0,
       1,
-      0
+      1
     ],
     "min_engine_version": [
       1,
@@ -23,7 +23,7 @@
       "version": [
         0,
         1,
-        0
+        1
       ],
       "entry": "scripts/main.js"
     }
