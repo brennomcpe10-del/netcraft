@@ -1,7 +1,7 @@
 /**
  * NetCraftCore 2.3.30 compatibility candidate, BDS-only, LAB OFF.
  * Pure dependency-injected module. Nothing runs on import.
- * Never generate request nonces with Math.random(); the reviewed private
+ * Never generate request nonces with non-cryptographic random values(); the reviewed private
  * HTTPS gateway issues 128-bit cryptographic challenge nonces per request.
  * Server-admin SecretString remains opaque inside HttpHeader.
  *
