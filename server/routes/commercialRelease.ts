@@ -48,6 +48,19 @@ commercialPixReleaseRouter.get("/config",(_req,res)=>{
       realPayments:true,minecraftDispatchConfigured:true});
   }catch(e){return error(res,e);}
 });
+// Voucher only for a prior commercial checkout whose secret checkout key the
+// buyer knows. Never accepts orderId/gamertag from the request body.
+commercialPixReleaseRouter.post("/orders/link-code",async(req,res)=>{
+  try {
+    const key=req.headers["x-checkout-key"];
+    if(typeof key!=="string"||!KEY.test(key))
+      return res.status(401).json({error:"buyer_checkout_key_required"});
+    const runtime=createReviewedCommercialVercelRuntime();
+    const proof=await runtime.pairing.issueForCheckoutKey(key);
+    return res.status(201).json({code:proof.code,
+      expiresAt:new Date(proof.expiresAt).toISOString()});
+  }catch(e){return error(res,e);}
+});
 commercialPixReleaseRouter.post("/orders",async(req,res)=>{
   try{
     const runtime=createReviewedCommercialVercelRuntime();
