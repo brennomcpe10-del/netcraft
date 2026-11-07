@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "vip",
+    "productId": "vip-1791128040888-vvek",
+    "tier": "explorer",
+    "rankTag": "ncbr:vip_explorer",
+    "duration": "30 dias",
+    "days": 30
+  },
+  {
+    "kind": "vip",
+    "productId": "vip-1791128072288-kztd",
+    "tier": "elite",
+    "rankTag": "ncbr:vip_elite",
+    "duration": "30 dias",
+    "days": 30
+  },
+  {
+    "kind": "vip",
+    "productId": "vip-1791128111086-kw5n",
+    "tier": "supreme",
+    "rankTag": "ncbr:vip_supreme",
+    "duration": "30 dias",
+    "days": 30
+  }
+]
