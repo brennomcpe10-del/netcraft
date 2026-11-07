@@ -1,0 +1,45 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "NetCraft Delivery Magno HTTPS Preflight OFF",
+    "description": "Standalone remote HTTPS GET/POST compatibility check. OFF by default. No payment, VIP, item, ACK or credentials.",
+    "uuid": "92aca4ab-e71a-4150-895e-a5de8ec17550",
+    "version": [
+      0,
+      1,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "c1abc66e-8354-4ca1-a671-2bcc9c180346",
+      "version": [
+        0,
+        1,
+        0
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "1.17.0"
+    },
+    {
+      "module_name": "@minecraft/server-admin",
+      "version": "1.0.0-beta"
+    },
+    {
+      "module_name": "@minecraft/server-net",
+      "version": "1.0.0-beta"
+    }
+  ]
+}
