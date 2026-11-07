@@ -109,7 +109,7 @@ For a separately authorized single MagnoHost test, configure the
   `ncbr_magno_preflight_origin` to the exact Vercel Preview HTTPS origin.
 - In `permissions.json`, allow `@minecraft/server-net` to contact only
   `/api/delivery/remote-preflight/health` and `/ping` on that origin.
-  Keep `force_tls=true` and do not widen permissions.
+  Keep `force_https=true` and do not widen permissions.
 - In the **private** `secrets.json`, set the name
   `ncbr_magno_vercel_preview_bypass` to the temporary Vercel bypass
   secret. **Never put the value in the .mcpack, GitHub, the chat or logs.**
