@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import type {Firestore} from "firebase-admin/firestore";
 
 export type BdsSignedMessage = {
-  action: "poll" | "ack" | "nack";
+  action: "poll" | "ack" | "nack" | "link";
   body: string;
   headers: {
     timestamp: string;
@@ -18,7 +18,7 @@ export type BdsSignedMessage = {
 export class BdsAuthError extends Error {
   constructor(readonly code: string) { super(code); }
 }
-const allowedActions = new Set(["poll", "ack", "nack"]);
+const allowedActions = new Set(["poll", "ack", "nack", "link"]);
 const MAX_BODY_BYTES = 4096;
 export const bdsBodyDigest = (body: string) =>
   crypto.createHash("sha256").update(body, "utf8").digest("hex");
