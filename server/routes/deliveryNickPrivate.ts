@@ -8,7 +8,7 @@
 import express from "express";
 import type {Request,Response} from "express";
 import {
-  createOpaqueBdsNickReleaseAdapter,OpaqueNickBridgeBlocked,
+  createOpaqueBdsNickReleaseAdapter,issuePrivateBdsChallenge,OpaqueNickBridgeBlocked,
   type NickBridgeService,
 } from "../delivery/bdsOpaqueNickReleaseAdapter.ts";
 const allowed=new Set(["poll","ack","nack"]);
@@ -33,6 +33,27 @@ export function createBdsNickPrivateRouter(opts:{
       return res.status(403).json({error:"private_tls_required"});
     next();
   });
+  // POST /challenge returns a server-generated nonce only after private TLS
+  // and authenticated SecretString. No queue access, lease or grant occurs.
+  router.post("/challenge",express.text({type:"application/json",limit:"128b"}),
+    (req:Request,res:Response)=>{
+      const token=req.headers["x-nc-bds-token"];
+      const body=typeof req.body==="string"?req.body:
+        req.body&&typeof req.body==="object"?JSON.stringify(req.body):"";
+      try {
+        return res.status(200).json(issuePrivateBdsChallenge({
+          method:req.method,transportVerified:true,body,
+          receivedToken:typeof token==="string"?token:undefined,
+          secret:opts.secret,now:opts.now,
+        }));
+      }catch(error){
+        if(error instanceof OpaqueNickBridgeBlocked)
+          return res.status(error.reason==="unauthorized_bds_request"?401:403)
+            .json({error:error.reason});
+        return res.status(503).json({error:"delivery_unavailable"});
+      }
+    },
+  );
   router.post("/:action",express.text({type:"application/json",limit:"4kb"}),
     async(req:Request,res:Response)=>{
       if(!allowed.has(req.params.action))
