@@ -68,7 +68,10 @@ test("mock live checkout -> verified paid webhook -> BDS nonce -> Core VIP -> on
         order.checkoutOrigin==="netcraft_commercial_checkout_v1",
     });
     // A pending payment never enters the queue, even if a buyer has its QR.
-    assert.equal((await gateway.reconcileVerifiedOrder(orderId)).created,0);
+    const pending=await gateway.reconcileVerifiedOrder(orderId);
+    assert.equal(pending.created,0);
+    assert.equal(pending.state,"pending");
+    assert.equal(pending.dispatchEnabled,false);
     paid=true;
     const requestId="mock-event-123";
     const ts=String(Math.floor(now/1000));
