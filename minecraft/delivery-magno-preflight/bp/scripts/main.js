@@ -36,6 +36,9 @@ async function request(url,method,body){
     req.body=body;
   }
   const result=await http.request(req);
+  if(result.status===401 || result.status===403)
+    throw Error("preview_access_protected");
+  if(result.status===404)throw Error("preview_endpoint_missing");
   if(result.status!==200 || typeof result.body!=="string" ||
      result.body.length<2 || result.body.length>1024)
     throw Error("preflight_unavailable");
@@ -60,9 +63,15 @@ async function runOnce(){
     check(await request(origin+PATH+"/ping",HttpRequestMethod.Post,
       JSON.stringify({schema:1,probe:CONTRACT})),true);
     console.warn("[NCBR MAGNO PREFLIGHT] HTTPS_GET_POST_PASS_NO_DELIVERIES");
-  }catch{
-    // Never log full URLs, headers, exceptions or credentials.
-    console.warn("[NCBR MAGNO PREFLIGHT] HTTPS_GET_POST_BLOCKED");
+  }catch(error){
+    // Log only a short, predefined status. Never reveal URLs, headers,
+    // exceptions or any test/production credentials.
+    const code=error?.message==="preview_access_protected"
+      ?"PREVIEW_PROTECTED_401_403"
+      :error?.message==="preview_endpoint_missing"
+        ?"PREVIEW_ENDPOINT_404"
+        :"HTTPS_GET_POST_BLOCKED";
+    console.warn("[NCBR MAGNO PREFLIGHT] "+code);
   }
 }
 // Run ONCE at startup. No intervals, event listeners, gamertags or commands.
