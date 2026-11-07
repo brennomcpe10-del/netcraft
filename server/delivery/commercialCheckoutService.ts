@@ -28,6 +28,7 @@ export function createNetCraftCommercialCheckout(input:{
   const priceCheck=commercialPriceValidator(input.approvedPrices,input.registry);
   const prices=new Map(input.approvedPrices.map(p=>[p.productId,p]));
   const orders=input.db.collection("pixCommercialOrders");
+  const deliveries=input.db.collection("pixCommercialDeliveries");
   const providerBindings=input.db.collection("pixCommercialProviderBindings");
   const now=input.now??Date.now;
   const release=()=>{
@@ -73,7 +74,8 @@ export function createNetCraftCommercialCheckout(input:{
     if(!order||order.environment!=="commercial")
       return {id,status:"not_found" as const};
     const result:{id:string;state:string;providerOrderId:string|null;
-      totalCents:number;currency:"BRL";qrCode?:string;qrCodeBase64?:string}={
+      totalCents:number;currency:"BRL";qrCode?:string;qrCodeBase64?:string;
+      deliveryStatus?:"awaiting_queue"|"queued"|"processing"|"delivered"|"blocked"|"review_required"}={
       id,state:order.state,providerOrderId:order.providerOrderId??null,
       totalCents:order.totalCents,currency:"BRL",
     };
@@ -99,6 +101,31 @@ export function createNetCraftCommercialCheckout(input:{
            /^[A-Za-z0-9+/=]+$/.test(base64))
           result.qrCodeBase64=base64;
       }
+    }
+    // A checkout key permits viewing only this order. Query server-owned
+    // receipts; never derive a delivery state from the provider POST or
+    // a browser-supplied flag. Unknown states fail closed to review.
+    if(order.state==="approved" &&
+       Array.isArray(order.lines) && order.lines.length>0 &&
+       order.lines.length<=20){
+      const snapshots=await Promise.all(order.lines.map((_:unknown,i:number)=>
+        deliveries.doc(id+"-"+i).get()));
+      const states=snapshots.map(snapshot=>
+        snapshot.exists?String(snapshot.data()?.state||""):"missing");
+      if(states.every(state=>state==="acknowledged"))
+        result.deliveryStatus="delivered";
+      else if(states.some(state=>["review_required","refunded_after_ack"].includes(state)))
+        result.deliveryStatus="review_required";
+      else if(states.some(state=>state==="blocked"))
+        result.deliveryStatus="blocked";
+      else if(states.every(state=>state==="missing"))
+        result.deliveryStatus="awaiting_queue";
+      else if(states.some(state=>["leased","acknowledged","awaiting_receipt"].includes(state)))
+        result.deliveryStatus="processing";
+      else if(states.every(state=>["queued","missing"].includes(state)))
+        result.deliveryStatus="queued";
+      else
+        result.deliveryStatus="review_required";
     }
     return result;
   }
