@@ -114,6 +114,9 @@ test("Bedrock pack is isolated, OFF by default, no credentials or rewards",()=>{
   assert.match(src,/secrets\.get\(VERCEL_AUTOMATION_SECRET\)/);
   assert.match(src,/new HttpHeader\("x-vercel-protection-bypass",opaqueSecret\)/);
   assert.doesNotMatch(src,/String\(opaqueSecret\)|\.toString\(\)|grantDeliveryVIP|addItem\(|runCommand\(|runInterval|playerSpawn|MERCADOPAGO_/);
+  const perms=JSON.parse(readFileSync("minecraft/delivery-magno-preflight/config/permissions.example.json","utf8"));
+  assert.equal(perms.module_permissions["@minecraft/server-net"].force_https,true);
+  assert.equal("force_tls" in perms.module_permissions["@minecraft/server-net"],false);
   const api=readFileSync("server/routes/api.ts","utf8");
   assert.match(api,/apiRouter\.use\('\/delivery\/remote-preflight',deliveryMagnoPreflightRouter\)/);
   assert.match(api,/apiRouter\.use\('\/delivery\/bds',commercialBdsReleaseRouter\)/);
