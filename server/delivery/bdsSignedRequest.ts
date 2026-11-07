@@ -37,6 +37,7 @@ export async function authenticateBdsRequest(
   message: BdsSignedMessage,
   secrets: Readonly<Record<string, string>>,
   now = Date.now(),
+  requireIssuedChallenge = false,
 ) {
   const h = message?.headers;
   if (!h || !allowedActions.has(message.action) ||
@@ -60,9 +61,26 @@ export async function authenticateBdsRequest(
   const receiptId = crypto.createHash("sha256")
     .update(h.keyId + ":" + h.nonce).digest("hex");
   const nonceRef = db.collection("pixCommercialDeliveryNonces").doc(receiptId);
+  const issuedRef = db.collection("pixCommercialIssuedNonces").doc(receiptId);
   await db.runTransaction(async tx => {
-    const prev = await tx.get(nonceRef);
-    if (prev.exists) throw new BdsAuthError("replayed_request");
+    const previous = await tx.get(nonceRef);
+    if (previous.exists) throw new BdsAuthError("replayed_request");
+    if (requireIssuedChallenge) {
+      // Both the issued challenge and the spent nonce live in Firestore.
+      // This transaction is atomic, including across concurrent BDS requests
+      // and gateway process restarts. No client-supplied "issued" flag counts.
+      const issued = await tx.get(issuedRef);
+      const proof = issued.data();
+      if (!issued.exists ||
+          proof?.status !== "issued" ||
+          proof?.keyId !== h.keyId ||
+          proof?.issuedAt !== Number(h.timestamp) ||
+          !Number.isSafeInteger(proof?.issuedAt) ||
+          now < proof.issuedAt ||
+          now - proof.issuedAt > 60_000)
+        throw new BdsAuthError("challenge_not_issued_or_expired");
+      tx.update(issuedRef,{status:"consumed",consumedAt:new Date(now)});
+    }
     tx.create(nonceRef, {
       keyId: h.keyId,
       issuedAt: Number(h.timestamp),
