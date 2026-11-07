@@ -31,7 +31,7 @@ export type NickBridgeService = Readonly<{
   ) => Promise<unknown>;
 }>;
 
-const actions = new Set(["poll", "ack", "nack"]);
+const actions = new Set(["poll", "ack", "nack", "link"]);
 const KEY_ID="netcraft_nick_private";
 const MAX_BYTES=4096;
 const validNonce=/^[a-f0-9]{32}$/;
