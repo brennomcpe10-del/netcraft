@@ -157,7 +157,8 @@ test("private gateway refuses forged webhook, wrong prices and cancelled provide
     assert.equal(f.db.records.has("pixCommercialDeliveries/"+f.job),false);
     f.db.records.get("pixCommercialOrders/"+ID).totalCents=490;
     f.setProvider("cancelled");
-    assert.equal((await f.gateway.reconcileVerifiedOrder(ID)).state,"cancelled");
+    assert.deepEqual(await f.gateway.reconcileVerifiedOrder(ID),
+      {state:"cancelled",created:0,dispatchEnabled:false});
     assert.equal((await f.send("poll",{gamertag:"Halzin5212",online:true}) as any).deliveries.length,0);
   });
 });
