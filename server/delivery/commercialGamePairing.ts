@@ -84,9 +84,11 @@ export function createCommercialGamePairing(db:DB,opts:{
         throw new CommercialGamePairingBlocked("already_linked");
       if(Number(slot?.codeExpiresAt)>time)
         throw new CommercialGamePairingBlocked("code_still_active");
-      const windowStart=Number.isSafeInteger(slot?.windowStart)&&
-        time-slot.windowStart<DAY?slot.windowStart:time;
-      const attempts=windowStart===slot?.windowStart?Number(slot.issuedCount||0):0;
+      const previousWindow=Number(slot?.windowStart);
+      const windowStart=Number.isSafeInteger(previousWindow)&&
+        time>=previousWindow&&time-previousWindow<DAY?previousWindow:time;
+      const attempts=slot&&windowStart===previousWindow?
+        Number(slot.issuedCount||0):0;
       if(attempts>=MAX_ISSUES_PER_DAY)
         throw new CommercialGamePairingBlocked("pairing_rate_limit");
       const next={orderId,gamertag:order.gamertag,
