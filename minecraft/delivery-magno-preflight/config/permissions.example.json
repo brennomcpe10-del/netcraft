@@ -1,0 +1,18 @@
+{
+  "allowed_modules": [
+    "@minecraft/server",
+    "@minecraft/server-admin",
+    "@minecraft/server-net"
+  ],
+  "module_permissions": {
+    "@minecraft/server-net": {
+      "allowed_uris": [
+        "https://REPLACE_WITH_APPROVED_PREVIEW_HOST/api/delivery/remote-preflight/health",
+        "https://REPLACE_WITH_APPROVED_PREVIEW_HOST/api/delivery/remote-preflight/ping"
+      ],
+      "force_tls": true,
+      "max_body_bytes": 1024,
+      "max_concurrent_requests": 1
+    }
+  }
+}
