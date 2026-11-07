@@ -9,6 +9,7 @@ import {getFirestore} from "firebase-admin/firestore";
 import {PixError} from "../payments/mercadoPago.ts";
 import {firebaseConfig} from "../../src/lib/firebaseConfig.ts";
 import {makeRewardRegistry,type RewardRule} from "./verifiedRewardRegistry.ts";
+import {assertNetcraftVipOnlyCommercialRelease} from "./netcraftVipOnlyReleaseGuard.ts";
 import type {CommercialApprovedPrice} from "./commercialCatalogReleaseApproval.ts";
 import {createCommercialOrdersWriter} from "../payments/mercadoPagoCommercialWriter.ts";
 import {createNetCraftCommercialCheckout} from "./commercialCheckoutService.ts";
@@ -45,6 +46,9 @@ export function createReviewedCommercialVercelRuntime(){
   const db=getFirestore(app);
   const rules=jsonEnv("NCBR_COMMERCIAL_REWARD_RULES_JSON") as RewardRule[];
   const prices=jsonEnv("NCBR_COMMERCIAL_APPROVED_PRICES_JSON") as CommercialApprovedPrice[];
+  // A staging, test or accidental environment edit must never authorize
+  // unknown kits, prices, tiers or rank destinations in commercial mode.
+  assertNetcraftVipOnlyCommercialRelease(rules,prices);
   const registry=makeRewardRegistry(rules);
   const token=process.env.NCBR_COMMERCIAL_MP_ACCESS_TOKEN||"";
   const webhookSecret=process.env.NCBR_COMMERCIAL_MP_WEBHOOK_SECRET||"";
