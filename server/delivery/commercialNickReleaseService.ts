@@ -94,7 +94,8 @@ export function createCommercialNickReleaseService(
     validateOrder:(order:Readonly<StoredOrder>)=>void;
     // Independent commercial release decision: no environment flag alone
     // may authorize a real Minecraft grant.
-    authorizeOrderForDispatch:(order:Readonly<StoredOrder>)=>Promise<boolean>},
+    authorizeOrderForDispatch:(order:Readonly<StoredOrder>)=>Promise<boolean>;
+    requireIssuedChallenge?:boolean},
 ) {
   commercialOnly();
   if(typeof options.validateOrder!=="function" ||
@@ -402,7 +403,8 @@ export function createCommercialNickReleaseService(
     // NOT by a client header or JSON field. No public adapter is installed.
     if (secureTransport !== true)
       throw new PixError("verified_https_required",403);
-    await authenticateBdsRequest(db,message,options.keyring,clock());
+    await authenticateBdsRequest(db,message,options.keyring,clock(),
+      options.requireIssuedChallenge===true);
     const body=safeBody(message.body);
     if (message.action === "poll") {
       if (!exactKeys(body,["gamertag","online"]) ||
