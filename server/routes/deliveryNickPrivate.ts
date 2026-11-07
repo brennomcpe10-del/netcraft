@@ -7,8 +7,9 @@
  */
 import express from "express";
 import type {Request,Response} from "express";
+import type {Firestore} from "firebase-admin/firestore";
 import {
-  createOpaqueBdsNickReleaseAdapter,issuePrivateBdsChallenge,OpaqueNickBridgeBlocked,
+  createOpaqueBdsNickReleaseAdapter,issuePersistedPrivateBdsChallenge,OpaqueNickBridgeBlocked,
   type NickBridgeService,
 } from "../delivery/bdsOpaqueNickReleaseAdapter.ts";
 const allowed=new Set(["poll","ack","nack"]);
@@ -16,6 +17,7 @@ const allowed=new Set(["poll","ack","nack"]);
 export function createBdsNickPrivateRouter(opts:{
   service:NickBridgeService;
   secret:string;hmacKey:string;now?:()=>number;
+  db:Pick<Firestore,"collection">;
 }){
   const router=express.Router();
   const adapter=createOpaqueBdsNickReleaseAdapter(opts);
@@ -36,16 +38,17 @@ export function createBdsNickPrivateRouter(opts:{
   // POST /challenge returns a server-generated nonce only after private TLS
   // and authenticated SecretString. No queue access, lease or grant occurs.
   router.post("/challenge",express.text({type:"application/json",limit:"128b"}),
-    (req:Request,res:Response)=>{
+    async(req:Request,res:Response)=>{
       const token=req.headers["x-nc-bds-token"];
       const body=typeof req.body==="string"?req.body:
         req.body&&typeof req.body==="object"?JSON.stringify(req.body):"";
       try {
-        return res.status(200).json(issuePrivateBdsChallenge({
+        const challenge=await issuePersistedPrivateBdsChallenge({
           method:req.method,transportVerified:true,body,
           receivedToken:typeof token==="string"?token:undefined,
-          secret:opts.secret,now:opts.now,
-        }));
+          secret:opts.secret,now:opts.now,db:opts.db,
+        });
+        return res.status(200).json(challenge);
       }catch(error){
         if(error instanceof OpaqueNickBridgeBlocked)
           return res.status(error.reason==="unauthorized_bds_request"?401:403)
