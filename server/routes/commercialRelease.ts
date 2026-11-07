@@ -11,6 +11,8 @@ import {claimWebhook,completeWebhook,releaseWebhook}
   from "../payments/webhookReplay.ts";
 import {createReviewedCommercialVercelRuntime}
   from "../delivery/commercialVercelRuntime.ts";
+import {refreshCommercialBuyerOrder}
+  from "../delivery/commercialBuyerRefresh.ts";
 
 const ID=/^[a-f0-9]{64}$/;
 const KEY=/^[A-Za-z0-9-]{20,80}$/;
@@ -62,7 +64,9 @@ commercialPixReleaseRouter.get("/orders/:id",async(req,res)=>{
          .digest("hex")!==req.params.id)
       return res.status(401).json({error:"buyer_checkout_key_required"});
     const runtime=createReviewedCommercialVercelRuntime();
-    return res.json(await runtime.checkout.viewByCheckoutKey(key));
+    return res.json(await refreshCommercialBuyerOrder(
+      runtime,key,req.params.id,
+    ));
   }catch(e){return error(res,e);}
 });
 commercialPixReleaseRouter.post("/webhook",async(req,res)=>{
