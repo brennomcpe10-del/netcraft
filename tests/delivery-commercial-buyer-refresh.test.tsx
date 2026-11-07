@@ -34,6 +34,9 @@ async function inMockCommerce(fn:()=>Promise<void>){
     }
   }
 }
+function readState(view:{id:string;state?:string}):string|undefined {
+  return "state" in view ? view.state : undefined;
+}
 function scenario(){
   const db=memoryDB() as any;
   let providerState="pending", release=true, requests=0, posts=0;
@@ -80,20 +83,20 @@ test("lost webhook: buyer refresh detects paid Orders GET and queues VIP once",a
   await inMockCommerce(async()=>{
     const f=scenario();
     const created=await f.create();
-    assert.equal(created.state,"pending");
+    assert.equal(readState(created),"pending");
     assert.equal(f.job(),undefined);
     const pending=await f.refresh();
-    assert.equal(pending.state,"pending");
+    assert.equal(readState(pending),"pending");
     assert.equal(f.job(),undefined);
     f.setProvider("approved");
     const paid=await f.refresh();
-    assert.equal(paid.state,"approved");
+    assert.equal(readState(paid),"approved");
     assert.equal((paid as any).deliveryStatus,"queued");
     assert.equal(f.job()?.state,"queued");
     assert.equal(f.job()?.payload.rankTag,"ncbr:vip_explorer");
     assert.equal(f.job()?.payload.days,30);
     const again=await f.refresh();
-    assert.equal(again.state,"approved");
+    assert.equal(readState(again),"approved");
     assert.equal(f.job()?.state,"queued");
     assert.equal(f.posts(),1);
     assert.ok(f.requests()>=4);
@@ -113,7 +116,7 @@ test("refund after ACK is rechecked on buyer refresh and requires review",async(
       {...f.job(),state:"acknowledged"});
     f.setProvider("refunded");
     const returned=await f.refresh();
-    assert.equal(returned.state,"refunded");
+    assert.equal(readState(returned),"refunded");
     assert.equal(f.job()?.state,"refunded_after_ack");
     assert.notEqual((returned as any).deliveryStatus,"delivered");
     assert.equal(f.posts(),1);
@@ -125,7 +128,7 @@ test("cancelled payment never creates a VIP and the release gate still blocks",a
     await f.create();
     f.setProvider("cancelled");
     const cancelled=await f.refresh();
-    assert.equal(cancelled.state,"cancelled");
+    assert.equal(readState(cancelled),"cancelled");
     assert.equal(f.job(),undefined);
     f.stop();
     await assert.rejects(()=>f.refresh(),/commercial_checkout_release_blocked/);
