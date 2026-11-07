@@ -142,7 +142,10 @@ export function createCommercialGamePairing(db:DB,opts:{
         codeDigest:null,codeExpiresAt:0,
         gameSessionDigest:sessionDigest,
         proofExpiresAt:time+PROOF_MS,verifiedAt:time});
-      return {status:"verified_in_game" as const,gamertag:input.gamertag};
+      return {status:"verified_in_game" as const,gamertag:input.gamertag,
+        // Order ID is returned only through authenticated private BDS TLS.
+        // Required for Core to bind the verified session to this exact order.
+        orderId:voucher.orderId};
     });
   }
 
