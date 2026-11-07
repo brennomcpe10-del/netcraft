@@ -17,12 +17,16 @@ const NONCE=/^[a-f0-9]{32}$/;
 const TS=/^[0-9]{13}$/;
 export function createNickBdsTransportChallenge({
   http,HttpRequest,HttpHeader,HttpRequestMethod,secret,baseUrl,
+  previewBypassSecret=undefined,
   clock=Date.now,
 }){
   if(!URL.test(baseUrl||'')||typeof HttpRequest!=='function'||
      typeof HttpHeader!=='function'||!secret||typeof secret!=='object'||
      typeof http?.request!=='function'||!HttpRequestMethod?.Post||
-     typeof clock!=='function')throw Error('GATEWAY_CONFIGURATION_INVALID');
+     typeof clock!=='function'||
+     (previewBypassSecret!==undefined&&
+      (!previewBypassSecret||typeof previewBypassSecret!=='object')))
+    throw Error('GATEWAY_CONFIGURATION_INVALID');
   let busy=false;
   const post=async(action,body,headers)=>{
     const req=new HttpRequest(baseUrl+'/'+action);
@@ -32,6 +36,7 @@ export function createNickBdsTransportChallenge({
     req.headers=[
       new HttpHeader('Content-Type','application/json'),
       new HttpHeader('x-nc-bds-token',secret),
+      ...(previewBypassSecret?[new HttpHeader('x-vercel-protection-bypass',previewBypassSecret)]:[]),
       ...headers,
     ];
     const response=await http.request(req);
