@@ -19,6 +19,7 @@ type DB = Pick<Firestore, "collection" | "runTransaction">;
 const ID = /^[a-f0-9]{64}$/;
 const DELIVERY_ID = /^[a-f0-9]{64}-(0|[1-9][0-9]{0,2})$/;
 const GAMERTAG = /^[A-Za-z0-9_ ]{3,32}$/;
+const GAME_SESSION = /^[A-Za-z0-9_:\-.]{1,128}$/;
 const SAFE_NACK = new Set([
   "player_offline", "inventory_full", "inventory_unavailable",
   "vip_not_configured", "vip_not_loaded",
@@ -94,7 +95,9 @@ export function createCommercialNickReleaseService(
     validateOrder:(order:Readonly<StoredOrder>)=>void;
     // Independent commercial release decision: no environment flag alone
     // may authorize a real Minecraft grant.
-    authorizeOrderForDispatch:(order:Readonly<StoredOrder>)=>Promise<boolean>;
+    authorizeOrderForDispatch:(order:Readonly<StoredOrder>,gameSessionId?:string)=>Promise<boolean>;
+    // Called only after the persisted signed BDS nonce and private TLS validation.
+    claimGameLink?:(input:{code:string;gamertag:string;sessionId:string})=>Promise<unknown>;
     requireIssuedChallenge?:boolean},
 ) {
   commercialOnly();
@@ -206,10 +209,12 @@ export function createCommercialNickReleaseService(
     });
   }
 
-  async function offer(deliveryId: string, gamertag: string, online: boolean) {
+  async function offer(deliveryId: string, gamertag: string, online: boolean, gameSessionId?:string) {
     commercialOnly();
     if (!DELIVERY_ID.test(deliveryId) || !GAMERTAG.test(gamertag) ||
         gamertag.trim() !== gamertag) throw new PixError("invalid_delivery_request",400);
+    if(gameSessionId!==undefined && !GAME_SESSION.test(gameSessionId))
+      throw new PixError("invalid_game_session",400);
     if (online !== true) return {status:"offline" as const};
     const initial = (await queue.doc(deliveryId).get()).data();
     if (!initial || initial.gamertag !== gamertag ||
@@ -222,7 +227,7 @@ export function createCommercialNickReleaseService(
       return {status:"payment_not_approved" as const};
     // Commercial release must be independently approved on EVERY lease.
     if (typeof options.authorizeOrderForDispatch !== "function" ||
-        await options.authorizeOrderForDispatch(order) !== true)
+        await options.authorizeOrderForDispatch(order,gameSessionId) !== true)
       return {status:"held" as const};
     const payload = compileLine(order, initial.lineIndex);
     const digest = fingerprint(payload);
@@ -248,6 +253,7 @@ export function createCommercialNickReleaseService(
       }
       tx.update(queue.doc(deliveryId),{
         state:"leased",leaseToken,attempts:job.attempts+1,
+        ...(gameSessionId?{boundSessionId:gameSessionId}:{}),
         leasedAt:new Date(clock()).toISOString(),
       });
       journal(tx,"lease_offered",order.id,deliveryId);
@@ -257,13 +263,15 @@ export function createCommercialNickReleaseService(
     });
   }
 
-  async function acknowledge(deliveryId:string, leaseToken:string, result:string) {
+  async function acknowledge(deliveryId:string, leaseToken:string, result:string,gameSessionId?:string) {
     commercialOnly();
     if (!DELIVERY_ID.test(deliveryId) || !/^[a-f0-9]{32}$/.test(leaseToken) ||
         !["applied","already_applied"].includes(result))
       throw new PixError("invalid_ack",400);
     const job = (await queue.doc(deliveryId).get()).data();
     if (!job || job.leaseToken !== leaseToken)
+      return {status:"held" as const};
+    if(job.boundSessionId && job.boundSessionId!==gameSessionId)
       return {status:"held" as const};
     if (job.state === "acknowledged")
       return {status:"acknowledged" as const,duplicate:true};
@@ -274,14 +282,15 @@ export function createCommercialNickReleaseService(
     try { approved = order.state === "approved" &&
       (await providerState(order)) === "approved" &&
       typeof options.authorizeOrderForDispatch === "function" &&
-      (await options.authorizeOrderForDispatch(order)) === true;
+      (await options.authorizeOrderForDispatch(order,job.boundSessionId)) === true;
     } catch { approved=false; }
     return db.runTransaction(async tx => {
       const [orderSnap,jobSnap]=await Promise.all([
         tx.get(orders.doc(order.id)),tx.get(queue.doc(deliveryId)),
       ]);
       const current=jobSnap.data(),o=orderSnap.data();
-      if (!current || current.leaseToken !== leaseToken)
+      if (!current || current.leaseToken !== leaseToken ||
+          (current.boundSessionId && current.boundSessionId!==gameSessionId))
         return {status:"held" as const};
       if (current.state === "acknowledged")
         return {status:"acknowledged" as const,duplicate:true};
@@ -406,25 +415,42 @@ export function createCommercialNickReleaseService(
     await authenticateBdsRequest(db,message,options.keyring,clock(),
       options.requireIssuedChallenge===true);
     const body=safeBody(message.body);
+    if(message.action==="link"){
+      if(!exactKeys(body,["code","gamertag","sessionId"])||
+         typeof body.code!=="string"||
+         !GAMERTAG.test(body.gamertag||"")||
+         body.gamertag.trim()!==body.gamertag||
+         !GAME_SESSION.test(body.sessionId||"")||
+         typeof options.claimGameLink!=="function")
+        throw new PixError("game_link_unavailable",403);
+      // Authentication and nonce consumption occurred before reading this body.
+      return options.claimGameLink({code:body.code,
+        gamertag:body.gamertag,sessionId:body.sessionId});
+    }
     if (message.action === "poll") {
-      if (!exactKeys(body,["gamertag","online"]) ||
-          !GAMERTAG.test(body.gamertag || "") || typeof body.online !== "boolean")
+      if ((!exactKeys(body,["gamertag","online"]) &&
+           !exactKeys(body,["gamertag","online","sessionId"])) ||
+          !GAMERTAG.test(body.gamertag || "") || typeof body.online !== "boolean"||
+          (body.sessionId!==undefined&&!GAME_SESSION.test(body.sessionId)))
         throw new PixError("invalid_poll",400);
       if (!body.online)return {schema:1 as const,simulation:false,dispatchEnabled:true,deliveries:[]};
       const found=await queue.where("gamertag","==",body.gamertag).get();
       const deliveries=[];
       for (const snap of found.docs.slice(0,20)) {
         if (deliveries.length>=4)break;
-        const result=await offer(snap.id,body.gamertag,true);
+        const result=await offer(snap.id,body.gamertag,true,body.sessionId);
         if (result.status==="offered")deliveries.push(result);
       }
       return {schema:1 as const,simulation:false,dispatchEnabled:true,deliveries};
     }
-    if (!exactKeys(body,["deliveryId","leaseToken",
-      ...(message.action==="ack"?["result"]:["reason","receipt"])]))
+    const replyKeys=["deliveryId","leaseToken",
+      ...(message.action==="ack"?["result"]:["reason","receipt"])];
+    if((!exactKeys(body,replyKeys) &&
+        !(message.action==="ack"&&exactKeys(body,[...replyKeys,"sessionId"])))||
+       (body.sessionId!==undefined&&!GAME_SESSION.test(body.sessionId)))
       throw new PixError("invalid_delivery_reply",400);
     if (message.action === "ack")
-      return acknowledge(body.deliveryId,body.leaseToken,body.result);
+      return acknowledge(body.deliveryId,body.leaseToken,body.result,body.sessionId);
     return nack(body.deliveryId,body.leaseToken,body.reason,body.receipt);
   }
 
