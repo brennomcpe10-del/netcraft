@@ -2,6 +2,7 @@ import {pixRouter} from './pix.ts';
 import {commercialPixReleaseRouter,commercialBdsReleaseRouter}
   from './commercialRelease.ts';
 import {deliveryMagnoPreflightRouter} from './deliveryMagnoPreflight.ts';
+import {previewGameLinkLabAdminRouter,previewGameLinkLabBdsRouter} from './previewGameLinkLab.ts';
 import { auditDeliveryCatalog } from '../delivery/catalogAudit.ts';
 import {identityRouter} from './identity.ts';
 import {paymentStatusPatch} from '../../src/lib/paymentStatus.ts';
@@ -31,6 +32,10 @@ apiRouter.use(identityRouter);
 // Explicitly gated commercial routes: in Preview they fall through to the
 // original blocked commercial endpoints. The BDS path remains 503 in LAB.
 apiRouter.use('/pix/commercial',commercialPixReleaseRouter);
+// Strictly Preview-only, before the commercial BDS router, and only for
+// /challenge and /link. Never intercepts commercial Production requests.
+apiRouter.use('/delivery/lab-link',previewGameLinkLabAdminRouter);
+apiRouter.use('/delivery/bds',previewGameLinkLabBdsRouter);
 apiRouter.use('/delivery/bds',commercialBdsReleaseRouter);
 // Read-only HTTPS transport check. No Pix/queue/ACK, Preview only.
 apiRouter.use('/delivery/remote-preflight',deliveryMagnoPreflightRouter);
