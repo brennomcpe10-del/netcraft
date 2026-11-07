@@ -9,6 +9,8 @@
  */
 const URL=/^https:\/\/(?:localhost|127\.0\.0\.1)(?::18443)?\/api\/delivery\/bds$|^https:\/\/[a-z0-9][a-z0-9.-]{1,190}(?::443)?\/api\/delivery\/bds$/i;
 const NAME=/^[A-Za-z0-9_ ]{3,32}$/;
+const SESSION=/^[A-Za-z0-9_:\-.]{1,128}$/;
+const CODE=/^NC-[A-Z2-9]{4}(?:-[A-Z2-9]{4}){3}$/;
 const ID=/^[a-f0-9]{64}-(0|[1-9][0-9]{0,2})$/;
 const LEASE=/^[a-f0-9]{32}$/;
 const NONCE=/^[a-f0-9]{32}$/;
@@ -60,16 +62,26 @@ export function createNickBdsTransportChallenge({
     }finally{busy=false;}
   }
   return Object.freeze({
-    poll:gamertag=>{
-      if(!NAME.test(gamertag||'')||gamertag.trim()!==gamertag)
-        throw Error('INVALID_GAMERTAG');
-      return request('poll',{gamertag,online:true});
+    poll:(gamertag,sessionId)=>{
+      if(!NAME.test(gamertag||'')||gamertag.trim()!==gamertag||
+         (sessionId!==undefined&&!SESSION.test(sessionId)))
+        throw Error('INVALID_GAMERTAG_OR_SESSION');
+      return request('poll',{gamertag,online:true,
+        ...(sessionId===undefined?{}:{sessionId})});
     },
-    ack:(deliveryId,leaseToken,result)=>{
+    ack:(deliveryId,leaseToken,result,sessionId)=>{
       if(!ID.test(deliveryId||'')||!LEASE.test(leaseToken||'')||
-         !['applied','already_applied'].includes(result))
+         !['applied','already_applied'].includes(result)||
+         (sessionId!==undefined&&!SESSION.test(sessionId)))
         throw Error('INVALID_ACK');
-      return request('ack',{deliveryId,leaseToken,result});
+      return request('ack',{deliveryId,leaseToken,result,
+        ...(sessionId===undefined?{}:{sessionId})});
+    },
+    link:(code,gamertag,sessionId)=>{
+      if(!CODE.test(code||'')||!NAME.test(gamertag||'')||
+         gamertag.trim()!==gamertag||!SESSION.test(sessionId||''))
+        throw Error('INVALID_GAME_LINK');
+      return request('link',{code,gamertag,sessionId});
     },
     nack:(deliveryId,leaseToken,reason,receipt)=>{
       if(!ID.test(deliveryId||'')||!LEASE.test(leaseToken||'')||
