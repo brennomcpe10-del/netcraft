@@ -23,7 +23,8 @@ export function PreviewGameLinkLab({adminToken}:{adminToken:string}){
        gamertag.trim()!==gamertag){
       setMessage("Informe o gamertag Bedrock exato.");return;
     }
-    setBusy(true);setIssued(null);setReceipt(null);setMessage("");
+    // Preserve a still-valid displayed code if a rate-limited reissue fails.
+    setBusy(true);setMessage("");
     try{
       const response=await fetch("/api/delivery/lab-link/issue",{
         method:"POST",cache:"no-store",
@@ -34,6 +35,7 @@ export function PreviewGameLinkLab({adminToken}:{adminToken:string}){
       if(!response.ok||json?.simulation!==true||json.grantsEnabled!==false)
         throw new Error(json?.error||"Laboratório indisponível.");
       setIssued(json);
+      setReceipt(null);
       setMessage("Código fictício gerado. Nenhuma cobrança foi criada.");
     }catch(e){
       setMessage(e instanceof Error?e.message:"Não foi possível gerar código.");
