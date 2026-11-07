@@ -12,6 +12,7 @@
  * Orders API and the server-owned reward registry for every offer/ACK.
  */
 import crypto from "node:crypto";
+import type {Firestore} from "firebase-admin/firestore";
 import {
   bdsSignature, type BdsSignedMessage,
 } from "./bdsSignedRequest.ts";
@@ -86,6 +87,28 @@ export function issuePrivateBdsChallenge(input:{
     simulation:false as const,
     dispatchEnabled:false as const,
   });
+}
+
+/**
+ * Durable, one-use challenge for the reviewed commercial gateway.
+ * NEVER return a nonce unless Firestore has first confirmed its insertion.
+ * The payment queue is not touched here.
+ */
+export async function issuePersistedPrivateBdsChallenge(input:{
+  method:string;transportVerified:boolean;body:string;
+  receivedToken:string|undefined;secret:string;now?:()=>number;
+  db:Pick<Firestore,"collection">;
+}){
+  const challenge=issuePrivateBdsChallenge(input);
+  const id=crypto.createHash("sha256")
+    .update(KEY_ID+":"+challenge.nonce).digest("hex");
+  await input.db.collection("pixCommercialIssuedNonces").doc(id).create({
+    keyId:KEY_ID,
+    issuedAt:Number(challenge.timestamp),
+    status:"issued",
+    expiresAt:new Date(Number(challenge.timestamp)+120_000),
+  });
+  return challenge;
 }
 
 export function createOpaqueBdsNickReleaseAdapter(input:{
