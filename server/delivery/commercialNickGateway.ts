@@ -28,7 +28,8 @@ export function createNetCraftCommercialNickGateway(input:{
   webhookSecret:string;
   authorizeOrderForDispatch:(order:Readonly<{
     id:string;providerOrderId:string;gamertag:string;
-  }>)=>Promise<boolean>;
+  }>,gameSessionId?:string)=>Promise<boolean>;
+  claimGameLink?:(input:{code:string;gamertag:string;sessionId:string})=>Promise<unknown>;
   now?:()=>number;
 }){
   if(typeof input.webhookSecret!=="string"||input.webhookSecret.length<32 ||
@@ -41,6 +42,7 @@ export function createNetCraftCommercialNickGateway(input:{
     now:input.now,
     validateOrder:priceCheck,
     authorizeOrderForDispatch:input.authorizeOrderForDispatch,
+    claimGameLink:input.claimGameLink,
     requireIssuedChallenge:true,
   });
   const router=createBdsNickPrivateRouter({
