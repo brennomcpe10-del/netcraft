@@ -1,0 +1,15 @@
+name = "netcraft-delivery-sandbox-only"
+main = "worker.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+NC_SANDBOX_ENABLED = "false"
+
+[[durable_objects.bindings]]
+name = "NONCE_GATE"
+class_name = "NonceGate"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["NonceGate"]

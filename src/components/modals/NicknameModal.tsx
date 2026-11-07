@@ -69,7 +69,7 @@ export const NicknameModal: React.FC = () => {
             Digite seu nickname do Minecraft
           </h2>
           <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-            Se for sua primeira vez, sua conta será criada automaticamente.
+            O nickname identifica seu perfil no site, mas não comprova propriedade da conta Minecraft. Compras e benefícios exigem confirmação separada.
           </p>
         </div>
 

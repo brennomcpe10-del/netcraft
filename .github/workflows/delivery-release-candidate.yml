@@ -1,0 +1,189 @@
+name: NetCraft Delivery Release Candidate Gates OFF
+
+on:
+  push:
+    branches:
+      - redesign-mobile-solaris
+  workflow_dispatch:
+
+# Read-only validation workflow. NEVER deploy, promote, mutate Production or
+# unlock Minecraft deliveries. All credentials are intentionally empty.
+permissions:
+  contents: read
+
+concurrency:
+  group: netcraft-delivery-release-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    name: Security and fail-closed infrastructure checks (OFF)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      NODE_ENV: test
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+      VERCEL_ENV: ''
+      MERCADOPAGO_ACCESS_TOKEN: ''
+      FIREBASE_SERVICE_ACCOUNT_JSON: ''
+      CLOUDFLARE_API_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check no live secret or unsafe credential log
+        run: node scripts/verify-delivery-secrets.mjs
+      - name: Check safety gates and generate file SHA-256 inventory
+        run: node scripts/check-delivery-release-gates.mjs
+      - name: Test rejection of forbidden public delivery changes
+        run: node --test tests/delivery-release-gates.test.mjs
+      - name: Upload release snapshot (NOT a backup of Production)
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcraft-delivery-release-candidate-source-inventory
+          path: dist/release-gates/release-readiness.json
+          if-no-files-found: error
+          retention-days: 14
+
+  regression:
+    name: TypeScript, automated regression and build (no deploy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_ENV: test
+      VERCEL_ENV: ''
+      MERCADOPAGO_ACCESS_TOKEN: ''
+      FIREBASE_SERVICE_ACCOUNT_JSON: ''
+      CLOUDFLARE_API_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies without production secrets
+        run: bun install
+      - name: Typecheck
+        run: npm run lint
+      - name: Delivery and storefront regression suite
+        run: npm test
+      - name: Build web storefront
+        run: npm run build
+
+  bedrock:
+    name: Bedrock clone BP/RP integrity OFF (no installation)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate and package independent v0.4.0 addon
+        run: node scripts/package-netcraft-delivery-v040.mjs
+      - name: Verify approved site products against NetCraftCore v2.3.24 executor (LAB OFF)
+        run: node --experimental-strip-types --test tests/delivery-core-v2324-contract.test.mjs
+      - name: Verify read-only Core VIP rank readiness and fail-closed OFF guard
+        run: node --test tests/delivery-core-vip-readiness.test.mjs
+      - name: Publish isolated clone artifact only
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcraft-delivery-release-candidate-clone-off-v040
+          path: |
+            dist/bds-off/NetCraft_Delivery_Core_Clone_LAB_OFF_v0.4.0.mcaddon
+            dist/bds-off/netcraft-delivery-v040-integrity.json
+          if-no-files-found: error
+          retention-days: 14
+
+  firestore:
+    name: Isolated Firestore permissions and alert regression (no deploy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NODE_ENV: test
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+      GCLOUD_PROJECT: demo-netcraft-admin-test
+      GOOGLE_CLOUD_PROJECT: demo-netcraft-admin-test
+      FIREBASE_PROJECT_ID: demo-netcraft-admin-test
+      FIREBASE_SERVICE_ACCOUNT_JSON: ''
+      GOOGLE_APPLICATION_CREDENTIALS: ''
+      MERCADOPAGO_ACCESS_TOKEN: ''
+      MERCADOPAGO_WEBHOOK_SECRET: ''
+      VERCEL_ENV: ''
+      CLOUDFLARE_API_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: oven-sh/setup-bun@v2
+      - name: Install emulator test dependencies
+        run: bun install
+      - name: Assert isolation and create ephemeral emulator-only config
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$FIRESTORE_EMULATOR_HOST" = "127.0.0.1:8085"
+          test "$GCLOUD_PROJECT" = "demo-netcraft-admin-test"
+          test -z "$FIREBASE_SERVICE_ACCOUNT_JSON"
+          test -z "$MERCADOPAGO_ACCESS_TOKEN"
+          cat > .firebase-release-candidate-ci.json <<'JSON'
+          {
+            "firestore": {"rules": "firestore.delivery-isolated.rules"},
+            "emulators": {
+              "firestore": {"host": "127.0.0.1", "port": 8085},
+              "ui": {"enabled": false}
+            }
+          }
+          JSON
+      - name: Run actual Firebase Emulator permission and queue-alert tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14 emulators:exec --only firestore \
+            --project demo-netcraft-admin-test \
+            --config .firebase-release-candidate-ci.json \
+            'node --import tsx tests/delivery-security-firestore.integration.ts && node --import tsx tests/delivery-monitor-firestore.integration.ts && node --import tsx tests/delivery-netcraft-vip-firestore.integration.ts'
+
+  evidence:
+    name: Publish truthful, non-release homologation evidence
+    if: ${{ always() }}
+    needs: [security, regression, bedrock, firestore]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GATE_SECURITY: ${{ needs.security.result }}
+      GATE_REGRESSION: ${{ needs.regression.result }}
+      GATE_PACKAGE: ${{ needs.bedrock.result }}
+      GATE_FIRESTORE: ${{ needs.firestore.result }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build report from completed job results, not guesses
+        run: node scripts/build-delivery-homologation-ci-report.mjs
+      - name: Upload report even if a prerequisite failed
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcraft-delivery-candidate-homologation-evidence
+          path: |
+            dist/release-gates/homologation-ci-evidence.json
+            dist/release-gates/homologation-ci-report.md
+          if-no-files-found: error
+          retention-days: 30
+      - name: Require every candidate gate to pass (never authorizes release)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GATE_SECURITY" = "success"
+          test "$GATE_REGRESSION" = "success"
+          test "$GATE_PACKAGE" = "success"
+          test "$GATE_FIRESTORE" = "success"
+          echo "PASS candidate CI gates; commercial release remains OFF"
