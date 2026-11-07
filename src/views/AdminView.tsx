@@ -5,6 +5,7 @@ import {formatStoredMoney} from '../lib/adminDisplay.ts';
 import {filterLegacyOrders,legacyOrderOverview,type LegacyFilter} from '../lib/legacyOrderMonitor.ts';
 import {ProductManager} from "../components/ProductManager.tsx";
 import {PixTestMonitor} from "../components/PixTestMonitor.tsx";
+import {PreviewGameLinkLab} from "../components/PreviewGameLinkLab.tsx";
 import {CategoryManager} from "../components/CategoryManager.tsx";
 import {useStoreCategories} from "../hooks/useStoreCategories.ts";
 import React, { useState, useEffect } from 'react';
@@ -1019,6 +1020,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
               )}
             </section>
 
+            {previewSafety?.environment==="preview" && adminToken &&
+              <PreviewGameLinkLab adminToken={adminToken}/>}
             <PixTestMonitor
               orders={pixTestOrders}
               deliveries={pixTestDeliveries}
