@@ -13,6 +13,7 @@ type Order = {
   qrCodeBase64?: string;
   expiresAt?: string;
   delivery?: string;
+  deliveryStatus?: "awaiting_queue" | "queued" | "processing" | "delivered" | "blocked" | "review_required";
 };
 const money = (v: number) =>
   (v / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -99,12 +100,22 @@ export function PixCheckout({
     checkConfiguration(abort.signal);
     return () => abort.abort();
   }, []);
+  const deliveryMessages:Record<string,string>={
+    awaiting_queue:"Pagamento aprovado. A entrega aguarda validação e entrada na fila.",
+    queued:"Pagamento aprovado. Sua recompensa está aguardando o jogador entrar no servidor.",
+    processing:"Entrega em processamento. Aguarde a confirmação do servidor.",
+    delivered:"Entrega confirmada pelo servidor Minecraft.",
+    blocked:"Entrega retida. Entre em contato com o suporte informando o pedido.",
+    review_required:"Entrega em revisão de segurança. Entre em contato com o suporte.",
+  };
   const normalizeOrder=(data:any):Order=>({
     ...data,discountCents:Number(data.discountCents||0),
     qrBase64:data.qrBase64||data.qrCodeBase64||undefined,
-    delivery:data.delivery||(mode==="commercial"
-      ?"A entrega será feita ao nick informado depois da confirmação do pagamento. Se estiver offline, fica na fila."
-      :"As recompensas comerciais permanecem desativadas no ambiente de teste."),
+    delivery:mode==="commercial" && typeof data.deliveryStatus==="string"
+      ?deliveryMessages[data.deliveryStatus]||"Status da entrega indisponível. Consulte o suporte."
+      :data.delivery||(mode==="commercial"
+        ?"O pagamento e a entrega são confirmados separadamente. Atualize o status para acompanhar."
+        :"As recompensas comerciais permanecem desativadas no ambiente de teste."),
   });
   async function refresh(k = key, signal?: AbortSignal) {
     const id = await crypto.subtle.digest(
@@ -218,7 +229,7 @@ export function PixCheckout({
     creating: "Criando cobrança",
     pending: "Aguardando pagamento",
     processing: "Processando no Mercado Pago",
-    approved: mode==="commercial"?"Pagamento aprovado — entrega em processamento"
+    approved: mode==="commercial"?"Pagamento aprovado — consulte o status da entrega"
       :"Pagamento aprovado — teste",
     expired: "Pix expirado",
     cancelled: "Pagamento cancelado",
