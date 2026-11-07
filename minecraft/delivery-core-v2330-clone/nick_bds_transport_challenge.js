@@ -62,14 +62,14 @@ export function createNickBdsTransportChallenge({
     }finally{busy=false;}
   }
   return Object.freeze({
-    poll:(gamertag,sessionId)=>{
+    poll:(gamertag,sessionId=undefined)=>{
       if(!NAME.test(gamertag||'')||gamertag.trim()!==gamertag||
          (sessionId!==undefined&&!SESSION.test(sessionId)))
         throw Error('INVALID_GAMERTAG_OR_SESSION');
       return request('poll',{gamertag,online:true,
         ...(sessionId===undefined?{}:{sessionId})});
     },
-    ack:(deliveryId,leaseToken,result,sessionId)=>{
+    ack:(deliveryId,leaseToken,result,sessionId=undefined)=>{
       if(!ID.test(deliveryId||'')||!LEASE.test(leaseToken||'')||
          !['applied','already_applied'].includes(result)||
          (sessionId!==undefined&&!SESSION.test(sessionId)))
