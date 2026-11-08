@@ -95,7 +95,9 @@ export function createPreviewGameLinkLab(input:{
       gamertag:data?.gamertag,
       state:data?.state==="issued"&&Number(data?.expiresAt)<=now()
         ?"expired":data?.state,
-      verifiedAt:data?.verifiedAt??null};
+      verifiedAt:data?.verifiedAt??null,
+      // Proof expires independently from voucher issuance (15 min post claim).
+      proofExpiresAt:data?.proofExpiresAt??null};
   }
   async function challenge(body:unknown,receivedToken:unknown){
     if(!validToken(receivedToken))
@@ -157,7 +159,7 @@ export function createPreviewGameLinkLab(input:{
         throw new PreviewGameLinkError("lab_receipt_mismatch");
       tx.update(c,{state:"consumed",consumedAt:time});
       tx.update(receipt,{state:"verified_in_game",verifiedAt:time,
-        sessionDigest});
+        proofExpiresAt:time+15*60*1000,sessionDigest});
       // Fake order ID meets Core's 64-hex schema but is NEVER a commercial
       // order ID, and no commercial service can read these lab collections.
       const orderId=digest("netcraft-preview-lab-order/"+data.receiptId);
