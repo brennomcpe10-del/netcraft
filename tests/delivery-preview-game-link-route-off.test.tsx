@@ -37,6 +37,10 @@ test("Preview LAB endpoints fail closed without independent Preview-only authori
           method:"POST",headers:{"Content-Type":"application/json"},
           body:'{"schema":1}'});
         assert.equal(r.status,503);
+        r=await fetch(base+"/api/delivery/lab-link/simulate-vip",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({receiptId:"a".repeat(64),tier:"explorer"})});
+        assert.equal(r.status,503);
         r=await fetch(base+"/api/delivery/bds/poll",{
           method:"POST",headers:{"Content-Type":"application/json"},
           body:'{"gamertag":"Halzin5212","online":true}'});
@@ -67,6 +71,10 @@ test("Preview LAB when configured never intercepts poll, ACK, NACK or public pay
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({gamertag:"Halzin5212"})});
       assert.ok([401,503].includes(noAdmin.status));
+      const noAdminSim=await fetch(base+"/api/delivery/lab-link/simulate-vip",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({receiptId:"a".repeat(64),tier:"supreme"})});
+      assert.ok([401,503].includes(noAdminSim.status));
     });
   }finally{
     for(const k of vars)previous[k]===undefined?delete process.env[k]:
