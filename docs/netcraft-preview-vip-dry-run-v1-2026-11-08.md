@@ -9,7 +9,7 @@ O teste em `Mundo Eterno` já confirmou a comunicação HTTPS do Core 2.3.38 com
 ## Roteiro prático de homologação no painel Preview
 
 1. Entre no painel administrativo da Preview da branch `redesign-mobile-solaris` e abra **Pedidos -> Teste: Vincular compra no Minecraft**.
-2. Com o jogador conectado ao Mundo Eterno, gere um **novo código fictício** para o gamertag correto e confirme em **Benefícios -> Vincular compra** no jogo. Use o código antes de 10 minutos. Os comprovantes de códigos antigos, emitidos antes de `proofExpiresAt` ser implementado, são recusados para simulação por segurança.
+2. Com o jogador conectado ao Mundo Eterno, gere um **novo código fictício** para o gamertag correto e confirme em **Benefícios -> Vincular compra** no jogo. Use o código antes de 10 minutos. Comprovantes anteriores sem o campo `proofExpiresAt` são aceitos **somente enquanto** o `verifiedAt` gravado pelo próprio servidor permanecer dentro dos mesmos 15 minutos; a validade não é renovada.
 3. Clique em **Consultar confirmação no jogo**. Deve mostrar `verified_in_game`. A vinculação tem prova transitória por **15 minutos contados da confirmação**, não uma identidade Xbox permanente.
 4. Selecione **Explorer** e clique em **Simular VIP (sem entrega real)**. O painel informa gamertag, `ncbr:vip_explorer`, início fictício, fim fictício exato 30 dias depois e **VIP NÃO ENTREGUE**.
 5. Um segundo clique/reenvio do mesmo recibo/tier não cria outra simulação; escolher outro tier para o mesmo recibo é bloqueado. Para simular **Elite** ou **Supreme**, emita **um novo código** e repita as etapas. Limite: **5 códigos por jogador a cada 24h**, com apenas um código ativo por vez.
