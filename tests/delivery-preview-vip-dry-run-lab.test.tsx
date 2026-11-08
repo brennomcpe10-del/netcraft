@@ -105,8 +105,22 @@ test("unverified, expired, ancient and corrupted session proof fail closed",asyn
       receiptId:id,tier:"supreme",
     }),/game_session_proof_missing_or_expired/);
   }
-  f2.db.records.set(key,original);
+  // The installed Core may still use a prior Preview URL which stored
+  // verifiedAt but not proofExpiresAt. The deadline must remain 15 minutes.
+  const legacy={...original};
+  delete (legacy as any).proofExpiresAt;
+  f2.db.records.set(key,legacy);
   assert.equal((await f2.dry.simulate({receiptId:id,tier:"elite"})).tier,"elite");
+  const f3=setup(),thirdId=await linked(f3);
+  const thirdKey="previewDeliveryLinkLabV1Receipts/"+thirdId;
+  const old=f3.db.records.get(thirdKey);
+  const oldLegacy={...old};
+  delete (oldLegacy as any).proofExpiresAt;
+  f3.db.records.set(thirdKey,oldLegacy);
+  f3.advance(15*60*1000);
+  await assert.rejects(()=>f3.dry.simulate({
+    receiptId:thirdId,tier:"explorer",
+  }),/game_session_proof_missing_or_expired/);
 });
 test("forged client fields, unknown tier or malformed receipt can never pick rank, duration or nickname",async()=>{
   const f=setup(),id=await linked(f);
