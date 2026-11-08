@@ -60,7 +60,9 @@ export function createPreviewVipDryRunLab(db:DB,opts:{now?:()=>number}={}){
     return typeof id==="string"&&RECEIPT.test(id);
   }
   async function simulate(input:{receiptId:string;tier:RequestedTier}){
-    if(!input||!validReceipt(input.receiptId)||
+    if(!input||typeof input!=="object"||Array.isArray(input)||
+       Object.keys(input).sort().join(",")!=="receiptId,tier"||
+       !validReceipt(input.receiptId)||
        typeof input.tier!=="string"||
        !TIERS.has(input.tier))
       throw new PreviewVipDryRunBlocked("invalid_simulation_request");
