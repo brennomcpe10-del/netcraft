@@ -148,7 +148,7 @@ jobs:
           npx --yes firebase-tools@14 emulators:exec --only firestore \
             --project demo-netcraft-admin-test \
             --config .firebase-release-candidate-ci.json \
-            'node --import tsx tests/delivery-security-firestore.integration.ts && node --import tsx tests/delivery-monitor-firestore.integration.ts && node --import tsx tests/delivery-netcraft-vip-firestore.integration.ts'
+            'node --import tsx tests/delivery-security-firestore.integration.ts && node --import tsx tests/delivery-monitor-firestore.integration.ts && node --import tsx tests/delivery-netcraft-vip-firestore.integration.ts && node --import tsx tests/delivery-preview-vip-dry-run-firestore.integration.ts'
 
   evidence:
     name: Publish truthful, non-release homologation evidence
