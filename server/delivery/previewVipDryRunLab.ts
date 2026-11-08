@@ -76,16 +76,23 @@ export function createPreviewVipDryRunLab(db:DB,opts:{now?:()=>number}={}){
     return db.runTransaction(async tx=>{
       const [rs,ss]=await Promise.all([tx.get(receiptRef),tx.get(simulatedRef)]);
       const receipt=rs.data(),prior=ss.data();
-      // Refuse stale proof, unlinked/untrusted players and old receipts that
-      // did not yet store a 15-min expiry. Never accept a browser nickname.
+      // Legacy Preview endpoints did not persist proofExpiresAt but did
+      // persist the trusted, server-issued verifiedAt and session digest.
+      // Derive the same 15-minute deadline, never extend or refresh it.
+      // If a deadline is present, it MUST equal the derived deadline.
+      const verifiedAt=receipt?.verifiedAt;
+      const expectedDeadline=Number.isSafeInteger(verifiedAt)
+        ?verifiedAt+FIFTEEN_MINUTES_MS:null;
+      const providedDeadline=receipt?.proofExpiresAt;
+      const deadline=providedDeadline===undefined?expectedDeadline:providedDeadline;
       if(!rs.exists||receipt?.state!=="verified_in_game"||
          !GAMERTAG.test(receipt.gamertag||"")||
          receipt.gamertag!==receipt.gamertag.trim()||
          !DIGEST.test(receipt.sessionDigest||"")||
-         !Number.isSafeInteger(receipt.verifiedAt)||
-         !Number.isSafeInteger(receipt.proofExpiresAt)||
-         receipt.proofExpiresAt!==receipt.verifiedAt+FIFTEEN_MINUTES_MS||
-         time<receipt.verifiedAt||time>=receipt.proofExpiresAt)
+         !Number.isSafeInteger(verifiedAt)||
+         !Number.isSafeInteger(deadline)||
+         deadline!==expectedDeadline||
+         time<verifiedAt||time>=deadline)
         throw new PreviewVipDryRunBlocked("game_session_proof_missing_or_expired");
       if(ss.exists){
         if(prior?.receiptId!==input.receiptId||
