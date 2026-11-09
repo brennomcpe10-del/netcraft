@@ -66,6 +66,8 @@ jobs:
         run: bun install
       - name: Typecheck
         run: npm run lint
+      - name: VIP Core clone synthetic gate safety (no Bedrock connection)
+        run: node --test tests/delivery-vip-clone-gate.test.mjs
       - name: Delivery and storefront regression suite
         run: npm test
       - name: Build web storefront
