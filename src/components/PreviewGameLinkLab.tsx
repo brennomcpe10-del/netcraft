@@ -1,4 +1,4 @@
-import React,{useState} from "react";
+import React,{useEffect,useState} from "react";
 
 type LabReceipt={
   receiptId:string;gamertag:string;state:string;
@@ -25,8 +25,25 @@ export function PreviewGameLinkLab({adminToken}:{adminToken:string}){
   const [busy,setBusy]=useState(false);
   const [tier,setTier]=useState<VipTier>("explorer");
   const [vipDryRun,setVipDryRun]=useState<VipDryRun|null>(null);
+  const [cloneReady,setCloneReady]=useState(false);
+  const [cloneTier,setCloneTier]=useState<VipTier>("explorer");
+  const [cloneStatus,setCloneStatus]=useState<{
+    receiptId:string;state:string;tier:VipTier;gamertag:string;
+    rankTag:string;days:30;cloneOnly:true;
+    commercialDispatchEnabled:false;paymentsEnabled:false;
+  }|null>(null);
   const [message,setMessage]=useState("");
   const headers={Authorization:"Bearer "+adminToken};
+  useEffect(()=>{
+    let alive=true;
+    fetch("/api/delivery/lab-clone-vip/health",{
+      cache:"no-store",headers:{Authorization:"Bearer "+adminToken},
+    }).then(async r=>r.ok?await r.json():null)
+      .then(j=>{if(alive)setCloneReady(j?.cloneOnly===true&&
+        j?.commercialDispatchEnabled===false);})
+      .catch(()=>{if(alive)setCloneReady(false);});
+    return ()=>{alive=false;};
+  },[adminToken]);
   async function issue(){
     if(!/^[A-Za-z0-9_ ]{3,32}$/.test(gamertag)||
        gamertag.trim()!==gamertag){
@@ -46,6 +63,7 @@ export function PreviewGameLinkLab({adminToken}:{adminToken:string}){
       setIssued(json);
       setReceipt(null);
       setVipDryRun(null);
+      setCloneStatus(null);
       setMessage("Código fictício gerado. Nenhuma cobrança foi criada.");
     }catch(e){
       setMessage(e instanceof Error?e.message:"Não foi possível gerar código.");
@@ -86,6 +104,39 @@ export function PreviewGameLinkLab({adminToken}:{adminToken:string}){
     }catch(e){
       setMessage(e instanceof Error?e.message:"Simulação indisponível.");
     }finally{setBusy(false);}
+  }
+  async function queueClone(){
+    if(!issued||receipt?.state!=="verified_in_game"||!cloneReady)return;
+    setBusy(true);setMessage("");
+    try{
+      const r=await fetch("/api/delivery/lab-clone-vip/queue",{
+        method:"POST",cache:"no-store",
+        headers:{...headers,"Content-Type":"application/json"},
+        body:JSON.stringify({receiptId:issued.receiptId,tier:cloneTier}),
+      });
+      const j=await r.json();
+      if(!r.ok||j.cloneOnly!==true||j.paymentsEnabled!==false||
+         j.commercialDispatchEnabled!==false)
+        throw Error(j.error||"Fila do clone indisponível");
+      setCloneStatus(j);
+      setMessage("Pedido fictício reservado para o CLONE; nenhuma compra foi criada.");
+    }catch(e){setMessage(e instanceof Error?e.message:"Fila indisponível");}
+    finally{setBusy(false);}
+  }
+  async function refreshClone(){
+    if(!issued||!cloneReady)return;
+    setBusy(true);setMessage("");
+    try{
+      const r=await fetch("/api/delivery/lab-clone-vip/status/"+issued.receiptId,{
+        cache:"no-store",headers,
+      });
+      const j=await r.json();
+      if(!r.ok||j.simulation!==true||
+         j.commercialDispatchEnabled!==false)
+        throw Error(j.error||"Estado do clone indisponível");
+      setCloneStatus(j);
+    }catch(e){setMessage(e instanceof Error?e.message:"Estado indisponível");}
+    finally{setBusy(false);}
   }
   return (
     <section className="rounded-2xl border border-emerald-700/30 bg-zinc-950 p-4 space-y-3">
@@ -153,6 +204,46 @@ export function PreviewGameLinkLab({adminToken}:{adminToken:string}){
           Não há liberação real, lançamento financeiro ou entrega automática neste teste.
         </p>
       </div>}
+      {cloneReady&&receipt?.state==="verified_in_game"&&issued&&
+        <div className="space-y-2 border-t border-zinc-700 pt-3">
+          <h4 className="font-semibold text-zinc-100">
+            Teste automático: Site → Minecraft CLONE
+          </h4>
+          <p className="text-xs text-amber-300">
+            Somente servidor CLONE isolado, nunca Mundo Eterno.
+            A fila é fictícia, sem Pix ou venda real. Se o clone estiver
+            configurado e conectado, ele poderá aplicar o VIP de teste.
+          </p>
+          <label className="block text-sm text-zinc-300">Plano do clone
+            <select className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 p-2"
+              value={cloneTier} disabled={busy||!!cloneStatus}
+              onChange={e=>setCloneTier(e.target.value as VipTier)}>
+              <option value="explorer">Explorer - 30 dias</option>
+              <option value="elite">Elite - 30 dias</option>
+              <option value="supreme">Supreme - 30 dias</option>
+            </select>
+          </label>
+          <button className="nc-button" type="button"
+            disabled={busy||!!cloneStatus} onClick={queueClone}>
+            Enviar pedido FICTÍCIO ao clone
+          </button>
+          {cloneStatus&&<div role="status"
+              className="rounded-lg bg-zinc-900 p-3 text-sm text-zinc-200 space-y-1">
+              <p>Jogador: {cloneStatus.gamertag}</p>
+              <p>VIP: {cloneStatus.tier} - {cloneStatus.days} dias</p>
+              <p>Estado: <strong>{cloneStatus.state}</strong></p>
+              <button className="text-link" type="button"
+                disabled={busy} onClick={refreshClone}>Atualizar confirmação do clone</button>
+              {cloneStatus.state==="acknowledged_clone"&&
+                <p className="text-emerald-300">
+                  O clone confirmou a aplicação. Nenhuma venda comercial ocorreu.
+                </p>}
+              {cloneStatus.state==="manual_review"&&
+                <p className="text-amber-300">
+                  Teste bloqueado para revisão; não repetir concessão automaticamente.
+                </p>}
+            </div>}
+        </div>}
       {message&&<p role="status" className="text-xs text-amber-300">{message}</p>}
     </section>
   );
