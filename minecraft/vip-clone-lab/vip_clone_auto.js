@@ -130,7 +130,7 @@ export async function installVipCloneAuto({
     return {enabled:false,reason:'AUTO_OFF'};
   if(read(variables,'NCBR_VIP_CLONE_GUARD')!=='I_ACK_ISOLATED_WORLD_2_3_40'||
      read(variables,'NCBR_DELIVERY_ENABLED')!=='OFF'||
-     read(variables,'NCBR_DELIVERY_LINK_ENABLED')===true)
+     read(variables,'NCBR_DELIVERY_LINK_ENABLED')!==true)
     return {enabled:false,reason:'CLONE_GUARDS_REJECTED'};
   const owner=read(variables,'NCBR_VIP_CLONE_GAMERTAG');
   const url=read(variables,'NCBR_VIP_CLONE_AUTO_URL');
