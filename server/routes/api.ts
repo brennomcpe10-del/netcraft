@@ -3,6 +3,7 @@ import {commercialPixReleaseRouter,commercialBdsReleaseRouter}
   from './commercialRelease.ts';
 import {deliveryMagnoPreflightRouter} from './deliveryMagnoPreflight.ts';
 import {previewGameLinkLabAdminRouter,previewGameLinkLabBdsRouter} from './previewGameLinkLab.ts';
+import {previewCloneVipAdminRouter,previewCloneVipBdsRouter} from './previewCloneVipAutoLab.ts';
 import { auditDeliveryCatalog } from '../delivery/catalogAudit.ts';
 import {identityRouter} from './identity.ts';
 import {paymentStatusPatch} from '../../src/lib/paymentStatus.ts';
@@ -35,6 +36,9 @@ apiRouter.use('/pix/commercial',commercialPixReleaseRouter);
 // Strictly Preview-only, before the commercial BDS router, and only for
 // /challenge and /link. Never intercepts commercial Production requests.
 apiRouter.use('/delivery/lab-link',previewGameLinkLabAdminRouter);
+// Synthetic VIP auto-delivery is restricted to a distinct Preview clone lab.
+apiRouter.use('/delivery/lab-clone-vip',previewCloneVipAdminRouter);
+apiRouter.use('/delivery/lab-clone-vip/bds',previewCloneVipBdsRouter);
 apiRouter.use('/delivery/bds',previewGameLinkLabBdsRouter);
 apiRouter.use('/delivery/bds',commercialBdsReleaseRouter);
 // Read-only HTTPS transport check. No Pix/queue/ACK, Preview only.
