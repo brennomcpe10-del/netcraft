@@ -57,6 +57,7 @@ test("activated lab still requires HTTPS, clone secret and independent admin log
     process.env.NCBR_PREVIEW_GAME_LINK_LAB_ENABLED="true";
     process.env.NCBR_PREVIEW_CLONE_AUTO_ENABLED="true";
     process.env.NCBR_PREVIEW_CLONE_BDS_TOKEN="Z".repeat(64);
+    process.env.NCBR_PREVIEW_BDS_LINK_TOKEN="L".repeat(64);
     await server(async base=>{
       let r=await fetch(base+"/api/delivery/lab-clone-vip/queue",{
         method:"POST",headers:{"content-type":"application/json"},
