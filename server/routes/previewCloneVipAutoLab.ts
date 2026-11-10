@@ -59,7 +59,7 @@ previewCloneVipAdminRouter.get("/health",requireAdmin,(_req,res)=>
     commercialDispatchEnabled:false,paymentsEnabled:false}));
 export const previewCloneVipBdsRouter=express.Router();
 previewCloneVipBdsRouter.use(noCache);
-previewCloneVipBdsRouter.use((_req,res,next)=>{
+previewCloneVipBdsRouter.use((req,res,next)=>{
   if(!allowed())return res.status(503).json({error:"clone_lab_disabled"});
   if(req.headers["x-forwarded-proto"]!=="https")
     return res.status(403).json({error:"clone_https_required"});
