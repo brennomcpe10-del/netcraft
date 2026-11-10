@@ -26,11 +26,12 @@ export class PreviewCloneVipError extends Error{
   constructor(readonly reason:string){super(reason);}
 }
 export function createPreviewCloneVipAutoLab(input:{
-  db:DB;cloneToken:string;now?:()=>number;
+  db:DB;cloneToken:string;linkToken:string;now?:()=>number;
 }){
-  const {db,cloneToken}=input,now=input.now??Date.now;
+  const {db,cloneToken,linkToken}=input,now=input.now??Date.now;
   if(!db?.collection||!db?.runTransaction||
-     !/^[A-Za-z0-9_-]{43,128}$/.test(cloneToken||""))
+     !/^[A-Za-z0-9_-]{43,128}$/.test(cloneToken||"")||
+     !/^[A-Za-z0-9_-]{43,128}$/.test(linkToken||""))
     throw new PreviewCloneVipError("clone_lab_private_config_required");
   const jobs=db.collection("previewCloneVipAutoV1Jobs");
   const slots=db.collection("previewCloneVipAutoV1Slots");
@@ -45,6 +46,8 @@ export function createPreviewCloneVipAutoLab(input:{
     (record.proofExpiresAt===undefined||
       record.proofExpiresAt===record.verifiedAt+PROOF)&&
     time>=record.verifiedAt&&time<record.verifiedAt+PROOF;
+  const linkSession=(sessionId:string)=>crypto.createHmac("sha256",linkToken)
+    .update("netcraft-preview-pair/session/"+sessionId).digest("hex");
   const validSecret=(given:unknown)=>{
     if(typeof given!=="string"||!/^[A-Za-z0-9_-]{43,128}$/.test(given))return false;
     return crypto.timingSafeEqual(Buffer.from(digest(given),"hex"),
@@ -160,7 +163,9 @@ export function createPreviewCloneVipAutoLab(input:{
       // a fake test job, and the clone session is pinned at the first offer.
       const receipt=await tx.get(receiptRef(id));
       if(!receipt.exists||!validateProof(receipt.data(),time)||
-         receipt.data()?.gamertag!==gamertag)return empty;
+         receipt.data()?.gamertag!==gamertag||
+         receipt.data()?.sessionDigest!==linkSession(sessionId))
+        return empty;
       const leaseToken=crypto.randomBytes(16).toString("hex");
       tx.update(ref,{state:"offered_clone",sessionDigest:digest(sessionId),
         leaseDigest:digest(leaseToken),offeredAt:time,
