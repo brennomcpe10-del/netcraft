@@ -72,7 +72,7 @@ export function createPreviewCloneVipAutoLab(input:{
     const time=now(),ref=jobRef(receiptId);
     return db.runTransaction(async tx=>{
       const r=await tx.get(receiptRef(receiptId)),proof=r.data();
-      if(!r.exists||!validateProof(proof,time))
+      if(!r.exists||!proof||!validateProof(proof,time))
         throw new PreviewCloneVipError("clone_link_proof_expired");
       const slot=slotRef(proof.gamertag);
       const [prior,active]=await Promise.all([tx.get(ref),tx.get(slot)]);
@@ -149,7 +149,7 @@ export function createPreviewCloneVipAutoLab(input:{
         paymentsEnabled:false as const,offer:null as any};
       if(!slot.exists||!HEX.test(id||""))return empty;
       const ref=jobRef(id),snap=await tx.get(ref),record=snap.data();
-      if(!snap.exists||record.gamertag!==gamertag)return empty;
+      if(!snap.exists||!record||record.gamertag!==gamertag)return empty;
       if(record.state==="offered_clone"&&time>=record.leaseExpiresAt){
         tx.update(ref,{state:"manual_review",reason:"clone_lease_timeout"});
         return empty;
