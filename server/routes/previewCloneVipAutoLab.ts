@@ -15,12 +15,15 @@ function allowed(){
     process.env.NCBR_PREVIEW_GAME_LINK_LAB_ENABLED==="true"&&
     process.env.NCBR_PREVIEW_CLONE_AUTO_ENABLED==="true"&&
     /^[A-Za-z0-9_-]{43,128}$/.test(
-      process.env.NCBR_PREVIEW_CLONE_BDS_TOKEN||"");
+      process.env.NCBR_PREVIEW_CLONE_BDS_TOKEN||"")&&
+    /^[A-Za-z0-9_-]{43,128}$/.test(
+      process.env.NCBR_PREVIEW_BDS_LINK_TOKEN||"");
 }
 function service(){
   if(!allowed())throw new PreviewCloneVipError("clone_lab_disabled");
   return createPreviewCloneVipAutoLab({
     db:paymentDatabase(),cloneToken:process.env.NCBR_PREVIEW_CLONE_BDS_TOKEN!,
+    linkToken:process.env.NCBR_PREVIEW_BDS_LINK_TOKEN!,
   });
 }
 const noCache=(_req:express.Request,res:express.Response,next:express.NextFunction)=>{
