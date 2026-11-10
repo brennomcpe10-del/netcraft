@@ -166,7 +166,7 @@ export function createPreviewCloneVipAutoLab(input:{
         leaseDigest:digest(leaseToken),offeredAt:time,
         leaseExpiresAt:time+LEASE});
       return {...empty,offer:{
-        leaseToken,
+        receiptId:id,leaseToken,
         payload:{contract:"netcraft.delivery.v1" as const,
           id:record.id,orderId:record.orderId,gamertag,
           kind:"vip" as const,rankTag:record.rankTag,days:30 as const},
