@@ -20,13 +20,14 @@ assert.equal(process.env.VERCEL_ENV||"","");
 const db=paymentDatabase();
 const clock=Date.now(),linkToken="P".repeat(64),cloneToken="Q".repeat(64);
 const link=createPreviewGameLinkLab({db,token:linkToken,now:()=>clock});
-const service=createPreviewCloneVipAutoLab({db,cloneToken,now:()=>clock});
+const service=createPreviewCloneVipAutoLab({db,cloneToken,
+  linkToken,now:()=>clock});
 const gamer="Halzin5212",sessionId="clone-verified-session-001";
 try{
   const voucher=await link.issue(gamer);
   const challenge=await link.challenge({schema:1},linkToken);
   const confirmed=await link.link({code:voucher.code,
-    gamertag:gamer,sessionId:"original-minecraft-session"},{
+    gamertag:gamer,sessionId},{
     token:linkToken,nonce:challenge.nonce,timestamp:challenge.timestamp});
   assert.equal(confirmed.status,"verified_in_game");
   const id=voucher.receiptId;
