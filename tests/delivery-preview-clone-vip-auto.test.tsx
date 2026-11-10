@@ -17,12 +17,12 @@ function setup(){
     db:db as any,token:LINK_TOKEN,now:()=>clock,
   });
   const svc=createPreviewCloneVipAutoLab({
-    db:db as any,cloneToken:TOKEN,now:()=>clock,
+    db:db as any,cloneToken:TOKEN,linkToken:LINK_TOKEN,now:()=>clock,
   });
   async function linked(){
     const code=await link.issue(PLAYER);
     const challenge=await link.challenge({schema:1},LINK_TOKEN);
-    await link.link({code:code.code,gamertag:PLAYER,sessionId:"original-game-session"},{
+    await link.link({code:code.code,gamertag:PLAYER,sessionId:"clone-player-session-1"},{
       token:LINK_TOKEN,nonce:challenge.nonce,timestamp:challenge.timestamp,
     });
     return code.receiptId;
@@ -100,6 +100,10 @@ test("token, nonce and cross-session replay cannot grant or ACK",async()=>{
   const notPlayer:any=await f.authorized("poll",{
     gamertag:"WrongPerson",sessionId:request.sessionId});
   assert.equal(notPlayer.offer,null);
+  const otherSession:any=await f.authorized("poll",{
+    gamertag:PLAYER,sessionId:"different-clone-session",
+  });
+  assert.equal(otherSession.offer,null);
   const real:any=await f.authorized("poll",request);
   assert.ok(real.offer);
   await assert.rejects(()=>f.authorized("ack",{
