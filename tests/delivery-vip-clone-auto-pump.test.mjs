@@ -120,7 +120,7 @@ test("auto mode remains OFF without clone-specific guard and secrets",async()=>{
     NCBR_VIP_CLONE_GAMERTAG:OWNER,
     NCBR_VIP_CLONE_AUTO_URL:
       "https://preview.example.com/api/delivery/lab-clone-vip/bds",
-    NCBR_DELIVERY_ENABLED:"OFF",NCBR_DELIVERY_LINK_ENABLED:false,
+    NCBR_DELIVERY_ENABLED:"OFF",NCBR_DELIVERY_LINK_ENABLED:true,
   };
   const vars=extra=>({get:k=>({...defaults,...extra})[k]});
   const secrets={get:()=>undefined};
@@ -128,7 +128,7 @@ test("auto mode remains OFF without clone-specific guard and secrets",async()=>{
     {NCBR_VIP_CLONE_AUTO_ENABLED:false},
     {NCBR_VIP_CLONE_GUARD:"wrong"},
     {NCBR_DELIVERY_ENABLED:"RELEASE_APPROVED"},
-    {NCBR_DELIVERY_LINK_ENABLED:true},
+    {NCBR_DELIVERY_LINK_ENABLED:false},
     {NCBR_VIP_CLONE_GAMERTAG:"OtherPlayer"},
     {NCBR_VIP_CLONE_AUTO_URL:"http://localhost/unsafe"},
   ]){
