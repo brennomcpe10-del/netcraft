@@ -5,7 +5,7 @@ import {previewCloneVipAdminRouter,previewCloneVipBdsRouter}
   from "../server/routes/previewCloneVipAutoLab.ts";
 const keys=["VERCEL_ENV","VERCEL_GIT_COMMIT_REF",
   "NCBR_PREVIEW_GAME_LINK_LAB_ENABLED","NCBR_PREVIEW_CLONE_AUTO_ENABLED",
-  "NCBR_PREVIEW_CLONE_BDS_TOKEN"];
+  "NCBR_PREVIEW_CLONE_BDS_TOKEN","NCBR_PREVIEW_BDS_LINK_TOKEN"];
 async function server(fn:(base:string)=>Promise<void>){
   const app=express();app.use(express.json({limit:"4kb"}));
   app.use("/api/delivery/lab-clone-vip/bds",previewCloneVipBdsRouter);
@@ -30,6 +30,7 @@ test("clone-queue and BDS endpoints cannot activate outside gated Preview branch
       process.env.NCBR_PREVIEW_GAME_LINK_LAB_ENABLED="true";
       delete process.env.NCBR_PREVIEW_CLONE_AUTO_ENABLED;
       process.env.NCBR_PREVIEW_CLONE_BDS_TOKEN="Z".repeat(64);
+      process.env.NCBR_PREVIEW_BDS_LINK_TOKEN="L".repeat(64);
       await server(async base=>{
         const q=await fetch(base+"/api/delivery/lab-clone-vip/queue",{
           method:"POST",headers:{"content-type":"application/json"},
