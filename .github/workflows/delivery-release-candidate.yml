@@ -68,6 +68,8 @@ jobs:
         run: npm run lint
       - name: VIP Core clone synthetic gate safety (no Bedrock connection)
         run: node --test tests/delivery-vip-clone-gate.test.mjs
+      - name: VIP clone automatic fake queue and Core executor safety (offline)
+        run: node --test tests/delivery-vip-clone-auto-pump.test.mjs
       - name: Delivery and storefront regression suite
         run: npm test
       - name: Build web storefront
