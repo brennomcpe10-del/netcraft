@@ -69,7 +69,7 @@ function fixture({tier="explorer",wrongPlayer=false,ackFail=false,invalid=false,
         if(rank&&rank!==delivery.rankTag)
           return {status:"vip_upgrade_review_required"};
         receipts.set(delivery.id,"started");
-        Server.VIPSystem.grantDeliveryVIPLab(OWNER,delivery.rankTag,30);
+        Server.VIPSystem.grantDeliveryVIPLab(OWNER,delivery.rankTag,30,delivery);
         receipts.set(delivery.id,"applied");
         return {status:"applied"};
       },
