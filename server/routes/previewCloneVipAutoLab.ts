@@ -4,6 +4,7 @@
  * existing Mundo Eterno, Pix, Production, or commercial delivery pumps.
  */
 import express from "express";
+import crypto from "node:crypto";
 import {requireAdmin} from "../auth/admin.ts";
 import {paymentDatabase} from "../payments/database.ts";
 import {createPreviewCloneVipAutoLab,PreviewCloneVipError}
@@ -72,13 +73,28 @@ function header(req:express.Request,key:string){
   const v=req.headers[key];
   return typeof v==="string"?v:undefined;
 }
+// Authentication must run BEFORE creating the Firestore service. A wrong
+// token gets a deterministic 401 even if Firebase is unavailable.
+function authorizedClone(req:express.Request){
+  const provided=header(req,"x-nc-clone-token");
+  const expected=process.env.NCBR_PREVIEW_CLONE_BDS_TOKEN;
+  if(typeof provided!=="string"||typeof expected!=="string")return false;
+  if(!/^[A-Za-z0-9_-]{43,128}$/.test(provided)||
+     !/^[A-Za-z0-9_-]{43,128}$/.test(expected))return false;
+  const hash=(s:string)=>crypto.createHash("sha256").update(s).digest();
+  return crypto.timingSafeEqual(hash(provided),hash(expected));
+}
 previewCloneVipBdsRouter.post("/challenge",async(req,res)=>{
+  if(!authorizedClone(req))
+    return res.status(401).json({error:"clone_bds_unauthorized"});
   try{return res.json(await service().challenge(req.body,
     header(req,"x-nc-clone-token")));}
   catch(e){return error(res,e);}
 });
 function bdsAction(method:"poll"|"ack"|"nack"){
   return async(req:express.Request,res:express.Response)=>{
+    if(!authorizedClone(req))
+      return res.status(401).json({error:"clone_bds_unauthorized"});
     try{
       const lab=service();
       await lab.authenticate(header(req,"x-nc-clone-token"),
