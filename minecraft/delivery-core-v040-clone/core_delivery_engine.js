@@ -77,7 +77,9 @@ export function createCoreDeliveryCloneEngine({
     return {status:"vip_upgrade_review_required"};
    try{
     world.setDynamicProperty(key,JSON.stringify({state:"started",kind:"vip"}));
-    if(system.grantDeliveryVIPLab(player.name,job.rankTag,job.days)!=="applied")
+    // The real Core writer checks the server-owned identity callbacks
+    // against the exact delivery job; do not omit that fourth argument.
+    if(system.grantDeliveryVIPLab(player.name,job.rankTag,job.days,job)!=="applied")
       return {status:"manual_review"};
     world.setDynamicProperty(key,JSON.stringify({state:"applied",kind:"vip"}));
     return {status:"applied"};
