@@ -1,0 +1,528 @@
+name: NetCraftBR Preview Quality
+
+on:
+  push:
+    branches:
+      - redesign-mobile-solaris
+  workflow_dispatch:
+
+# Only the newest Preview commit needs the full, resource-heavy
+# Firestore/Workerd/Chrome matrix. Never cancel workflows on other refs.
+concurrency:
+  group: preview-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  storefront_mobile_browser:
+    name: Mobile shop and Pix browser (mock API, no real checkout)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - name: Install storefront and disposable browser runner
+        run: |
+          bun install
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.64.1
+      - name: Build static storefront
+        run: npm run build
+      - name: Start localhost-only Vite Preview and run five-width browser smoke
+        env:
+          NC_STORE_BROWSER_TEST: '1'
+          MERCADOPAGO_ACCESS_TOKEN: ''
+          FIREBASE_SERVICE_ACCOUNT_JSON: ''
+          VERCEL_ENV: ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          export TEST_CHROME_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -x "$TEST_CHROME_PATH"
+          npm run preview -- --host 127.0.0.1 --port 3000 --strictPort >/tmp/netcraft-store-preview.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          for n in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3000/ >/dev/null
+          node tests/store-mobile-browser.e2e.cjs
+          node tests/admin-pix-monitor.browser.cjs
+
+  fixture_workerd_sqlite:
+    name: Local Cloudflare fixture DO SQLite (no deploy, no payments)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout isolated Preview branch
+        uses: actions/checkout@v4
+      - name: Install Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Wrangler for localhost-only test
+        run: npm install --global wrangler@4
+      - name: Test real local SQLite-backed Durable Object with ephemeral token
+        env:
+          NC_FIXTURE_LOCAL_TEST: '1'
+          VERCEL_ENV: ''
+          MERCADOPAGO_ACCESS_TOKEN: ''
+          FIREBASE_SERVICE_ACCOUNT_JSON: ''
+        run: node scripts/test-cloudflare-fixture-workerd-local.mjs
+
+  quality:
+    name: TypeScript, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Preview branch
+        uses: actions/checkout@v4
+      - name: Install Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies for isolated CI runner
+        # bun.lock predates esbuild dependency update. Update only the
+        # temporary runner lockfile; never commit dependency changes here.
+        run: bun install
+      - name: Core v0.3.1 BDS clone executor idempotency (no Minecraft/server)
+        run: node --test tests/delivery-core-v031-clone.test.mjs
+      - name: Check v0.3.1 isolated mock BDS fixture server syntax
+        run: node --check minecraft/delivery-v031-core-lab/start-v031-bds-clone-local.mjs
+      - name: Verify no private credentials or unsafe logging in source
+        run: node scripts/verify-delivery-secrets.mjs
+      - name: Verify Cloudflare private Worker remains strictly OFF
+        run: |
+          node --check sandbox/cloudflare/delivery-private-candidate.worker.mjs
+          node --test --import tsx tests/delivery-infra-30-34.test.tsx tests/delivery-secret-guard.test.tsx
+      - name: TypeScript typecheck
+        run: npm run lint
+      - name: Package clone-only fixture bridge source v0.3.2 (not installable)
+        run: node scripts/package-bds-fixture-bridge-v032.mjs
+      - name: Upload clone-only bridge source for eventual BDS lab review
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcraft-delivery-fixture-bridge-source-v032
+          path: |
+            dist/bds-off/NetCraft_Delivery_Fixture_Bridge_Source_v0.3.2.zip
+            dist/bds-off/fixture-bridge-v032-manifest.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Assemble clone-only NetCraft Delivery BP/RP v0.4.0
+        run: node scripts/package-netcraft-delivery-v040.mjs
+      - name: Publish clone-only NetCraft Delivery v0.4.0 Bedrock addon
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcraft-delivery-core-clone-lab-off-v040
+          path: |
+            dist/bds-off/NetCraft_Delivery_Core_Clone_LAB_OFF_v0.4.0.mcaddon
+            dist/bds-off/netcraft-delivery-v040-integrity.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Automated tests
+        run: NODE_ENV=test npm test
+      - name: Gate C - isolated verified HTTPS loopback (no external endpoint)
+        env:
+          NODE_ENV: test
+          MERCADOPAGO_ACCESS_TOKEN: ""
+          FIREBASE_SERVICE_ACCOUNT_JSON: ""
+        run: node scripts/test-delivery-gate-c-https-loopback.mjs
+      - name: Gate C.2 - isolated authenticated HTTPS local protocol (no deployment)
+        env:
+          NODE_ENV: test
+          MERCADOPAGO_ACCESS_TOKEN: ""
+          FIREBASE_SERVICE_ACCOUNT_JSON: ""
+        run: node scripts/test-gate-c2-local-server.mjs
+      - name: NetCraftCore BDS E2E synthetic HTTPS to executor contract (no production)
+        env:
+          NODE_ENV: test
+          MERCADOPAGO_ACCESS_TOKEN: ""
+          FIREBASE_SERVICE_ACCOUNT_JSON: ""
+        run: |
+          node --test minecraft/delivery-e2e-local/test-local-server.cjs minecraft/delivery-e2e-local/test-protocol.mjs
+      - name: Isolated Pix TEST outbox HTTPS to BDS contract (no real provider or server)
+        env:
+          NODE_ENV: test
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+          MERCADOPAGO_ACCESS_TOKEN: ""
+          FIREBASE_SERVICE_ACCOUNT_JSON: ""
+        run: node --test minecraft/delivery-e2e-local/test-verified-outbox.mjs
+
+      - name: Phone UDP relay integration tests without BDS firewall changes
+        run: |
+          node --test minecraft/delivery-e2e-local/test-phone-udp-relay.cjs
+          sha256sum minecraft/delivery-e2e-local/phone_udp_relay.cjs
+
+      - name: Isolated Redmi UDP proxy installer — syntax and no BDS rule mutation
+        shell: pwsh
+        run: |
+          $path = 'scripts/netcraft-delivery-phone-relay.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          $source = Get-Content $path -Raw
+          foreach ($required in @('NETCRAFT_PHONE_RELAY_READY','NETCRAFT_PHONE_RELAY_CLEANED',
+                 '192.168.1.2','192.168.1.9','19144',
+                 'NC_PHONE_LAB_RELAY','Get-FileHash','sourceSha',
+                 'CheckLabRule','IsOurRule','phone_udp_relay.cjs')) {
+            if (!$source.Contains($required)) { throw ('Missing proxy verification: ' + $required) }
+          }
+          foreach ($forbidden in @('Set-NetFirewallAddressFilter','Disable-NetFirewallRule',
+                 'Set-NetFirewallProfile','netsh advfirewall set')) {
+            if ($source.Contains($forbidden)) { throw ('Unexpected firewall mutation: ' + $forbidden) }
+          }
+          Write-Host 'PASS: proxy installer syntax and BDS block preservation'
+
+      - name: Redmi LAN firewall helper — syntax and IPv4 complement safety
+        shell: pwsh
+        run: |
+          $path = 'scripts/netcraft-delivery-phone-lan.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count) { throw ($errors | Out-String) }
+          $source = Get-Content $path -Raw
+          foreach ($required in @('NETCRAFT_PHONE_ACCESS_READY', 'NETCRAFT_PHONE_ACCESS_CLEANED', '192.168.1.2',
+                                   '192.168.1.9', '19142', "Set-Remote `$out", "Set-Remote `$in",
+                                   "Set-Remote `$out @('Any')", "Set-Remote `$in @('Any')")) {
+            if (!$source.Contains($required)) { throw ('Missing firewall guard: ' + $required) }
+          }
+          foreach ($forbidden in @('Disable-NetFirewallRule', 'Set-NetFirewallProfile', 'Disable-NetFirewallProfile', 'netsh advfirewall set')) {
+            if ($source.Contains($forbidden)) { throw ('Forbidden firewall operation: ' + $forbidden) }
+          }
+          Write-Host 'PASS: LAN helper syntax and rollback guards'
+      - name: Redmi LAN firewall helper — IPv4 excludes phone and nothing else
+        run: |
+          python3 - <<'PY'
+          import ipaddress,re
+          text=open('scripts/netcraft-delivery-phone-lan.ps1').read()
+          arr=text.split('$networks=@(',1)[1].split(')',1)[0]
+          networks=re.findall(r"'([^']+)'",arr)
+          assert len(networks)==33, networks
+          ipv4=[ipaddress.ip_network(n) for n in networks if ':' not in n]
+          assert len(ipv4)==32 and '::/0' in networks
+          remaining=[ipaddress.ip_network('0.0.0.0/0')]
+          phone=ipaddress.ip_address('192.168.1.2')
+          expected=set(ipaddress.ip_network('0.0.0.0/0').address_exclude(ipaddress.ip_network('192.168.1.2/32')))
+          assert set(ipv4)==expected, 'non-phone IPv4 coverage must be exact'
+          assert all(phone not in n for n in ipv4), 'phone IP must not be explicitly blocked'
+          print('PASS: only 192.168.1.2 is excepted from the BDS lab block rules')
+          PY
+
+      - name: Delivery E2E downloadable Windows script parser and fail-closed guards
+        shell: pwsh
+        run: |
+          $file = 'scripts/netcraft-delivery-e2e-windows.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($file, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw ('E2E PS1 parse failed: ' + ($errors | Out-String)) }
+          $source = Get-Content $file -Raw
+          foreach ($required in @('NETCRAFT_DELIVERY_E2E_PREPARED','NETCRAFT_DELIVERY_E2E_CLEANED',
+                'Get-NetFirewallRule','force_tls','Get-FileHash','Cleanup',
+                'NetCraftDeliveryE2E','CurrentUser','raw.githubusercontent.com')) {
+            if (!$source.Contains($required)) { throw ('E2E missing guard: ' + $required) }
+          }
+          if ((Get-Item $file).Length -lt 4000) { throw 'E2E PS1 is truncated or empty' }
+          Write-Host 'PASS: E2E PowerShell has valid syntax and mandatory safeguards'
+
+      - name: Gate C.2 - PowerShell Windows lab syntax safety preflight
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile('scripts/gate-c2-windows-lab.ps1', [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw ('PowerShell syntax errors: ' + ($errors | Out-String)) }
+          $source = Get-Content scripts/gate-c2-windows-lab.ps1 -Raw
+          foreach ($required in @('GateC2_Local', 'nc_gate_c2_synthetic_token', 'CurrentUser', 'force_tls', 'Cleanup', 'NetCraftGateC2')) {
+            if (!$source.Contains($required)) { throw ('Gate C.2 Windows safety guard missing: ' + $required) }
+          }
+          Write-Host 'PASS: Gate C.2 Windows lab PowerShell parsed; scope and cleanup guards present'
+      - name: Package and inspect OFF BDS preflight without deployment
+        run: |
+          set -euo pipefail
+          node scripts/build-bds-preflight-off.mjs
+          python3 - <<'PY'
+          import json, zipfile
+          path = "dist/bds-off/NetCraft_Delivery_Homologacao_OFF_v0.2.0.mcpack"
+          expected = {
+              "manifest.json",
+              "scripts/main.js",
+              "scripts/secretHeaderProbe.js",
+              "scripts/capabilityInspection.js",
+          }
+          with zipfile.ZipFile(path) as pack:
+              assert set(pack.namelist()) == expected, "Unexpected BDS package contents"
+              manifest = json.loads(pack.read("manifest.json"))
+              assert manifest["modules"][0]["entry"] == "scripts/main.js"
+              assert manifest["modules"][0]["uuid"] == "99ac2e49-b003-46fc-8473-55700984acc7"
+              entry = pack.read("scripts/main.js").decode()
+              for forbidden in ("secretHeaderProbe", "http.request", "secrets.get", "runInterval", "runTimeout"):
+                  assert forbidden not in entry, "BDS entrypoint is not inert"
+              assert "modo OFF" in entry
+          print("PASS: OFF-only BDS .mcpack archive inspected; no deployment")
+          PY
+      - name: Verify OFF mcpack using Windows-compatible PowerShell checker
+        shell: pwsh
+        run: |
+          ./scripts/verify-bds-off-artifact.ps1 -PackPath "./dist/bds-off/NetCraft_Delivery_Homologacao_OFF_v0.2.0.mcpack"
+      - name: Publish inert BDS OFF package for clone-only inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcraft-delivery-bds-off-v020
+          path: dist/bds-off/NetCraft_Delivery_Homologacao_OFF_v0.2.0.mcpack
+          if-no-files-found: error
+          retention-days: 7
+      - name: Package and verify separate minimal Gate A OFF pack
+        run: |
+          set -euo pipefail
+          node scripts/build-bds-gate-a-minimal.mjs
+          python3 - <<'PY'
+          import json,zipfile
+          path="dist/bds-off/NetCraft_Delivery_GateA_Minimal_OFF_v0.2.1.mcpack"
+          with zipfile.ZipFile(path) as z:
+              assert sorted(z.namelist()) == ["manifest.json","scripts/main.js"]
+              m=json.loads(z.read("manifest.json"))
+              s=z.read("scripts/main.js").decode()
+              assert m["header"]["uuid"]=="91bc21f7-a701-4f06-9785-7126cbdb67f1"
+              assert m["modules"][0]["uuid"]=="16f58c35-975f-45ac-a512-85f282b7ea45"
+              assert m["dependencies"]==[{"module_name":"@minecraft/server","version":"1.17.0"}]
+              assert "system.run" in s and "MINIMAL OFF loaded" in s
+              for forbidden in ("server-net","server-admin","http.request","secrets.get","runCommand","fetch(","eval("):
+                  assert forbidden not in s
+          print("PASS: two-file Gate A minimal OFF pack inspected")
+          PY
+      - name: Publish separate Gate A minimal OFF archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcraft-gate-a-minimal-off-v021
+          path: dist/bds-off/NetCraft_Delivery_GateA_Minimal_OFF_v0.2.1.mcpack
+          if-no-files-found: error
+          retention-days: 7
+      - name: Build and inspect NetCraft Delivery v0.3.1 BDS read-only OFF preflight
+        run: |
+          set -euo pipefail
+          node scripts/build-bds-pix-preflight-v031.mjs
+          python3 - <<'PY'
+          import json,zipfile
+          p="dist/bds-off/NetCraft_Delivery_Pix_Preflight_OFF_v0.3.1.mcpack"
+          with zipfile.ZipFile(p) as z:
+              assert sorted(z.namelist())==["manifest.json","scripts/main.js"]
+              m=json.loads(z.read("manifest.json"))
+              script=z.read("scripts/main.js").decode("utf-8")
+              assert m["header"]["version"]==[0,3,1]
+              assert m["modules"][0]["version"]==[0,3,1]
+              assert "variables.get(ENABLE) === true" in script
+              assert "AUTHENTICATED_READ_ONLY_PREFLIGHT_PASS" in script
+              assert "/delivery/poll" not in script
+              assert "/delivery/ack" not in script
+              assert "/delivery/nack" not in script
+          print("PASS: v0.3.1 isolated OFF read-only BDS pack")
+          PY
+      - name: Publish NetCraft Delivery v0.3.1 BDS OFF preflight archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcraft-delivery-pix-preflight-off-v031
+          path: dist/bds-off/NetCraft_Delivery_Pix_Preflight_OFF_v0.3.1.mcpack
+          if-no-files-found: error
+          retention-days: 14
+      - name: Build storefront
+        run: npm run build
+
+  delivery-firestore-permissions:
+    name: Delivery candidate Firestore client permissions (emulator only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    env:
+      NODE_ENV: test
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+      GCLOUD_PROJECT: demo-netcraft-admin-test
+      GOOGLE_CLOUD_PROJECT: demo-netcraft-admin-test
+      FIREBASE_PROJECT_ID: demo-netcraft-admin-test
+      FIREBASE_SERVICE_ACCOUNT_JSON: ""
+      GOOGLE_APPLICATION_CREDENTIALS: ""
+      MERCADOPAGO_ACCESS_TOKEN: ""
+      MERCADOPAGO_WEBHOOK_SECRET: ""
+    steps:
+      - name: Checkout Preview branch
+        uses: actions/checkout@v4
+      - name: Install Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Java 21 for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install
+      - name: Check no rules or infrastructure release is activated
+        run: |
+          test -f firestore.delivery-isolated.rules
+          grep -q 'CANDIDATE ONLY - NOT DEPLOYED' firestore.delivery-isolated.rules
+          test -f sandbox/cloudflare/wrangler.delivery-private-candidate.toml
+          grep -q 'workers_dev = false' sandbox/cloudflare/wrangler.delivery-private-candidate.toml
+          node scripts/verify-delivery-secrets.mjs
+      - name: Verify private client permissions with isolated candidate rules
+        run: |
+          set -euo pipefail
+          test "$FIRESTORE_EMULATOR_HOST" = '127.0.0.1:8085'
+          test "$GCLOUD_PROJECT" = 'demo-netcraft-admin-test'
+          test -z "$FIREBASE_SERVICE_ACCOUNT_JSON"
+          test -z "$MERCADOPAGO_ACCESS_TOKEN"
+          cat > .firebase-delivery-candidate-ci.json <<'JSON'
+          {
+            "firestore": {"rules": "firestore.delivery-isolated.rules"},
+            "emulators": {"firestore": {"host": "127.0.0.1", "port": 8085},
+              "ui": {"enabled": false}}
+          }
+          JSON
+          npx --yes firebase-tools@14 emulators:exec --only firestore \
+            --project demo-netcraft-admin-test \
+            --config .firebase-delivery-candidate-ci.json \
+            'node --import tsx tests/delivery-security-firestore.integration.ts && node --import tsx tests/delivery-monitor-firestore.integration.ts'
+
+  pix-firestore-emulator:
+    name: Pix Firestore emulator (demo only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      NODE_ENV: test
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+      GCLOUD_PROJECT: demo-netcraft-admin-test
+      GOOGLE_CLOUD_PROJECT: demo-netcraft-admin-test
+      FIREBASE_PROJECT_ID: demo-netcraft-admin-test
+      FIREBASE_SERVICE_ACCOUNT_JSON: ""
+      GOOGLE_APPLICATION_CREDENTIALS: ""
+      MERCADOPAGO_ACCESS_TOKEN: ""
+      MERCADOPAGO_WEBHOOK_SECRET: ""
+    steps:
+      - name: Checkout Preview branch
+        uses: actions/checkout@v4
+      - name: Install Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Java 21 for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install
+      - name: Run isolated Firestore emulator integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$FIRESTORE_EMULATOR_HOST" = "127.0.0.1:8085"
+          test "$GCLOUD_PROJECT" = "demo-netcraft-admin-test"
+          test -z "$FIREBASE_SERVICE_ACCOUNT_JSON"
+          test -z "$GOOGLE_APPLICATION_CREDENTIALS"
+          test -z "$MERCADOPAGO_ACCESS_TOKEN"
+          cat > /tmp/netcraft-firebase-emulator.json <<'JSON'
+          {
+            "firestore": {"rules": "firestore.rules"},
+            "emulators": {
+              "firestore": {"host": "127.0.0.1", "port": 8085},
+              "ui": {"enabled": false}
+            }
+          }
+          JSON
+          # Config lives in the checkout so its relative rules path resolves.
+          cp /tmp/netcraft-firebase-emulator.json .firebase-emulator-ci.json
+          npx --yes firebase-tools@14 emulators:exec --only firestore \
+            --project demo-netcraft-admin-test \
+            --config .firebase-emulator-ci.json \
+            'node --import tsx tests/delivery-gate29-firestore.integration.ts && node --import tsx tests/pix-emulator.integration.ts'
+
+  nethernet_phone_lab_firewall_preflight:
+    name: NetherNet lab firewall compatibility (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate script syntax, guardrails and Windows Internet keyword
+        shell: pwsh
+        run: |
+          $script = 'scripts/netcraft-delivery-nethernet-phone.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($script,[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw ($errors | Out-String) }
+          $src = Get-Content $script -Raw
+          foreach($required in @('NCBR_NETHERNET_PHONE_READY','NCBR_NETHERNET_PHONE_CLEANED',
+            '192.168.1.2','192.168.1.9','19142','RestoreOriginal','RemoveCreated',
+            'Internet','Disable-NetFirewallRule','Get-NetFirewallApplicationFilter')) {
+            if (!$src.Contains($required)) { throw ("Missing safeguard: " + $required) }
+          }
+          foreach($forbidden in @('Set-NetFirewallProfile','Disable-NetFirewallProfile',
+            'netsh advfirewall set','Set-NetFirewallAddressFilter')) {
+            if ($src.Contains($forbidden)) { throw ("Forbidden operation: " + $forbidden) }
+          }
+          $name = 'NCBR-NetherNet-CI-Test'
+          try {
+            New-NetFirewallRule -Name $name -DisplayName 'NetCraft temporary runner test' -Direction Inbound -Action Block -Program "$env:WINDIR\System32\notepad.exe" -RemoteAddress Internet -Profile Private -ErrorAction Stop | Out-Null
+            $rule = Get-NetFirewallRule -Name $name -ErrorAction Stop
+            $remote = ($rule | Get-NetFirewallAddressFilter).RemoteAddress
+            if($remote -ne 'Internet') { throw "Internet keyword not accepted on Windows runner: $remote" }
+            Write-Host 'PASS: NetherNet script parses and Windows firewall accepts Internet scope'
+          } finally {
+            Get-NetFirewallRule -Name $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+          }
+      - name: Validate all four NetherNet firewall rule shapes without interactive prompts
+        shell: pwsh
+        run: |
+          $source = Get-Content scripts/netcraft-delivery-nethernet-phone.ps1 -Raw
+          if (-not $source.Contains('Name=$name;DisplayName=$name;')) {
+            throw 'NewRule must pass mandatory DisplayName; otherwise PowerShell hangs prompting the user'
+          }
+          $prefix = 'NCBR-NetherNet-ShapeCI-'
+          $app = "$env:WINDIR\System32\notepad.exe"
+          $specs = @(
+            @{Name='In';Dir='Inbound';Action='Block';Remote='Internet';Protocol=$null;Port=$null},
+            @{Name='Out';Dir='Outbound';Action='Block';Remote='Internet';Protocol=$null;Port=$null},
+            @{Name='PhoneTCP';Dir='Inbound';Action='Allow';Remote='192.168.1.2';Protocol='TCP';Port=19142},
+            @{Name='PhoneUDP';Dir='Inbound';Action='Allow';Remote='192.168.1.2';Protocol='UDP';Port=$null}
+          )
+          try {
+            foreach ($spec in $specs) {
+              $name = "$prefix$($spec.Name)"
+              $opts = @{Name=$name;DisplayName=$name;Direction=$spec.Dir;
+                Action=$spec.Action;Program=$app;RemoteAddress=$spec.Remote;
+                Profile='Private';Enabled='True';ErrorAction='Stop'}
+              if ($spec.Protocol) { $opts.Protocol = $spec.Protocol }
+              if ($spec.Port) { $opts.LocalPort = $spec.Port }
+              if ($spec.Action -eq 'Allow') { $opts.LocalAddress = '127.0.0.1' }
+              New-NetFirewallRule @opts | Out-Null
+              $created = Get-NetFirewallRule -Name $name -ErrorAction Stop
+              $remote = ($created | Get-NetFirewallAddressFilter).RemoteAddress
+              if ($remote -ne $spec.Remote) { throw "Unexpected remote scope: $name => $remote" }
+            }
+            Write-Host 'PASS: all four firewall rule shapes were created without prompts on Windows'
+          } finally {
+            foreach ($spec in $specs) {
+              Get-NetFirewallRule -Name "$prefix$($spec.Name)" -ErrorAction SilentlyContinue |
+                Remove-NetFirewallRule -ErrorAction SilentlyContinue
+            }
+          }

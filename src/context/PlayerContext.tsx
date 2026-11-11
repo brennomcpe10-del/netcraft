@@ -2,11 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Player } from '../types/index.ts';
 import { api } from '../lib/api.ts';
 import { useToast } from './ToastContext.tsx';
-import {
-  getOrCreateUserFromFirestore,
-  getUserByNicknameFromFirestore,
-  saveUserToFirestore
-} from '../lib/firestoreSync.ts';
 
 interface PlayerContextType {
   player: Player | null;
@@ -20,160 +15,85 @@ interface PlayerContextType {
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
-
 const STORAGE_KEY = 'netcraftbr_player_nickname';
-const PROFILE_KEY = 'netcraftbr_player_profile';
+const LEGACY_PROFILE_KEY = 'netcraftbr_player_profile';
 
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [player, setPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const { showSuccess } = useToast();
+  const { showSuccess, showError } = useToast();
 
   const loadSavedPlayer = useCallback(async () => {
     try {
-      const savedNick = localStorage.getItem(STORAGE_KEY);
-      if (savedNick) {
-        let p: Player | null = null;
-        try {
-          p = await api.getPlayer(savedNick);
-        } catch {
-          p = await getUserByNicknameFromFirestore(savedNick);
-        }
-        if (!p) {
-          const cached = localStorage.getItem(PROFILE_KEY);
-          if (cached) {
-            try { p = JSON.parse(cached); } catch {}
-          }
-        }
-        if (p) {
-          setPlayer(p);
-        } else {
-          // If player was deleted by admin from both server and Firestore, clear local session
-          localStorage.removeItem(STORAGE_KEY);
-          localStorage.removeItem(PROFILE_KEY);
-          setPlayer(null);
-        }
-      } else {
-        // If not logged in yet, prompt the user smoothly with the nickname modal
+      const nickname = localStorage.getItem(STORAGE_KEY);
+      // Never restore an unverified cached profile as though it were server data.
+      localStorage.removeItem(LEGACY_PROFILE_KEY);
+      if (!nickname) {
+        setIsLoginModalOpen(true);
+        return;
+      }
+      try {
+        const response = await api.getPlayer(nickname);
+        setPlayer(response);
+      } catch {
+        // Retain the nickname for retry, but no privileged offline profile.
+        setPlayer(null);
         setIsLoginModalOpen(true);
       }
-    } catch (err) {
-      console.warn('Could not restore saved player session:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadSavedPlayer();
+    void loadSavedPlayer();
   }, [loadSavedPlayer]);
 
   const login = async (nickname: string): Promise<boolean> => {
-    const cleanNick = nickname.trim();
-    if (!cleanNick) return false;
-
+    const cleaned = nickname.trim();
+    if (cleaned.length < 3 || cleaned.length > 32) return false;
+    setLoading(true);
     try {
-      setLoading(true);
-      let p: Player | null = null;
-
-      // 1. Try server API login
-      try {
-        const res = await api.loginPlayer(cleanNick);
-        p = res.player;
-      } catch (apiErr) {
-        console.warn('Backend API login unreachable, trying Firestore fallback:', apiErr);
-      }
-
-      // 2. If backend didn't respond, try Firestore directly
-      if (!p) {
-        try {
-          p = await getOrCreateUserFromFirestore(cleanNick);
-        } catch (fsErr) {
-          console.warn('Firestore user query failed:', fsErr);
-        }
-      } else {
-        // Background sync to Firestore
-        saveUserToFirestore(p).catch(() => {});
-      }
-
-      // 3. Guaranteed fallback session if both remote sources are unavailable
-      if (!p) {
-        p = {
-          id: `player-${cleanNick.toLowerCase().replace(/[^a-z0-9]/g, '')}-${Date.now().toString(36)}`,
-          nickname: cleanNick,
-          createdAt: new Date().toISOString(),
-          lastActive: new Date().toISOString(),
-          activeVips: [],
-          totalSpent: 0,
-          ordersCount: 0
-        };
-      }
-
-      setPlayer(p);
-      localStorage.setItem(STORAGE_KEY, p.nickname);
-      localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+      const result = await api.loginPlayer(cleaned);
+      if (!result.success || !result.player) throw new Error('Perfil não confirmado pelo servidor.');
+      // Nickname-only entry identifies a record but is not verified account ownership.
+      setPlayer(result.player);
+      localStorage.setItem(STORAGE_KEY, result.player.nickname);
+      localStorage.removeItem(LEGACY_PROFILE_KEY);
       setIsLoginModalOpen(false);
-      showSuccess(`Bem-vindo ao NetCraftBR, ${p.nickname}!`);
+      showSuccess(`Identificação registrada: ${result.player.nickname}`);
       return true;
-    } catch (err: unknown) {
-      console.error('Login error:', err);
-      // Guarantee login succeeds so player is never locked out
-      const fallback: Player = {
-        id: `player-${cleanNick.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-        nickname: cleanNick,
-        createdAt: new Date().toISOString(),
-        lastActive: new Date().toISOString(),
-        activeVips: [],
-        totalSpent: 0,
-        ordersCount: 0
-      };
-      setPlayer(fallback);
-      localStorage.setItem(STORAGE_KEY, fallback.nickname);
-      localStorage.setItem(PROFILE_KEY, JSON.stringify(fallback));
-      setIsLoginModalOpen(false);
-      showSuccess(`Bem-vindo ao NetCraftBR, ${fallback.nickname}!`);
-      return true;
+    } catch {
+      setPlayer(null);
+      showError('Não foi possível consultar o servidor. Tente novamente.');
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
   const logout = () => {
-    if (player) {
-      showSuccess(`Até logo, ${player.nickname}!`);
-    }
     setPlayer(null);
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(PROFILE_KEY);
+    localStorage.removeItem(LEGACY_PROFILE_KEY);
   };
 
   const refreshPlayer = async () => {
     if (!player) return;
     try {
-      const updated = await api.getPlayer(player.nickname);
-      setPlayer(updated);
-      localStorage.setItem(PROFILE_KEY, JSON.stringify(updated));
+      setPlayer(await api.getPlayer(player.nickname));
     } catch {
-      const fsUser = await getUserByNicknameFromFirestore(player.nickname);
-      if (fsUser) {
-        setPlayer(fsUser);
-        localStorage.setItem(PROFILE_KEY, JSON.stringify(fsUser));
-      }
+      // Keep the last server-confirmed public profile during a temporary outage.
     }
   };
 
   return (
     <PlayerContext.Provider
       value={{
-        player,
-        loading,
-        login,
-        logout,
-        refreshPlayer,
-        isLoginModalOpen,
+        player, loading, login, logout, refreshPlayer, isLoginModalOpen,
         openLoginModal: () => setIsLoginModalOpen(true),
-        closeLoginModal: () => setIsLoginModalOpen(false)
+        closeLoginModal: () => setIsLoginModalOpen(false),
       }}
     >
       {children}
@@ -183,8 +103,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
 export const usePlayer = () => {
   const context = useContext(PlayerContext);
-  if (!context) {
-    throw new Error('usePlayer must be used within a PlayerProvider');
-  }
+  if (!context) throw new Error('usePlayer must be used within a PlayerProvider');
   return context;
 };
