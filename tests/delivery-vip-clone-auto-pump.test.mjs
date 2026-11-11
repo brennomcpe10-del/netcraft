@@ -6,7 +6,8 @@ const ORDER="a".repeat(64),RECEIPT="f".repeat(64),LEASE="b".repeat(32);
 const OWNER="Halzin5212";
 const job=tier=>({contract:"netcraft.delivery.v1",id:ORDER+"-0",
   orderId:ORDER,gamertag:OWNER,kind:"vip",rankTag:"ncbr:vip_"+tier,days:30});
-function fixture({tier="explorer",wrongPlayer=false,ackFail=false,invalid=false}={}){
+function fixture({tier="explorer",wrongPlayer=false,ackFail=false,invalid=false,
+  linked=true}={}){
   const receipts=new Map(),ranks=new Map(),vipRanks=new Map(),logs=[];
   let rank=null,grants=0,polls=0,acks=0,nacks=0,callback;
   const player={id:"isolated-player-1",name:wrongPlayer?"WrongName":OWNER,
@@ -16,11 +17,16 @@ function fixture({tier="explorer",wrongPlayer=false,ackFail=false,invalid=false}
     getDynamicProperty:key=>receipts.get(key),
     setDynamicProperty:(key,value)=>receipts.set(key,value),
   };
-  const Server={VIPSystem:{
+  const Server={DeliveryLink:{
+    isPlayerLinked:p=>linked===true&&p.id===player.id&&p.name===OWNER,
+  },VIPSystem:{
     vipRanks,
     getVIP:()=>rank?{rankTag:rank}:null,
-    grantDeliveryVIPLab:(_name,newRank,days)=>{
+    grantDeliveryVIPLab:(_name,newRank,days,delivery)=>{
       assert.equal(days,30);
+      assert.equal(Server.DeliveryAuthorization?.isReleaseApproved?.(),true);
+      assert.equal(Server.DeliveryIdentity?.isPlayerLinked?.(player),true);
+      assert.equal(Server.DeliveryIdentity?.verifyLinkedPlayer?.(player,delivery),true);
       grants++;rank=newRank;return "applied";
     },
   },Ranks:{
@@ -73,7 +79,7 @@ function fixture({tier="explorer",wrongPlayer=false,ackFail=false,invalid=false}
     world,Server,transport,createExecutor,owner:OWNER,
     system:{runInterval:fn=>{callback=fn;}},log:x=>logs.push(x),
   });
-  return {pump,receipts,ranks,logs,callback,
+  return {pump,receipts,ranks,logs,callback,Server,
     get rank(){return rank;},get grants(){return grants;},
     get polls(){return polls;},get acks(){return acks;},get nacks(){return nacks;}};
 }
@@ -86,6 +92,8 @@ test("BDS clone automatically applies each exact 30-day synthetic VIP once",asyn
     assert.equal(x.receipts.get(job(tier).id),"applied");
     assert.equal(x.acks,1);
     assert.equal(x.pump.getPending(),false);
+    assert.equal(x.Server.DeliveryAuthorization,undefined);
+    assert.equal(x.Server.DeliveryIdentity,undefined);
     await x.pump.tick();
     assert.equal(x.grants,1);
     assert.ok(x.logs.some(line=>line.includes("commercial=OFF")));
@@ -107,6 +115,10 @@ test("wrong BDS player or forged payload never grants VIP",async()=>{
   await other.pump.tick();
   assert.equal(other.grants,0);
   assert.equal(other.polls,0);
+  const notLinked=fixture({linked:false});
+  await notLinked.pump.tick();
+  assert.equal(notLinked.polls,0);
+  assert.equal(notLinked.grants,0);
   const forged=fixture({invalid:true});
   await forged.pump.tick();
   assert.equal(forged.grants,0);
