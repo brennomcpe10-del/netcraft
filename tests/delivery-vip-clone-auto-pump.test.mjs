@@ -2,12 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {createCloneVipAutoPump,installVipCloneAuto}
   from "../minecraft/vip-clone-lab/vip_clone_auto.js";
+import {createCoreDeliveryCloneEngine}
+  from "../minecraft/delivery-core-v040-clone/core_delivery_engine.js";
 const ORDER="a".repeat(64),RECEIPT="f".repeat(64),LEASE="b".repeat(32);
 const OWNER="Halzin5212";
 const job=tier=>({contract:"netcraft.delivery.v1",id:ORDER+"-0",
   orderId:ORDER,gamertag:OWNER,kind:"vip",rankTag:"ncbr:vip_"+tier,days:30});
 function fixture({tier="explorer",wrongPlayer=false,ackFail=false,invalid=false,
-  linked=true}={}){
+  linked=true,realExecutor=false}={}){
   const receipts=new Map(),ranks=new Map(),vipRanks=new Map(),logs=[];
   let rank=null,grants=0,polls=0,acks=0,nacks=0,callback;
   const player={id:"isolated-player-1",name:wrongPlayer?"WrongName":OWNER,
@@ -24,6 +26,7 @@ function fixture({tier="explorer",wrongPlayer=false,ackFail=false,invalid=false,
     getVIP:()=>rank?{rankTag:rank}:null,
     grantDeliveryVIPLab:(_name,newRank,days,delivery)=>{
       assert.equal(days,30);
+      assert.deepEqual(delivery,job(tier));
       assert.equal(Server.DeliveryAuthorization?.isReleaseApproved?.(),true);
       assert.equal(Server.DeliveryIdentity?.isPlayerLinked?.(player),true);
       assert.equal(Server.DeliveryIdentity?.verifyLinkedPlayer?.(player,delivery),true);
@@ -58,6 +61,9 @@ function fixture({tier="explorer",wrongPlayer=false,ackFail=false,invalid=false,
     throw Error("unexpected action");
   }};
   function createExecutor({isDispatchApproved,verifyLinkedPlayer}){
+    if(realExecutor)return createCoreDeliveryCloneEngine({
+      world,Server,ItemStack:class {},verifyLinkedPlayer,
+    });
     return {
       receiptStatus:id=>receipts.get(id)||"none",
       execute:delivery=>{
@@ -159,4 +165,20 @@ test("auto mode remains OFF without clone-specific guard and secrets",async()=>{
   });
   assert.equal(noSecret.enabled,false);
   assert.equal(noSecret.reason,"CLONE_PRIVATE_SECRETS_MISSING");
+});
+
+test("the real v0.4.0 executor and clone pump pass the full job to Core before ACK",async()=>{
+  const x=fixture({tier:"explorer",realExecutor:true});
+  await x.pump.tick();
+  assert.equal(x.grants,1);
+  assert.equal(x.rank,"ncbr:vip_explorer");
+  assert.equal(x.acks,1);
+  assert.equal(x.pump.getPending(),false);
+  assert.equal(x.receipts.get(
+    "ncbr:delivery_clone_v040:"+job("explorer").id),
+    JSON.stringify({state:"applied",kind:"vip"}));
+  assert.equal(x.Server.DeliveryAuthorization,undefined);
+  assert.equal(x.Server.DeliveryIdentity,undefined);
+  await x.pump.tick();
+  assert.equal(x.grants,1);
 });
