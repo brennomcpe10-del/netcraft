@@ -24,7 +24,7 @@ export function createCloneVipAutoPump({
   const verifyLinkedPlayer=(p,j)=>grantActive&&
     p?.isValid===true&&p?.name===owner&&
     p?.id===activePlayer?.id&&j?.gamertag===owner&&
-    j?.id===activeId;
+    j?.id===activeId&&Server?.DeliveryLink?.isPlayerLinked?.(p)===true;
   const executor=createExecutor({
     isDispatchApproved:()=>grantActive,verifyLinkedPlayer,
   });
@@ -64,6 +64,9 @@ export function createCloneVipAutoPump({
         p?.typeId==='minecraft:player'&&p?.name===owner&&p.hasTag?.('admin'));
       if(players.length!==1)return;
       const player=players[0];
+      // The same actual clone player must have confirmed a 10-minute code
+      // in this server, not merely matched a browser-supplied gamertag.
+      if(Server?.DeliveryLink?.isPlayerLinked?.(player)!==true)return;
       if(!NAME.test(owner)||typeof player.id!=='string'||
          !/^[A-Za-z0-9_:\-.]{1,128}$/.test(player.id))return;
       if(pending){
@@ -92,14 +95,34 @@ export function createCloneVipAutoPump({
       // The origin must bind each offered lease to an exact Preview receipt.
       if(!/^[a-f0-9]{64}$/.test(receiptId))throw Error('INVALID_CLONE_RECEIPT');
       let outcome='manual_review';
+      const previousAuth=Server.DeliveryAuthorization;
+      const previousIdentity=Server.DeliveryIdentity;
       try{
         if(!ensureRank(job.rankTag))outcome='vip_not_configured';
         else{
           grantActive=true;activePlayer=player;activeId=job.id;
+          // The real NetCraftCore VIP writer requires TWO server-owned
+          // callbacks as well as a successful executor identity check.
+          // Install both ONLY during this one authenticated clone offer,
+          // restoring the original Core services in all outcomes.
+          Server.DeliveryAuthorization={
+            isReleaseApproved:()=>grantActive===true,
+          };
+          Server.DeliveryIdentity={
+            isPlayerLinked:p=>p?.id===player.id&&
+              Server?.DeliveryLink?.isPlayerLinked?.(p)===true,
+            verifyLinkedPlayer:(p,j)=>verifyLinkedPlayer(p,j),
+          };
           outcome=executor.execute(job)?.status||'manual_review';
         }
       }catch{outcome='manual_review';}
-      finally{grantActive=false;activePlayer=null;activeId='';}
+      finally{
+        grantActive=false;activePlayer=null;activeId='';
+        if(previousAuth===undefined)delete Server.DeliveryAuthorization;
+        else Server.DeliveryAuthorization=previousAuth;
+        if(previousIdentity===undefined)delete Server.DeliveryIdentity;
+        else Server.DeliveryIdentity=previousIdentity;
+      }
       const result=outcome==='applied'||outcome==='already_applied'
         ?outcome:'manual_review';
       pending={receiptId,leaseToken:offer.leaseToken,
