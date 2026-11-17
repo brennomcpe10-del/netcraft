@@ -129,7 +129,9 @@ export function createCommercialVipSessionPump({
           let outcome="manual_review";
           try{outcome=executor.execute(offer.payload)?.status||"manual_review";}
           catch{safeLog("EXECUTOR_FAILED_RECEIPT_REQUIRED");}
-          const receipt=sanitizeReceipt(receiptStatus(offer.deliveryId));
+          let receipt="unknown";
+          try{receipt=sanitizeReceipt(receiptStatus(offer.deliveryId));}
+          catch{safeLog("RECEIPT_READ_FAILED_MANUAL_REVIEW");}
           if(["applied","already_applied"].includes(outcome) &&
              receipt==="applied"){
             const pending={leaseToken:offer.leaseToken,result:outcome,
@@ -143,8 +145,9 @@ export function createCommercialVipSessionPump({
               applied++;
             }catch{
               safeLog("ACK_LOST_RECEIPT_PERSISTED");
-              // No new offers should be processed while ACK is unresolved.
-              return {status:"ack_pending",applied,review};
+              // Finish handling offers ALREADY leased in this same poll.
+              // Do not initiate another poll until the ACKs are confirmed.
+              continue;
             }
           }else{
             const safe=receipt==="none"&&SAFE_NACK.has(outcome);
@@ -155,6 +158,8 @@ export function createCommercialVipSessionPump({
             if(!safe)review++;
           }
         }
+        if(pendingAcks.size>0)
+          return {status:"ack_pending",applied,review};
       }
       return {status:"completed",applied,review};
     }finally{busy=false;}
