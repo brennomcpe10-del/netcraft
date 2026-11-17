@@ -7,7 +7,7 @@ import {memoryDB,ordersFixture,ORD} from "./fixtures/pixOrders.ts";
 import {makeRewardRegistry} from "../server/delivery/verifiedRewardRegistry.ts";
 import {createNetCraftCommercialCheckout} from "../server/delivery/commercialCheckoutService.ts";
 import {createNetCraftCommercialNickGateway} from "../server/delivery/commercialNickGateway.ts";
-import {refreshCommercialBuyerOrder}
+import {refreshCommercialBuyerOrder,issueCodeAfterCommercialPaymentRefresh}
   from "../server/delivery/commercialBuyerRefresh.ts";
 
 const KEY="buyer-key-for-lost-webhook-123456";
@@ -146,4 +146,51 @@ test("order-key mismatch or missing provider binding cannot reconcile",async()=>
       delivery:{reconcileVerifiedOrder:async()=>{throw Error("must_not_call");}},
     },KEY,ID),/checkout_order_binding_mismatch/);
   });
+});
+
+test("commercial game code requires a fresh provider-approved order, even if cache says paid",async()=>{
+  let state="approved",provider="refunded",checks=0,issued=0;
+  const runtime={
+    checkout:{viewByCheckoutKey:async()=>({id:ID,state,providerOrderId:ORD})},
+    delivery:{reconcileVerifiedOrder:async()=>{checks++;state=provider;}},
+    pairing:{issueForCheckoutKey:async(key:string)=>{
+      assert.equal(key,KEY);
+      issued++;
+      return {code:"NC-AAAA-BBBB-CCCC-DDDD",expiresAt:123456789};
+    }},
+  };
+  await assert.rejects(()=>
+    issueCodeAfterCommercialPaymentRefresh(runtime,KEY,ID),
+    /commercial_payment_not_verified_for_link/);
+  assert.equal(checks,1);
+  assert.equal(issued,0);
+  provider="pending";
+  await assert.rejects(()=>
+    issueCodeAfterCommercialPaymentRefresh(runtime,KEY,ID),
+    /commercial_payment_not_verified_for_link/);
+  assert.equal(issued,0);
+  provider="approved";
+  const proof=await issueCodeAfterCommercialPaymentRefresh(runtime,KEY,ID);
+  assert.equal(proof.code,"NC-AAAA-BBBB-CCCC-DDDD");
+  assert.equal(issued,1);
+  assert.equal(checks,3);
+  await assert.rejects(()=>
+    issueCodeAfterCommercialPaymentRefresh(runtime,KEY,"0".repeat(64)),
+    /checkout_order_binding_mismatch/);
+  assert.equal(issued,1);
+});
+test("commercial code rejects missing provider binding rather than trusting stored approved",async()=>{
+  let issued=0,checks=0;
+  const runtime={
+    checkout:{viewByCheckoutKey:async()=>({id:ID,state:"approved",providerOrderId:null})},
+    delivery:{reconcileVerifiedOrder:async()=>{checks++;}},
+    pairing:{issueForCheckoutKey:async()=>{
+      issued++;return {code:"NC-AAAA-BBBB-CCCC-DDDD",expiresAt:0};
+    }},
+  };
+  await assert.rejects(()=>
+    issueCodeAfterCommercialPaymentRefresh(runtime,KEY,ID),
+    /commercial_payment_not_verified_for_link/);
+  assert.equal(checks,0);
+  assert.equal(issued,0);
 });
