@@ -1,4 +1,5 @@
 import {pixRouter} from './pix.ts';
+import {inspectCommercialReleasePreflight} from '../delivery/commercialReleaseReadiness.ts';
 import {commercialPixReleaseRouter,commercialBdsReleaseRouter}
   from './commercialRelease.ts';
 import {deliveryMagnoPreflightRouter} from './deliveryMagnoPreflight.ts';
@@ -58,6 +59,12 @@ apiRouter.get('/admin/environment', requireAdmin, (_req,res)=>{
   sharedStoreData:stage==='preview',
   storeWritesBlocked:stage==='preview',
  });
+});
+// Authenticated read-only status: no secrets, no checkout or BDS side effects.
+apiRouter.get('/admin/commercial/readiness',requireAdmin,(_req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  res.setHeader('X-Content-Type-Options','nosniff');
+  return res.json(inspectCommercialReleasePreflight(process.env));
 });
 // Preview-only, authenticated and read-only. Never creates a payment or grants items.
 apiRouter.get('/admin/delivery-catalog-audit',requireAdmin,async(_req,res)=>{
