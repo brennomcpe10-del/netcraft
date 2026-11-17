@@ -60,6 +60,21 @@ async function adminRequest<T>(path: string, options: RequestInit): Promise<T> {
 export const api = {
   async uploadIdentity(value:{data:string;mime:string},token:string){const res=await fetch(`${API_BASE}/admin/identity/upload`,{method:'POST',headers:getHeaders(token),body:JSON.stringify(value)});return handleAdminFetch<{asset:import('./identity.ts').LogoAsset;uploadToken:string}>(res,'Não foi possível enviar o logo.');},
   async saveIdentity(value:unknown,token:string){const res=await fetch(`${API_BASE}/admin/identity`,{method:'PUT',headers:getHeaders(token),body:JSON.stringify(value)});return handleAdminFetch<import('./identity.ts').SiteIdentity>(res,'Não foi possível salvar a identidade visual.');},
+  // Admin-only, read-only: never exposes credentials or enables commerce.
+  async getCommercialReadiness(adminToken:string):Promise<{
+    environment:'preview'|'production'|'development';
+    status:'blocked'|'configuration_complete_review_required';
+    missing:string[];
+    commercialEnabled:false;
+    providerContacted:false;
+    minecraftContacted:false;
+    releaseApproved:false;
+  }> {
+    const res=await fetch(`${API_BASE}/admin/commercial/readiness`,{
+      headers:getHeaders(adminToken),cache:'no-store',
+    });
+    return handleAdminFetch(res,'Não foi possível verificar a prontidão do checkout comercial.');
+  },
   async getEnvironmentStatus(adminToken: string): Promise<{
     environment: 'preview' | 'production' | 'development';
     isolatedPlayerAndSupportData: boolean;
