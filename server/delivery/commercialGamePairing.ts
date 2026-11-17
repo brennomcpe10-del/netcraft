@@ -56,7 +56,7 @@ export function createCommercialGamePairing(db:DB,opts:{
   const digest=(namespace:string,plain:string)=>crypto.createHmac("sha256",opts.hashSecret)
     .update("netcraft-delivery/"+namespace+"/v1:"+plain).digest("hex");
 
-  /** Buyer-only after persisted checkout; never based on a public nickname. */
+  /** Buyer-only AFTER verified approved checkout; never based on a public nickname. */
   async function issueForCheckoutKey(checkoutKey:string){
     if(!KEY.test(checkoutKey||""))
       throw new CommercialGamePairingBlocked("checkout_key_required");
@@ -77,7 +77,7 @@ export function createCommercialGamePairing(db:DB,opts:{
          !/^[a-f0-9]{64}$/.test(order.requestHash)||
          !NAME.test(order.gamertag||"")||
          order.gamertag.trim()!==order.gamertag||
-         ["cancelled","expired","refunded","disputed"].includes(order.state))
+         order.state!=="approved")
         throw new CommercialGamePairingBlocked("order_not_eligible");
       if(slot?.state==="verified_in_game"&&
          Number(slot.proofExpiresAt)>time)
@@ -132,7 +132,7 @@ export function createCommercialGamePairing(db:DB,opts:{
          order?.environment!=="commercial"||
          order?.id!==voucher.orderId||
          order?.gamertag!==input.gamertag||
-         !["pending","processing","approved","creating"].includes(order.state)||
+         order.state!=="approved"||
          slot?.state!=="awaiting_game"||
          slot?.codeDigest!==codeDigest||
          slot?.codeExpiresAt!==voucher.expiresAt)
