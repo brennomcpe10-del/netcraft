@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import type { CartLine } from "../lib/cart.ts";
-import {pixCheckoutStorageNames,readPixCheckoutKey} from "../lib/pixCheckoutSession.ts";
+import {pixCheckoutStorageNames,readPixCheckoutKey,canStartNextPixOrder} from "../lib/pixCheckoutSession.ts";
 type Order = {
   id: string;
   state: string;
@@ -346,8 +346,12 @@ export function PixCheckout({
                  </div>
                )}
                <button type="button" className="nc-button" onClick={requestGameLinkCode}
-                 disabled={linkBusy}>
-                 {linkBusy?"Gerando código...":linkCode?"Gerar novo código após expirar":"Gerar código de resgate"}
+                 disabled={linkBusy || Boolean(linkCode && linkExpiresAt &&
+                   Date.parse(linkExpiresAt)>Date.now())}>
+                 {linkBusy?"Gerando código...":
+                   linkCode && linkExpiresAt && Date.parse(linkExpiresAt)>Date.now()
+                     ?"Código ativo — use /resgatar no Minecraft"
+                     :linkCode?"Gerar novo código após expirar":"Gerar código de resgate"}
                </button>
              </div>
            )}
@@ -358,9 +362,15 @@ export function PixCheckout({
           >
             Atualizar status
           </button>
-          {["cancelled", "expired", "refunded", "approved"].includes(
-            order.state,
-          ) && (
+          {mode==="commercial" && order.state==="approved" &&
+            order.deliveryStatus!=="delivered" && (
+              <p className="text-xs text-zinc-400" role="note">
+                Guarde esta tentativa no navegador até a entrega ficar
+                confirmada. Não inicie outra compra nem descarte o pedido:
+                o código de resgate depende deste vínculo.
+              </p>
+            )}
+          {canStartNextPixOrder(mode,order.state,order.deliveryStatus) && (
             <button
               className="text-link"
               onClick={() => {
