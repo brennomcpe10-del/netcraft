@@ -40,3 +40,24 @@ export async function refreshCommercialBuyerOrder<
     throw new PixError("checkout_order_binding_mismatch",409);
   return latest;
 }
+
+/**
+ * Buyer-only code issuance requires a fresh authoritative Orders GET before
+ * issuing even a short-lived voucher. A previously approved Firestore record
+ * must not be sufficient if the provider has since cancelled or refunded it.
+ * Actual dispatch independently rechecks the provider and live game session.
+ */
+export async function issueCodeAfterCommercialPaymentRefresh<
+  V extends CommercialBuyerOrderView,
+>(
+  input:{
+    checkout:{viewByCheckoutKey:(key:string)=>Promise<V>};
+    delivery:{reconcileVerifiedOrder:(id:string)=>Promise<unknown>};
+    pairing:{issueForCheckoutKey:(key:string)=>Promise<{code:string;expiresAt:number}>};
+  },checkoutKey:string,expectedId:string,
+):Promise<{code:string;expiresAt:number}>{
+  const current=await refreshCommercialBuyerOrder(input,checkoutKey,expectedId);
+  if(current.state!=="approved"||!current.providerOrderId)
+    throw new PixError("commercial_payment_not_verified_for_link",409);
+  return input.pairing.issueForCheckoutKey(checkoutKey);
+}
