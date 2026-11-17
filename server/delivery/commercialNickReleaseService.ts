@@ -259,7 +259,8 @@ export function createCommercialNickReleaseService(
       journal(tx,"lease_offered",order.id,deliveryId);
       // Offers are signed/authorized only by the private authenticated BDS router.
       // The backend rechecks the live provider before granting the lease.
-      return {status:"offered" as const,payload,leaseToken,dispatchEnabled:true as const};
+      return {status:"offered" as const,deliveryId,payload,leaseToken,
+        dispatchEnabled:true as const};
     });
   }
 
