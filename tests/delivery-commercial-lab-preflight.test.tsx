@@ -32,7 +32,7 @@ test("read-only staff event never responds to non-admin or logs credentials",()=
     listener=fn;
   }}}};
   const result=installCommercialLabPreflight({
-    Server,world,system,log:(s:string)=>logs.push(s),
+    Server,world,system,log:(...args:unknown[])=>{logs.push(String(args[0]));},
   });
   const event={id:"ncbr:commercial_check_v1",
     sourceEntity:{typeId:"minecraft:player",isValid:true,
