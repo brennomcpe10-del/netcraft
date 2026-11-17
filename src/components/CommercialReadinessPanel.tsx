@@ -12,6 +12,13 @@ export function CommercialReadinessPanel({adminToken}:{adminToken:string}){
     setLoading(true);
     setError("");
     api.getCommercialReadiness(adminToken).then(result=>{
+      // A failed/mocked API must never crash the entire admin orders page.
+      if(!result||Array.isArray(result)||
+         !Array.isArray(result.missing)||
+         !['preview','production','development'].includes(result.environment)||
+         !['blocked','configuration_complete_review_required'].includes(result.status)||
+         result.missing.some(name=>typeof name!=='string'))
+        throw Error('commercial_readiness_invalid');
       if(active)setStatus(result);
     }).catch(()=>{
       if(active){setStatus(null);setError("Verificação indisponível.");}
