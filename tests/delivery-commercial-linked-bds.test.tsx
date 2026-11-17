@@ -82,8 +82,12 @@ async function fixture(){
 }
 test("commercial BDS link/offer/ACK requires exact authenticated session; no real grant",async()=>{
   await withMockProduction(async()=>{
-    const f=await fixture(),code=await f.pairing.issueForCheckoutKey(KEY);
-    assert.equal((await f.service.reconcileAndQueue(ID)).created,0);
+    const f=await fixture();
+    await assert.rejects(()=>f.pairing.issueForCheckoutKey(KEY),
+      /order_not_eligible/); // pending Pix must not produce code
+    f.setPaid();
+    assert.equal((await f.service.reconcileAndQueue(ID)).created,1);
+    const code=await f.pairing.issueForCheckoutKey(KEY);
     await assert.rejects(()=>f.bds("link",{
       code:code.code,gamertag:"WrongRecipient",sessionId:"bedrock-player-1",
     }),/invalid_or_expired_code/);
@@ -96,8 +100,7 @@ test("commercial BDS link/offer/ACK requires exact authenticated session; no rea
     await assert.rejects(()=>f.bds("link",{
       code:code.code,gamertag:GAMERTAG,sessionId:"bedrock-player-1",
     }),/invalid_or_expired_code/);
-    f.setPaid();
-    assert.equal((await f.service.reconcileAndQueue(ID)).created,1);
+    assert.equal((await f.service.reconcileAndQueue(ID)).created,0);
     const wrong=await f.bds("poll",{gamertag:GAMERTAG,online:true,
       sessionId:"different-player"}) as any;
     assert.equal(wrong.deliveries.length,0);
@@ -119,10 +122,11 @@ test("commercial BDS link/offer/ACK requires exact authenticated session; no rea
       sessionId:"bedrock-player-1"}) as any).deliveries.length,0);
   });
 });
-test("cancelled payment cannot offer a VIP even after successful in-game link",async()=>{
+test("pending payment cannot mint a code or offer a VIP",async()=>{
   await withMockProduction(async()=>{
-    const f=await fixture(),code=await f.pairing.issueForCheckoutKey(KEY);
-    await f.bds("link",{code:code.code,gamertag:GAMERTAG,sessionId:"a"});
+    const f=await fixture();
+    await assert.rejects(()=>f.pairing.issueForCheckoutKey(KEY),
+      /order_not_eligible/);
     assert.equal((await f.service.reconcileAndQueue(ID)).state,"pending");
     const p=await f.bds("poll",{gamertag:GAMERTAG,online:true,sessionId:"a"}) as any;
     assert.equal(p.deliveries.length,0);
