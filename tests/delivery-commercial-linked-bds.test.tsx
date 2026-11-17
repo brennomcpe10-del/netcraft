@@ -110,10 +110,14 @@ test("commercial BDS link/offer/ACK requires exact authenticated session; no rea
       sessionId:"bedrock-player-1"}) as any;
     assert.equal(legit.deliveries.length,1);
     const offer=legit.deliveries[0];
+    // ACK must use the actual server-owned lease identity returned to BDS,
+    // never guess a delivery ID from a browser order or nickname.
+    assert.equal(offer.deliveryId,ID+"-0");
+    assert.equal(offer.deliveryId,offer.payload.id);
     assert.equal(offer.payload.kind,"vip");
     assert.equal(offer.payload.rankTag,"ncbr:vip_explorer");
     assert.equal(offer.payload.days,30);
-    assert.equal((await f.bds("ack",{deliveryId:ID+"-0",
+    assert.equal((await f.bds("ack",{deliveryId:offer.deliveryId,
       leaseToken:offer.leaseToken,result:"applied",sessionId:"different-player"}) as any).status,"held");
     assert.equal((await f.bds("ack",{deliveryId:ID+"-0",
       leaseToken:offer.leaseToken,result:"applied",sessionId:"bedrock-player-1"}) as any).status,"acknowledged");
