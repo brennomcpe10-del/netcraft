@@ -16,7 +16,7 @@ function fixture(){
   const order={
     id:ID,environment:"commercial",checkoutOrigin:"netcraft_commercial_checkout_v1",
     catalogValidated:true,requestHash:"a".repeat(64),
-    gamertag:NAME,state:"pending",totalCents:490,
+    gamertag:NAME,state:"approved",totalCents:490,
     lines:[{productType:"vip",productId:"approved-explorer",
       quantity:1,duration:"30 dias"}],
   };
@@ -98,6 +98,10 @@ test("rate-limits reissues: at most five codes per order each 24 hours",async()=
 test("cancelled, forged or unreviewed order cannot mint a voucher",async()=>{
   const f=fixture(); const order=f.db.records.get("pixCommercialOrders/"+ID);
   for(const patch of [
+    {state:"pending"},
+    {state:"processing"},
+    {state:"creating"},
+    {state:"review_required"},
     {state:"cancelled"},
     {state:"refunded"},
     {checkoutOrigin:"fake_browser_order"},
@@ -105,7 +109,7 @@ test("cancelled, forged or unreviewed order cannot mint a voucher",async()=>{
     {gamertag:" Another"},
     {requestHash:"invalid"},
   ]){
-    Object.assign(order,{state:"pending",checkoutOrigin:"netcraft_commercial_checkout_v1",
+    Object.assign(order,{state:"approved",checkoutOrigin:"netcraft_commercial_checkout_v1",
       catalogValidated:true,gamertag:NAME,requestHash:"a".repeat(64)},patch);
     await assert.rejects(()=>f.link.issueForCheckoutKey(KEY),/order_not_eligible/);
   }
@@ -116,4 +120,14 @@ test("missing secret fails closed; code contains no usable payment authorization
     /pairing_configuration_missing/);
   const source=JSON.stringify([...db.records.entries()]);
   assert.equal(source.includes("APP_USR-"),false);
+});
+
+test("voucher is refused if payment is reversed between issuance and in-game claim",async()=>{
+  const f=fixture(),{code}=await f.link.issueForCheckoutKey(KEY);
+  const order=f.db.records.get("pixCommercialOrders/"+ID);
+  order.state="refunded";
+  await assert.rejects(()=>f.link.claimInGame({code,gamertag:NAME,
+    sessionId:"session-after-refund"},()=>true),/pairing_state_mismatch/);
+  assert.equal(await f.link.verifyActiveSession({orderId:ID,gamertag:NAME,
+    sessionId:"session-after-refund"}),false);
 });
