@@ -140,3 +140,29 @@ test("lost ACK or clone failure quarantines delivery, never automatically redisp
   assert.equal(nack.status,"manual_review");
   assert.equal((await f2.authorized<any>("poll",request)).offer,null);
 });
+
+test("expired unoffered clone queue may be safely replaced after new game proof",async()=>{
+  const f=setup(),oldId=await f.linked();
+  await f.svc.queue({receiptId:oldId,tier:"explorer"});
+  f.step(15*60*1000+1);
+  const renewed=await f.linked();
+  const newer=await f.svc.queue({receiptId:renewed,tier:"explorer"});
+  assert.equal(newer.state,"queued_clone");
+  const previous=await f.svc.status(oldId);
+  assert.equal(previous.state,"expired_clone");
+  assert.equal(previous.reason,"previous_link_proof_expired_before_offer");
+  const {offer}:any=await f.authorized("poll",request);
+  assert.equal(offer.receiptId,renewed);
+  assert.equal(offer.payload.rankTag,"ncbr:vip_explorer");
+});
+test("leased old clone VIP cannot be replaced, even after proof expiry",async()=>{
+  const f=setup(),oldId=await f.linked();
+  await f.svc.queue({receiptId:oldId,tier:"elite"});
+  const {offer}:any=await f.authorized("poll",request);
+  assert.ok(offer);
+  f.step(15*60*1000+1);
+  const next=await f.linked();
+  await assert.rejects(()=>f.svc.queue({receiptId:next,tier:"elite"}),
+    /clone_player_has_unfinished_job/);
+  assert.equal((await f.svc.status(oldId)).state,"offered_clone");
+});
