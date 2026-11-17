@@ -6,6 +6,7 @@ import {filterLegacyOrders,legacyOrderOverview,type LegacyFilter} from '../lib/l
 import {ProductManager} from "../components/ProductManager.tsx";
 import {PixTestMonitor} from "../components/PixTestMonitor.tsx";
 import {PreviewGameLinkLab} from "../components/PreviewGameLinkLab.tsx";
+import {CommercialReadinessPanel} from "../components/CommercialReadinessPanel.tsx";
 import {CategoryManager} from "../components/CategoryManager.tsx";
 import {useStoreCategories} from "../hooks/useStoreCategories.ts";
 import React, { useState, useEffect } from 'react';
@@ -1020,6 +1021,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onExit, onRefreshGlobalDat
               )}
             </section>
 
+            {adminToken && <CommercialReadinessPanel adminToken={adminToken}/>}
             {previewSafety?.environment==="preview" && adminToken &&
               <PreviewGameLinkLab adminToken={adminToken}/>}
             <PixTestMonitor
