@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {pixCheckoutStorageNames,readPixCheckoutKey}
+import {pixCheckoutStorageNames,readPixCheckoutKey,canStartNextPixOrder}
   from "../src/lib/pixCheckoutSession.ts";
 
 test("test and commercial Pix keys cannot overwrite or reuse each other",()=>{
@@ -27,4 +27,18 @@ test("malformed cached payment keys fail closed without affecting other mode",()
   const read={getItem:(_key:string)=>"not a valid checkout key"};
   assert.equal(readPixCheckoutKey(read,"commercial"),"");
   assert.equal(readPixCheckoutKey(read,"test"),"");
+});
+
+test("commercial customer keeps the paid order key until server confirms VIP",()=>{
+  for(const state of ["approved","pending","processing","creating"]){
+    assert.equal(canStartNextPixOrder("commercial",state,"awaiting_queue"),false);
+  }
+  for(const state of ["awaiting_queue","queued","processing",
+    "blocked","review_required",undefined]){
+    assert.equal(canStartNextPixOrder("commercial","approved",state),false);
+  }
+  assert.equal(canStartNextPixOrder("commercial","approved","delivered"),true);
+  assert.equal(canStartNextPixOrder("test","approved"),true);
+  for(const state of ["cancelled","expired","refunded"])
+    assert.equal(canStartNextPixOrder("commercial",state),true);
 });
