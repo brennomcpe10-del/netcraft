@@ -16,3 +16,17 @@ export function readPixCheckoutKey(
   const value=storage.getItem(pixCheckoutStorageNames(mode).key)||"";
   return /^[A-Za-z0-9-]{20,80}$/.test(value)?value:"";
 }
+
+/**
+ * Never erase the only browser-side lookup key for a PAID commercial order
+ * while Minecraft has not acknowledged the reward. A fresh order would use
+ * a new idempotency key, leaving the previous buyer without its voucher path.
+ */
+export function canStartNextPixOrder(
+  mode:PixCheckoutMode,state:string|undefined,deliveryStatus?:string,
+):boolean{
+  if(["cancelled","expired","refunded"].includes(state||""))return true;
+  if(state==="approved")
+    return mode==="test"||deliveryStatus==="delivered";
+  return false;
+}
