@@ -64,7 +64,7 @@ export function PreviewGameLinkLab({adminToken}:{adminToken:string}){
       setReceipt(null);
       setVipDryRun(null);
       setCloneStatus(null);
-      setMessage("Código fictício gerado. Digite /resgatar CODIGO no Minecraft.");
+      setMessage("Código fictício gerado. Use /resgatar no Minecraft.");
     }catch(e){
       setMessage(e instanceof Error?e.message:"Não foi possível gerar código.");
     }finally{setBusy(false);}
@@ -144,7 +144,7 @@ export function PreviewGameLinkLab({adminToken}:{adminToken:string}){
       <p className="text-xs text-zinc-400">
         Somente Preview. Código fictício válido por 10 minutos, não gera Pix,
         pedido comercial nem recompensa. No servidor de testes, use
-        /resgatar CODIGO (addon NetCraft Delivery Standalone).
+        /resgatar para abrir o formulario ou /resgatar CODIGO diretamente.
       </p>
       <label className="block text-sm text-zinc-300">
         Gamertag do jogador conectado
