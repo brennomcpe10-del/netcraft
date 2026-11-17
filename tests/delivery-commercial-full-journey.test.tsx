@@ -159,6 +159,19 @@ test("offline full journey: POST Pix -> GET accredited -> one code -> BDS link -
     },KEY,ID),/commercial_payment_not_verified_for_link/);
     assert.equal((await f.delivery.reconcileVerifiedOrder(ID)).created,0);
     f.setState("approved");
+    // Webhook is only a notification: the gateway verifies the signature,
+    // then fetches the authoritative Orders resource before queueing.
+    const requestId="mercadopago-mock-order-approved";
+    const ts=String(Math.floor(TIME/1000));
+    const signature="ts="+ts+",v1="+crypto.createHmac("sha256",WEBHOOK)
+      .update("id:"+ORD.toLowerCase()+";request-id:"+requestId+";ts:"+ts+";")
+      .digest("hex");
+    const notification={orderId:ORD,requestId,signature,type:"order"};
+    await assert.rejects(()=>f.delivery.reconcileSignedOrderNotification({
+      ...notification,signature:"ts="+ts+",v1="+("0".repeat(64)),
+    }),/unverified_commercial_notification/);
+    assert.equal((await f.delivery.reconcileSignedOrderNotification(notification)).created,1);
+    assert.equal((await f.delivery.reconcileSignedOrderNotification(notification)).created,0);
     const before=await refreshCommercialBuyerOrder({
       checkout:f.checkout,delivery:f.delivery,
     },KEY,ID) as any;
