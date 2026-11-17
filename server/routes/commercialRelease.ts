@@ -11,7 +11,7 @@ import {claimWebhook,completeWebhook,releaseWebhook}
   from "../payments/webhookReplay.ts";
 import {createReviewedCommercialVercelRuntime}
   from "../delivery/commercialVercelRuntime.ts";
-import {refreshCommercialBuyerOrder}
+import {refreshCommercialBuyerOrder,issueCodeAfterCommercialPaymentRefresh}
   from "../delivery/commercialBuyerRefresh.ts";
 
 const ID=/^[a-f0-9]{64}$/;
@@ -56,7 +56,9 @@ commercialPixReleaseRouter.post("/orders/link-code",async(req,res)=>{
     if(typeof key!=="string"||!KEY.test(key))
       return res.status(401).json({error:"buyer_checkout_key_required"});
     const runtime=createReviewedCommercialVercelRuntime();
-    const proof=await runtime.pairing.issueForCheckoutKey(key);
+    const orderId=crypto.createHash("sha256")
+      .update("netcraft-commercial-v1:"+key).digest("hex");
+    const proof=await issueCodeAfterCommercialPaymentRefresh(runtime,key,orderId);
     return res.status(201).json({code:proof.code,
       expiresAt:new Date(proof.expiresAt).toISOString()});
   }catch(e){return error(res,e);}
