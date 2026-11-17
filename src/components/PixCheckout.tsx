@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import type { CartLine } from "../lib/cart.ts";
+import {pixCheckoutStorageNames,readPixCheckoutKey} from "../lib/pixCheckoutSession.ts";
 type Order = {
   id: string;
   state: string;
@@ -43,7 +44,7 @@ export function PixCheckout({
     [error, setError] = useState("");
   const [key, setKey] = useState(() => {
     try {
-      return sessionStorage.getItem("netcraft-pix-key") || "";
+      return readPixCheckoutKey(sessionStorage,"test");
     } catch {
       return "";
     }
@@ -62,7 +63,11 @@ export function PixCheckout({
         if(approved.available===true&&approved.environment==="commercial"&&
            approved.realPayments===true){
           if(!signal?.aborted){
-            setMode("commercial");setAvailable(true);setConfigError("");
+            setMode("commercial");
+            try{setKey(readPixCheckoutKey(sessionStorage,"commercial"));}
+            catch{setKey("");}
+            setOrder(null);setLinkCode("");setLinkExpiresAt("");
+            setAvailable(true);setConfigError("");
           }
           return;
         }
@@ -78,6 +83,9 @@ export function PixCheckout({
       const config = await response.json();
       if (!signal?.aborted) {
         setMode("test");
+        try{setKey(readPixCheckoutKey(sessionStorage,"test"));}
+        catch{setKey("");}
+        setOrder(null);setLinkCode("");setLinkExpiresAt("");
         setAvailable(response.ok && config.available === true);
         if (!response.ok || !config.available)
           setConfigError(
@@ -178,8 +186,9 @@ export function PixCheckout({
   }
   function resetCheckout() {
     try {
-      sessionStorage.removeItem("netcraft-pix-key");
-      sessionStorage.removeItem("netcraft-pix-request");
+      const names=pixCheckoutStorageNames(mode);
+      sessionStorage.removeItem(names.key);
+      sessionStorage.removeItem(names.request);
     } catch {}
     setKey("");
     setOrder(null);
@@ -212,7 +221,7 @@ export function PixCheckout({
     let previousFingerprint = "";
     try {
       previousFingerprint =
-        sessionStorage.getItem("netcraft-pix-request") || "";
+        sessionStorage.getItem(pixCheckoutStorageNames(mode).request) || "";
     } catch {}
     // A pending order may already exist at the provider even when POST timed
     // out. Never silently create a second charge because form data changed.
@@ -225,8 +234,9 @@ export function PixCheckout({
     setKey(k);
     setOrder(null);
     try {
-      sessionStorage.setItem("netcraft-pix-key", k);
-      sessionStorage.setItem("netcraft-pix-request", fingerprint);
+      const names=pixCheckoutStorageNames(mode);
+      sessionStorage.setItem(names.key, k);
+      sessionStorage.setItem(names.request, fingerprint);
     } catch {}
     try {
       const r = await fetch(mode==="commercial"
