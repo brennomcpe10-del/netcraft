@@ -322,11 +322,11 @@ export function PixCheckout({
               </p>}
             </>
           )}
-          {mode==="commercial" && !["cancelled","expired","refunded"].includes(order.state) &&
+          {mode==="commercial" && order.state==="approved" &&
             order.deliveryStatus!=="delivered" && (
              <div className="rounded-xl border border-emerald-800/40 bg-zinc-950 p-3 space-y-2">
-               <h4 className="font-semibold">Vincular compra ao Minecraft</h4>
-               <p className="text-sm text-zinc-400">Gere um código e digite em Benefícios - Vincular compra, dentro do NetCraftBR. O código expira em 10 minutos. Ele não confirma o pagamento nem entrega VIP sozinho.</p>
+               <h4 className="font-semibold">Resgatar compra no Minecraft</h4>
+               <p className="text-sm text-zinc-400">Pagamento aprovado: gere um código e use /resgatar CODIGO dentro do NetCraftBR. O código expira em 10 minutos e só pode ser usado na conta Bedrock indicada na compra. A entrega será confirmada pelo servidor.</p>
                {linkCode && (
                  <div className="space-y-1">
                    <label className="block text-xs text-zinc-400">Código temporário</label>
@@ -337,7 +337,7 @@ export function PixCheckout({
                )}
                <button type="button" className="nc-button" onClick={requestGameLinkCode}
                  disabled={linkBusy}>
-                 {linkBusy?"Gerando código...":linkCode?"Gerar novo código após expirar":"Gerar código de vinculação"}
+                 {linkBusy?"Gerando código...":linkCode?"Gerar novo código após expirar":"Gerar código de resgate"}
                </button>
              </div>
            )}
