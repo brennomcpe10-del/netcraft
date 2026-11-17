@@ -38,6 +38,11 @@ const assert=require("node:assert/strict");
     isolatedPreviewCatalog:true,isolatedPreviewCoupons:true,
     sharedStoreData:true,storeWritesBlocked:true,
    };break;
+   case "/api/admin/commercial/readiness":value={
+    environment:"preview",status:"blocked",missing:["production_runtime"],
+    commercialEnabled:false,providerContacted:false,
+    minecraftContacted:false,releaseApproved:false,
+   };break;
    case "/api/admin/pix-test-orders":
     value=[order("a","approved"),order("b","pending"),order("c","approved"),
       order("d","refunded")];break;
@@ -67,6 +72,7 @@ const assert=require("node:assert/strict");
   await page.getByRole("button",{name:"Acessar Painel"}).click();
   await page.getByText("Painel Administrativo NetCraftBR",{exact:true}).waitFor();
   await page.getByRole("button",{name:"Pedidos",exact:true}).click();
+  await page.getByRole("heading",{name:"Pix real + entrega no Minecraft"}).waitFor();
   await page.getByRole("heading",{name:/Acompanhamento de Pix e entregas/}).waitFor();
   await page.getByText("Lab A · 1 item(ns)").waitFor();
   await page.getByText("Lab D · 1 item(ns)").waitFor();
