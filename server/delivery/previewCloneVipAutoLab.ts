@@ -85,8 +85,22 @@ export function createPreviewCloneVipAutoLab(input:{
         return exposed(prior.data());
       }
       if(active.exists&&active.data()?.receiptId!==receiptId){
-        const other=await tx.get(jobRef(active.data()?.receiptId));
-        if(other.exists&&other.data()?.state!=="acknowledged_clone")
+        const previousId=active.data()?.receiptId;
+        if(!HEX.test(previousId||""))
+          throw new PreviewCloneVipError("clone_player_has_unfinished_job");
+        const previousRef=jobRef(previousId),other=await tx.get(previousRef);
+        if(other.exists&&other.data()?.state==="queued_clone"){
+          // This older fake job was NEVER leased. An expired pairing proof
+          // cannot be used by the BDS, so replace only this safe, unoffered
+          // test queue entry. Leased/manual-review jobs remain quarantined.
+          const oldProof=await tx.get(receiptRef(previousId));
+          if(oldProof.exists&&validateProof(oldProof.data(),time))
+            throw new PreviewCloneVipError("clone_player_has_unfinished_job");
+          tx.update(previousRef,{state:"expired_clone",
+            reason:"previous_link_proof_expired_before_offer",
+            expiredAt:time});
+        }else if(other.exists&&
+          !["acknowledged_clone","expired_clone"].includes(other.data()?.state))
           throw new PreviewCloneVipError("clone_player_has_unfinished_job");
       }
       const orderId=digest("netcraft-clone-only-not-paid/"+receiptId);
