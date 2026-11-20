@@ -116,12 +116,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     );
   }
 
+  // Keep the old Product branch type-safe: the legacy checkout still handles products.
+  const isVipPurchase=()=>itemType==='vip';
   // Only a backend-reviewed Pix order is eligible for commercial VIP.
   // Keep other products and existing non-VIP checkout unchanged.
-  if(itemType==='vip'&&commercialMode==='enabled')
+  if(isVipPurchase()&&commercialMode==='enabled')
     return <CommercialVipCheckout item={item as VIP}
       buyerNickname={player.nickname} onClose={onClose}/>;
-  if(itemType==='vip'){
+  if(isVipPurchase()){
     return <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/85" onClick={onClose}/>
       <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c1017] p-6 text-white space-y-3">
