@@ -31,12 +31,15 @@ export async function inspectCommercialOrder(
     String(merchant.id)!==order.collector)
   throw new PixError("Recebedor comercial divergente.",409);
  const resource=await reader.get(order.providerOrderId);
+ // GET /v1/orders may omit live_mode even in production; the verified
+ // non-test merchant identity from /users/me and exact order fields remain
+ // mandatory. An explicitly false/non-boolean live_mode is rejected.
  if(!orderIdPattern.test(resource?.id||"")||resource.id!==order.providerOrderId||
     resource.type!=="online"||resource.external_reference!==order.id||
     String(resource.user_id)!==order.collector||
     !["BRA","MLB"].includes(resource.country_code)||
     (resource.currency_id!==undefined&&resource.currency_id!=="BRL")||
-    resource.live_mode!==true||
+    (resource.live_mode!==undefined&&resource.live_mode!==true)||
     amountCents(resource.total_amount)!==order.totalCents)
   throw new PixError("Order comercial não corresponde ao pedido original.",409);
  const payments=resource.transactions?.payments;
