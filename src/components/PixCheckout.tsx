@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { CartLine } from "../lib/cart.ts";
-import {pixCheckoutStorageNames,readPixCheckoutKey,canStartNextPixOrder} from "../lib/pixCheckoutSession.ts";
+import {pixCheckoutStorageNames,readPixCheckoutKey,canStartNextPixOrder,readCachedCommercialLink,storeCachedCommercialLink,clearCachedCommercialLink} from "../lib/pixCheckoutSession.ts";
 type Order = {
   id: string;
   state: string;
@@ -29,6 +29,7 @@ export function PixCheckout({
   couponCode?: string;
 }) {
   const [mode,setMode] = useState<"commercial"|"test">("test");
+  const autoLinkAttempt=useRef("");
   const [available, setAvailable] = useState(false),
     [configChecking, setConfigChecking] = useState(true),
     [configError, setConfigError] = useState(""),
@@ -180,11 +181,43 @@ export function PixCheckout({
         throw new Error("Vinculação indisponível. Nenhum VIP será liberado sem confirmação.");
       setLinkCode(body.code);
       setLinkExpiresAt(body.expiresAt||"");
+      try{
+        storeCachedCommercialLink(sessionStorage,{
+          checkoutKey:key,orderId:order.id,
+          code:body.code,expiresAt:body.expiresAt,
+        });
+      }catch{}
     }catch(e){
       setError(e instanceof Error?e.message:"Não foi possível gerar o código da compra.");
     }finally{setLinkBusy(false);}
   }
+  useEffect(()=>{
+    if(mode!=="commercial"||!key||order?.state!=="approved"||
+       order.deliveryStatus==="delivered")return;
+    const cached=readCachedCommercialLink(sessionStorage,key,order.id);
+    if(cached && cached.code!==linkCode){
+      setLinkCode(cached.code);
+      setLinkExpiresAt(cached.expiresAt);
+      return;
+    }
+    // Automatic issuance happens once per freshly approved payment, never
+    // because the UI poll repeated. A failed request remains manually retryable.
+    if(linkCode||linkBusy||autoLinkAttempt.current===order.id)return;
+    autoLinkAttempt.current=order.id;
+    void requestGameLinkCode();
+  },[mode,key,order?.id,order?.state,order?.deliveryStatus,linkCode,linkBusy]);
+
+  useEffect(()=>{
+    if(mode!=="commercial"||order?.deliveryStatus!=="delivered")return;
+    clearCachedCommercialLink(sessionStorage);
+    setLinkCode("");setLinkExpiresAt("");
+  },[mode,order?.deliveryStatus]);
+
   function resetCheckout() {
+    try{
+      clearCachedCommercialLink(sessionStorage);
+      autoLinkAttempt.current="";
+    }catch{}
     try {
       const names=pixCheckoutStorageNames(mode);
       sessionStorage.removeItem(names.key);
@@ -336,12 +369,18 @@ export function PixCheckout({
             order.deliveryStatus!=="delivered" && (
              <div className="rounded-xl border border-emerald-800/40 bg-zinc-950 p-3 space-y-2">
                <h4 className="font-semibold">Resgatar compra no Minecraft</h4>
-               <p className="text-sm text-zinc-400">Pagamento aprovado: gere um código e use /resgatar CODIGO dentro do NetCraftBR. O código expira em 10 minutos e só pode ser usado na conta Bedrock indicada na compra. A entrega será confirmada pelo servidor.</p>
+               <p className="text-sm text-zinc-400">Pagamento aprovado e validado no Mercado Pago. Seu código é gerado automaticamente. Use /resgatar CODIGO ou Benefícios &gt; Vincular compra, no LOBBY da NetCraftBR. Código válido por 10 minutos; a entrega será confirmada pelo servidor.</p>
                {linkCode && (
                  <div className="space-y-1">
                    <label className="block text-xs text-zinc-400">Código temporário</label>
                    <input readOnly value={linkCode} aria-label="Código para vincular compra"
                      className="w-full rounded-lg bg-zinc-900 px-3 py-2 font-mono tracking-wider text-emerald-300" />
+                   <button type="button" className="text-link" onClick={()=>
+                     navigator.clipboard.writeText(linkCode)
+                       .then(()=>setError("Código copiado."))
+                       .catch(()=>setError("Selecione e copie o código acima."))}>
+                     Copiar código de resgate
+                   </button>
                    {linkExpiresAt && <p className="text-xs text-zinc-400">Validade: {new Date(linkExpiresAt).toLocaleString("pt-BR")}</p>}
                  </div>
                )}
@@ -356,6 +395,11 @@ export function PixCheckout({
              </div>
            )}
            <p className="text-sm">{order.delivery}</p>
+           {mode==="commercial"&&order.deliveryStatus==="delivered"&&(
+             <p role="status" className="font-semibold text-emerald-300">
+               VIP entregue e confirmado pelo servidor Minecraft.
+             </p>
+           )}
           <button
             className="text-link"
             onClick={() => refresh().catch((e) => setError(e.message))}
