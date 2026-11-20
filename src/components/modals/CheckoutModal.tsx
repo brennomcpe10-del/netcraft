@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import {CommercialVipCheckout} from './CommercialVipCheckout.tsx';
 import { VIP, Product, Order, Coupon } from '../../types/index.ts';
 import { usePlayer } from '../../context/PlayerContext.tsx';
 import { useToast } from '../../context/ToastContext.tsx';
@@ -34,6 +35,24 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const [recipientType, setRecipientType] = useState<'self' | 'gift'>('self');
   const [recipientNickname, setRecipientNickname] = useState('');
+  // The commercial backend must affirm LIVE readiness before showing Pix.
+  // A failed readiness check never falls back to unverified manual Pix for VIPs.
+  const [commercialMode,setCommercialMode]=useState<'checking'|'enabled'|'blocked'>('checking');
+  React.useEffect(()=>{
+    if(itemType!=='vip'){setCommercialMode('blocked');return;}
+    const controller=new AbortController();
+    setCommercialMode('checking');
+    fetch('/api/pix/commercial/config',{cache:'no-store',signal:controller.signal})
+      .then(async r=>{
+        if(!r.ok)return false;
+        const status=await r.json();
+        return status?.available===true&&status.environment==='commercial'&&
+          status.realPayments===true&&status.minecraftDispatchConfigured===true;
+      }).then(ready=>{if(!controller.signal.aborted)
+        setCommercialMode(ready?'enabled':'blocked');
+      }).catch(()=>{if(!controller.signal.aborted)setCommercialMode('blocked');});
+    return ()=>controller.abort();
+  },[itemType,item.id]);
   const [loading, setLoading] = useState(false);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
 
@@ -95,6 +114,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         </div>
       </div>
     );
+  }
+
+  // Only a backend-reviewed Pix order is eligible for commercial VIP.
+  // Keep other products and existing non-VIP checkout unchanged.
+  if(itemType==='vip'&&commercialMode==='enabled')
+    return <CommercialVipCheckout item={item as VIP}
+      buyerNickname={player.nickname} onClose={onClose}/>;
+  if(itemType==='vip'){
+    return <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/85" onClick={onClose}/>
+      <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c1017] p-6 text-white space-y-3">
+        <h2 className="text-lg font-bold">VIP NetCraftBR · Pix automático</h2>
+        <p role="status" className="text-sm text-zinc-300">
+          {commercialMode==='checking'?
+            'Consultando a liberação do pagamento e da entrega no Minecraft...':
+            'As compras automáticas de VIP estão indisponíveis até a integração do Mercado Pago e do LOBBY ser confirmada. Nenhuma cobrança foi gerada.'}
+        </p>
+        <button type="button" onClick={onClose}
+          className="rounded-lg border border-white/20 px-4 py-2">Fechar</button>
+      </div>
+    </div>;
   }
 
   const rawPrice = Number(item.price) || 0;
