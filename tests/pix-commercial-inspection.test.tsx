@@ -54,3 +54,23 @@ test("commercial reconciliation refuses a test account, forged data, wrong amoun
  }
  assert.equal(fetches,8);
 });
+
+test("commercial GET /v1/orders accepts an omitted live_mode only for verified production merchant",async()=>{
+  const real=withResource("approved");
+  delete real.live_mode;
+  const verified={
+    me:async()=>({id:42,netcraftTestAccount:false}),
+    get:async()=>real,
+  };
+  const accepted=await inspectCommercialOrder(saved,verified);
+  assert.equal(accepted.state,"approved");
+  assert.equal(accepted.canDispatch,false,"read-only inspection never releases VIP");
+  await assert.rejects(()=>inspectCommercialOrder(saved,{
+    ...verified,me:async()=>({id:42,netcraftTestAccount:true}),
+  }),/Recebedor comercial divergente/);
+  for(const live_mode of [false,null,"true",0]){
+    await assert.rejects(()=>inspectCommercialOrder(saved,{
+      ...verified,get:async()=>({...real,live_mode}),
+    }),/Order comercial não corresponde/);
+  }
+});
