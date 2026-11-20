@@ -1,8 +1,8 @@
-export type OrderStatus = 'Pendente' | 'Pago' | 'Cancelado' | 'Entregue';
+export type OrderStatus = 'Pendente' | 'Pago' | 'Cancelado' | 'Entregue' | 'Reembolsado' | 'Estornado';
 export type PaymentMethod = 'LIVEPIX' | 'PIX' | 'Cartao' | 'Boleto';
 export type EventStatus = 'Próximo' | 'Em andamento' | 'Encerrado';
 export type NewsCategory = 'Atualização' | 'Evento' | 'Manutenção' | 'Novidade';
-export type ProductCategory = 'vips' | 'kits' | 'itens' | 'cosmeticos' | 'outros';
+export type ProductCategory = 'vips' | 'kits' | 'itens' | 'cosmeticos' | 'pacotes' | 'outros' | (string & {});
 
 export interface ActiveVip {
   vipId: string;
@@ -24,6 +24,7 @@ export interface Player {
 }
 
 export interface VIP {
+  categoryId?: string;
   id: string;
   name: string;
   price: number;
@@ -39,10 +40,17 @@ export interface VIP {
   pixUrl?: string;
 }
 
+/** Editorial configuration only. Never an authorized or executable delivery payload. */
+export interface RewardDraft { version: 1; items: { itemId: string; quantity: number }[]; }
+
 export interface Product {
   id: string;
   name: string;
   category: ProductCategory;
+  rewardDraft?: RewardDraft;
+  featured?: boolean;
+  allowQuantity?: boolean;
+  maxQuantity?: number;
   price: number;
   description: string;
   image: string;
@@ -51,6 +59,56 @@ export interface Product {
   order: number;
   livepixUrl?: string;
   pixUrl?: string;
+}
+
+// Preview-only, authenticated delivery-catalog checks. Not a release authorization.
+export interface DeliveryCatalogAudit {
+  environment: 'preview';
+  realPaymentsEnabled: false;
+  minecraftDispatchEnabled: false;
+  totalActive: number;
+  truncated: boolean;
+  counts: Record<'reward_invalid' | 'reward_missing' | 'quantity_exceeds_executor' |
+    'vip_mapping_required' | 'kit_lab_only', number>;
+  items: Array<{
+    id: string;
+    name: string;
+    kind: 'product' | 'vip';
+    maxQuantity: number;
+    status: 'reward_invalid' | 'reward_missing' | 'quantity_exceeds_executor' |
+      'vip_mapping_required' | 'kit_lab_only';
+  }>;
+}
+
+// Admin-only, read-only inspection of simulated sandbox transactions.
+export interface PixTestOrderSummary {
+  id: string;
+  environment: 'test';
+  state: 'creating' | 'pending' | 'processing' | 'approved' | 'expired' | 'cancelled' | 'refunded' | 'unknown';
+  gamertag: string;
+  totalCents: number;
+  linesCount: number;
+  createdAt: string | null;
+  approvedAt: string | null;
+  approvalObservedAt: string | null;
+  providerOrderId: string | null;
+  expiresAt: string | null;
+}
+
+// Admin-only read-only status for synthetic Pix deliveries. No dispatch controls.
+export interface PixTestDeliverySummary {
+  id: string;
+  orderId: string;
+  gamertag: string;
+  kind: 'items' | 'vip' | 'unconfigured';
+  units: number;
+  state: 'pending' | 'blocked' | 'unknown';
+  hold: 'payment_not_verified' | 'refunded' | 'missing_approval_timestamp' |
+    'reward_review_required' | 'vip_mapping_required' | 'reward_missing' |
+    'reward_invalid' | 'quantity_invalid' | 'product_invalid' |
+    'plan_missing' | 'dispatch_disabled';
+  dispatchEnabled: false;
+  createdAt: string | null;
 }
 
 export interface Order {
@@ -69,6 +127,13 @@ export interface Order {
   transactionId: string;
   paymentMethod: PaymentMethod;
   paidAt?: string;
+  approvedAt?: string;
+  refundedAmount?: number;
+  refundedAt?: string;
+  paymentId?: string;
+  paymentStatus?: string;
+  paymentProvider?: string;
+  refunds?: {id:string;amount:number;status:string}[];
   deliveredAt?: string;
   pixCode?: string;
   pixQrCodeUrl?: string;

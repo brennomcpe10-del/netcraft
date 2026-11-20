@@ -1,0 +1,21 @@
+{
+  "purpose": "NONDEPLOYED isolated staging plan only; not actual Firebase credentials",
+  "isolationRequired": true,
+  "locations": {
+    "isolated_test": {
+      "projectId": "demo-netcraft-admin-test",
+      "databaseId": "(default)"
+    },
+    "staging": {
+      "projectId": "replace-with-separate-staging-id",
+      "databaseId": "(default)"
+    },
+    "production": {
+      "projectId": "replace-with-real-production-id",
+      "databaseId": "(default)"
+    }
+  },
+  "deploymentEnabled": false,
+  "realPaymentsEnabled": false,
+  "commercialDispatchEnabled": false
+}

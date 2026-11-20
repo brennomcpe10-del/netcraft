@@ -1,0 +1,45 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "NetCraft Delivery Magno HTTPS Preflight 0.1.1 OFF",
+    "description": "Isolated protected Preview HTTPS diagnostic with opaque SecretString. OFF; no payments, VIPs, rewards or ACK.",
+    "uuid": "92aca4ab-e71a-4150-895e-a5de8ec17550",
+    "version": [
+      0,
+      1,
+      1
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "c1abc66e-8354-4ca1-a671-2bcc9c180346",
+      "version": [
+        0,
+        1,
+        1
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "1.17.0"
+    },
+    {
+      "module_name": "@minecraft/server-admin",
+      "version": "1.0.0-beta"
+    },
+    {
+      "module_name": "@minecraft/server-net",
+      "version": "1.0.0-beta"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+# STRICTLY UNDEPLOYED fixture-only candidate: do not replace wrangler.toml.
+name = "netcraft-delivery-fixture-clone-only"
+main = "verified-fixture-gateway.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+[vars]
+NC_SANDBOX_ENABLED = "false"
+NC_FIXTURE_DELIVERY_ENABLED = "false"
+NC_TEST_GAMERTAG = "Lab Tester"
+
+[[durable_objects.bindings]]
+name = "FIXTURE_GATE"
+class_name = "FixtureDeliveryGate"
+
+[[migrations]]
+tag = "fixture-v1"
+new_sqlite_classes = ["FixtureDeliveryGate"]

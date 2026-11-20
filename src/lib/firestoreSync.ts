@@ -1,3 +1,4 @@
+import {revenueReport,brasiliaPeriod} from './revenue.ts';
 import {
   collection,
   doc,
@@ -347,7 +348,7 @@ export async function getStatsFromFirestore(): Promise<DashboardStats> {
     const orders: Order[] = oSnap.docs ? oSnap.docs.map((d: any) => ({ ...d.data(), id: d.id })) : [];
     const players: Player[] = pSnap.docs ? pSnap.docs.map((d: any) => ({ ...d.data(), id: d.id })) : [];
     const paid = orders.filter((o: Order) => o.status === 'Pago' || o.status === 'Entregue');
-    const rev = paid.reduce((acc: number, o: Order) => acc + (o.amount || 0), 0);
+    const rev = revenueReport(orders,brasiliaPeriod(new Date())!).totalCents/100;
 
     return {
       playersCount: players.length,

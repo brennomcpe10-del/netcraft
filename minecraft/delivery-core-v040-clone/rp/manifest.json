@@ -1,0 +1,29 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "NetCraft Delivery Core Clone LAB OFF RP v0.4.0",
+    "description": "Inert resource companion for NetCraft Delivery clone-only BP v0.4.0.",
+    "uuid": "539d74c7-aa89-4c75-ade8-b57d4233a040",
+    "version": [
+      0,
+      4,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "type": "resources",
+      "uuid": "c55ba1dd-3d04-416a-a21a-91342f367040",
+      "version": [
+        0,
+        4,
+        0
+      ]
+    }
+  ]
+}

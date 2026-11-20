@@ -20,15 +20,15 @@ const faqList: FaqItem[] = [
   },
   {
     question: 'Quanto tempo demora para meu VIP ser entregue após o pagamento?',
-    answer: 'Pagamentos via PIX ou Cartão são validados pelo backend de forma quase instantânea. Após a confirmação, os benefícios são concedidos imediatamente ao nickname escolhido.'
+    answer: 'Na versão de testes da loja, o Pix é simulado e não libera itens no servidor. Entregas automáticas e cobranças reais ainda não estão habilitadas.'
   },
   {
     question: 'Posso presentear outro jogador com um VIP?',
-    answer: 'Sim. Durante a compra, selecione a opção "Presentear outro jogador" e informe o nickname exato da pessoa no Minecraft Bedrock.'
+    answer: 'No momento, a opção de presentes e entregas para outros jogadores ainda não está habilitada no checkout de testes.'
   },
   {
     question: 'O que fazer se o meu VIP não ativar?',
-    answer: 'Caso passem 15 minutos sem ativação, preencha o formulário abaixo com o seu nickname e o ID do pedido para verificação da equipe.'
+    answer: 'Os pagamentos de teste não ativam VIPs. Se houver alguma divergência em um pedido antigo, abra um chamado abaixo e informe a referência sem compartilhar dados bancários.'
   }
 ];
 
@@ -43,6 +43,7 @@ export const SupportView: React.FC = () => {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [ticketId, setTicketId] = useState('');
 
   const toggleFaq = (idx: number) => {
     setOpenFaq(openFaq === idx ? null : idx);
@@ -57,12 +58,13 @@ export const SupportView: React.FC = () => {
 
     try {
       setSending(true);
-      await api.createTicket({
+      const receipt = await api.createTicket({
         nickname: nickname.trim(),
         category,
         subject: subject.trim(),
         message: message.trim()
       });
+      setTicketId(receipt.id);
       setSubmitted(true);
       showSuccess('Chamado de suporte enviado.');
       setSubject('');
@@ -133,6 +135,9 @@ export const SupportView: React.FC = () => {
         {submitted ? (
           <div className="p-6 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.02] text-center space-y-3">
             <h3 className="text-base font-bold text-white">Chamado registrado</h3>
+            <p className="font-mono text-emerald-400 text-xs break-all">
+              Protocolo: {ticketId}
+            </p>
             <p className="text-xs text-zinc-400 max-w-md mx-auto">
               Nossa equipe recebeu sua mensagem e responderá através do servidor e Discord.
             </p>

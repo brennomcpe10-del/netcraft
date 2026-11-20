@@ -1,0 +1,45 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "NetCraft Delivery Gate C.2 Local OFF",
+    "description": "Isolated authenticated HTTPS localhost test. OFF by default. No rewards or ACK.",
+    "uuid": "7ba25e40-c7a4-4f0a-a68e-17fc47f32c57",
+    "version": [
+      0,
+      0,
+      1
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "8c5efdab-2f90-4d8d-9dc7-9b1bb49ac3fa",
+      "version": [
+        0,
+        0,
+        1
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "1.17.0"
+    },
+    {
+      "module_name": "@minecraft/server-admin",
+      "version": "1.0.0-beta"
+    },
+    {
+      "module_name": "@minecraft/server-net",
+      "version": "1.0.0-beta"
+    }
+  ]
+}

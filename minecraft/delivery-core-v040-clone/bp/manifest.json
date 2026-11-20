@@ -1,0 +1,45 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "NetCraft Delivery Core Clone LAB OFF BP v0.4.0",
+    "description": "BDS clone only. All deliveries OFF by default. Not the production NetCraftCore.",
+    "uuid": "9835eaf0-a209-4cb7-9ba6-73d2da177040",
+    "version": [
+      0,
+      4,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "7ab988f3-732d-4664-909d-c9ff37553740",
+      "version": [
+        0,
+        4,
+        0
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "1.17.0"
+    },
+    {
+      "uuid": "539d74c7-aa89-4c75-ade8-b57d4233a040",
+      "version": [
+        0,
+        4,
+        0
+      ]
+    }
+  ]
+}

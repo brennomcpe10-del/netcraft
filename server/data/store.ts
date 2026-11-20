@@ -1,3 +1,4 @@
+import {revenueReport,brasiliaPeriod} from '../../src/lib/revenue.ts';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -52,7 +53,7 @@ class Store {
 
   private loadDatabase(): DatabaseSchema {
     try {
-      if (fs.existsSync(DB_FILE)) {
+      if (!process.env.FIRESTORE_EMULATOR_HOST && fs.existsSync(DB_FILE)) {
         const fileContent = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(fileContent);
         // CRITICAL: When the database file exists, NEVER fallback to initial hardcoded arrays.
@@ -95,6 +96,8 @@ class Store {
   }
 
   private saveDatabase(dataToSave: DatabaseSchema = this.data) {
+    // Emulator runs must never overwrite the repository snapshot with test data.
+    if (process.env.FIRESTORE_EMULATOR_HOST) return;
     try {
       const dir = path.dirname(DB_FILE);
       if (!fs.existsSync(dir)) {
@@ -944,7 +947,7 @@ class Store {
   getDashboardStats(): DashboardStats {
     const orders = this.data.orders;
     const paidOrders = orders.filter(o => o.status === 'Pago' || o.status === 'Entregue');
-    const totalRevenue = paidOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
+    const totalRevenue = revenueReport(orders,brasiliaPeriod(new Date())!).totalCents/100;
     const vipsSold = paidOrders.filter(o => o.productType === 'vip').length;
 
     return {

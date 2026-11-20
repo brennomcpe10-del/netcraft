@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, setLogLevel, connectFirestoreEmulator } from 'firebase/firestore';
 import { firebaseConfig } from './firebaseConfig.ts';
 
 // Silences internal gRPC lifecycle messages (such as idle stream disconnects)
@@ -23,11 +23,19 @@ if (typeof window !== 'undefined' && window.console) {
   };
 }
 
-// Initialize Firebase App
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-
-// CRITICAL: Connect with the provisioned firestoreDatabaseId
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Local tests are isolated from the real project, even if a test accidentally omits a collection fixture.
+const emulatorHost = typeof window === 'undefined'
+  ? (process.env.NODE_ENV !== 'production' ? process.env.FIRESTORE_EMULATOR_HOST : undefined)
+  : (import.meta.env?.DEV ? import.meta.env.VITE_FIRESTORE_EMULATOR_HOST : undefined);
+if (emulatorHost && !/^127\.0\.0\.1:\d+$/.test(emulatorHost)) throw new Error('Use apenas o emulador local em 127.0.0.1.');
+const app = getApps().length > 0 ? getApp() : initializeApp(emulatorHost
+  ? {...firebaseConfig, projectId:'demo-netcraft-admin-test', firestoreDatabaseId:'(default)'}
+  : firebaseConfig);
+export const db = getFirestore(app, emulatorHost ? '(default)' : firebaseConfig.firestoreDatabaseId);
+if (emulatorHost) {
+  const [host, port] = emulatorHost.split(':');
+  connectFirestoreEmulator(db, host, Number(port));
+}
 
 // Test connection when needed
 export async function testFirestoreConnection(): Promise<boolean> {
