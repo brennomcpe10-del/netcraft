@@ -1,9 +1,25 @@
+import {commercialPixReleaseRouter,commercialBdsReleaseRouter} from './commercialRelease.ts';
+import {inspectCommercialReleasePreflight} from '../delivery/commercialReleaseReadiness.ts';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import crypto from 'crypto';
 import { dbStore } from '../data/store.ts';
 import type { Player } from '../../src/types/index.ts';
 
 export const apiRouter = express.Router();
+/**
+ * Commercial routes are present but fail closed in Preview and Production.
+ * Their POST handlers only execute after independent release authorization,
+ * isolated Firestore and private BDS credentials are checked by runtime.
+ * The public /health probe never starts checkout or grants a VIP.
+ */
+apiRouter.use('/pix/commercial',commercialPixReleaseRouter);
+apiRouter.use('/delivery/bds',commercialBdsReleaseRouter);
+apiRouter.get('/admin/commercial/readiness',requireAdmin,(_req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  res.setHeader('X-Content-Type-Options','nosniff');
+  return res.json(inspectCommercialReleasePreflight(process.env));
+});
+
 
 // The secret keyword is strictly handled on the server side
 // Default: 'brennomcpe' as instructed by the server owner

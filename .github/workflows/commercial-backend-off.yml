@@ -1,0 +1,44 @@
+name: Commercial backend isolated release OFF
+
+on:
+  push:
+    branches:
+      - release/commercial-backend-off-20261120
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commercial-backend-off-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Compile and test commercial API (no payments)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NODE_ENV: test
+      VERCEL_ENV: preview
+      NETCRAFT_DELIVERY_RELEASE_APPROVED: OFF
+      NCBR_COMMERCIAL_CHECKOUT_APPROVED: OFF
+      NCBR_COMMERCIAL_FIREBASE_ISOLATED: false
+      NCBR_COMMERCIAL_MP_ACCESS_TOKEN: ""
+      NCBR_COMMERCIAL_BDS_TOKEN: ""
+      FIRESTORE_EMULATOR_HOST: ""
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies from reviewed lock
+        run: npm ci --ignore-scripts
+      - name: TypeScript
+        run: npm run lint
+      - name: Commercial mock regression (no real network)
+        run: npm test
+      - name: Build official storefront assets
+        run: npm run build
