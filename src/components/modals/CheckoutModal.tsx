@@ -123,15 +123,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   if(isVipPurchase()&&commercialMode==='enabled')
     return <CommercialVipCheckout item={item as VIP}
       buyerNickname={player.nickname} onClose={onClose}/>;
-  if(isVipPurchase()){
+  if(isVipPurchase()&&commercialMode==='checking'){
     return <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/85" onClick={onClose}/>
       <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c1017] p-6 text-white space-y-3">
         <h2 className="text-lg font-bold">VIP NetCraftBR · Pix automático</h2>
         <p role="status" className="text-sm text-zinc-300">
-          {commercialMode==='checking'?
-            'Consultando a liberação do pagamento e da entrega no Minecraft...':
-            'As compras automáticas de VIP estão indisponíveis até a integração do Mercado Pago e do LOBBY ser confirmada. Nenhuma cobrança foi gerada.'}
+          Consultando a disponibilidade do Pix automático no servidor...
         </p>
         <button type="button" onClick={onClose}
           className="rounded-lg border border-white/20 px-4 py-2">Fechar</button>
@@ -363,6 +361,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
+        {isVipPurchase()&&commercialMode==='blocked'&&
+          <p className="text-xs text-amber-300 rounded-lg border border-amber-500/20 p-3 mb-4" role="note">
+            Pix automático com entrega verificada ainda não foi ativado.
+            As formas de pagamento abaixo são as antigas e não confirmam VIP
+            automaticamente no Minecraft.
+          </p>}
         {/* STEP 1: BEFORE ORDER CREATION */}
         {!activeOrder && (
           <div className="space-y-6">
