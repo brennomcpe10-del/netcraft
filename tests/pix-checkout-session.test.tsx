@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {pixCheckoutStorageNames,readPixCheckoutKey,canStartNextPixOrder}
+import {pixCheckoutStorageNames,readPixCheckoutKey,canStartNextPixOrder,readCachedCommercialLink,storeCachedCommercialLink,clearCachedCommercialLink}
   from "../src/lib/pixCheckoutSession.ts";
 
 test("test and commercial Pix keys cannot overwrite or reuse each other",()=>{
@@ -41,4 +41,37 @@ test("commercial customer keeps the paid order key until server confirms VIP",()
   assert.equal(canStartNextPixOrder("test","approved"),true);
   for(const state of ["cancelled","expired","refunded"])
     assert.equal(canStartNextPixOrder("commercial",state),true);
+});
+
+test("verified voucher is restored for only the same paid order in this tab",()=>{
+  const data=new Map<string,string>();
+  const store={
+    getItem:(key:string)=>data.get(key)??null,
+    setItem:(key:string,value:string)=>{data.set(key,value);},
+    removeItem:(key:string)=>{data.delete(key);},
+  };
+  const id="a".repeat(64),other="b".repeat(64);
+  const key="commercial-fixture-123456789012345";
+  const expiresAt=new Date(1800000600000).toISOString();
+  const code="NC-AAAA-BBBB-CCCC-DDDD";
+  assert.equal(storeCachedCommercialLink(store,{checkoutKey:key,orderId:id,code,expiresAt}),true);
+  assert.equal(readCachedCommercialLink(store,key,id,1800000000000)?.code,code);
+  assert.equal(readCachedCommercialLink(store,key,other,1800000000000),null);
+  assert.equal(readCachedCommercialLink(store,"different-fixture-1234567890123",id,1800000000000),null);
+  assert.equal(readCachedCommercialLink(store,key,id,1800000600000),null);
+  clearCachedCommercialLink(store);
+  assert.equal(readCachedCommercialLink(store,key,id,1800000000000),null);
+});
+test("a malformed voucher is never restored or saved",()=>{
+  const data=new Map<string,string>();
+  const store={
+    getItem:(key:string)=>data.get(key)??null,
+    setItem:(key:string,value:string)=>{data.set(key,value);},
+    removeItem:(key:string)=>{data.delete(key);},
+  };
+  assert.equal(storeCachedCommercialLink(store,{
+    checkoutKey:"notvalid",orderId:"x".repeat(64),
+    code:"THIS_IS_NOT_A_VOUCHER",expiresAt:"invalid",
+  }),false);
+  assert.equal(readCachedCommercialLink(store,"foo","a".repeat(64)),null);
 });
